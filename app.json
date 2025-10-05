@@ -1,19 +1,21 @@
 {
   "expo": {
-    "name": "maanstuden",
+    "name": "تطبيق الحضور والغياب",
     "slug": "maanstuden",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "description": "تطبيق بسيط لإدارة حضور وغياب الطلاب للمعلمين",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "supportsRtl": true
     },
     "android": {
       "adaptiveIcon": {
@@ -21,10 +23,18 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "supportsRtl": true
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "fonts": [
+      "./assets/fonts/TheYearofHandicrafts-Regular.otf",
+      "./assets/fonts/TheYearofHandicrafts-Medium.otf",
+      "./assets/fonts/TheYearofHandicrafts-SemiBold.otf",
+      "./assets/fonts/TheYearofHandicrafts-Bold.otf",
+      "./assets/fonts/TheYearofHandicrafts-Black.otf"
+    ]
   }
 }

@@ -19,6 +19,14 @@ interface DashboardScreenProps {
 export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   const { state, dispatch, deleteClass } = useApp();
   const { currentTeacher, classes, isLoading } = state;
+  const [isInitialLoad, setIsInitialLoad] = React.useState(true);
+
+  // إخفاء loading state عند تحميل الفصول
+  React.useEffect(() => {
+    if (classes.length > 0 && isInitialLoad) {
+      setIsInitialLoad(false);
+    }
+  }, [classes, isInitialLoad]);
 
   const handleAddClass = () => {
     navigation.navigate('AddClass');

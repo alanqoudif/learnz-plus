@@ -12,6 +12,7 @@ import { useApp } from '../context/AppContext';
 import { AttendanceRecord, AttendanceSession } from '../types';
 import { showErrorAlert, showAttendanceCompleteAlert } from '../utils/notifications';
 import { fontFamilies } from '../utils/theme';
+import { supabase } from '../config/supabase';
 
 interface AttendanceScreenProps {
   navigation: any;
@@ -33,6 +34,67 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
   const currentClass = state.classes.find(cls => cls.id === classId);
   const students = currentClass?.students || [];
   const currentStudent = students[currentStudentIndex];
+
+  // Real-time listener for attendance changes in this class
+  useEffect(() => {
+    const attendanceSubscription = supabase
+      .channel(`attendance_class_${classId}`)
+      .on('postgres_changes', 
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'attendance_sessions',
+          filter: `class_id=eq.${classId}`
+        }, 
+        (payload) => {
+          console.log('Attendance session change detected for class:', classId, payload);
+          // Reload attendance sessions for this class
+          const today = new Date().toDateString();
+          const existingSession = state.attendanceSessions.find(
+            session => session.classId === classId && new Date(session.date).toDateString() === today
+          );
+          
+          if (existingSession) {
+            setIsSessionStarted(true);
+            setSessionId(existingSession.id);
+            // تحميل سجلات الحضور الموجودة
+            const records: { [key: string]: 'present' | 'absent' } = {};
+            existingSession.records.forEach(record => {
+              records[record.studentId] = record.status;
+            });
+            setAttendanceRecords(records);
+          }
+        }
+      )
+      .on('postgres_changes', 
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'attendance_records'
+        }, 
+        (payload) => {
+          console.log('Attendance record change detected:', payload);
+          // Reload attendance records
+          const today = new Date().toDateString();
+          const existingSession = state.attendanceSessions.find(
+            session => session.classId === classId && new Date(session.date).toDateString() === today
+          );
+          
+          if (existingSession) {
+            const records: { [key: string]: 'present' | 'absent' } = {};
+            existingSession.records.forEach(record => {
+              records[record.studentId] = record.status;
+            });
+            setAttendanceRecords(records);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      attendanceSubscription.unsubscribe();
+    };
+  }, [classId, state.attendanceSessions]);
 
   const translateX = new Animated.Value(0);
   const scale = new Animated.Value(1);

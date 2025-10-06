@@ -104,34 +104,41 @@ export const classService = {
 
     if (classesError) throw classesError;
 
-    // جلب الطلاب لكل فصل
-    const classesWithStudents = await Promise.all(
-      classesData.map(async (classData) => {
-        const { data: studentsData, error: studentsError } = await supabase
-          .from('students')
-          .select('*')
-          .eq('class_id', classData.id)
-          .order('created_at', { ascending: true });
+    if (classesData.length === 0) return [];
 
-        if (studentsError) throw studentsError;
+    // جلب جميع الطلاب لجميع الفصول في استعلام واحد
+    const classIds = classesData.map(c => c.id);
+    const { data: allStudentsData, error: studentsError } = await supabase
+      .from('students')
+      .select('*')
+      .in('class_id', classIds)
+      .order('created_at', { ascending: true });
 
-        const students: Student[] = studentsData.map(student => ({
-          id: student.id,
-          name: student.name,
-          classId: student.class_id,
-          createdAt: new Date(student.created_at),
-        }));
+    if (studentsError) throw studentsError;
 
-        return {
-          id: classData.id,
-          name: classData.name,
-          section: classData.section,
-          teacherId: classData.teacher_id,
-          students,
-          createdAt: new Date(classData.created_at),
-        };
-      })
-    );
+    // تجميع الطلاب حسب الفصل
+    const studentsByClass: { [classId: string]: Student[] } = {};
+    allStudentsData.forEach(student => {
+      if (!studentsByClass[student.class_id]) {
+        studentsByClass[student.class_id] = [];
+      }
+      studentsByClass[student.class_id].push({
+        id: student.id,
+        name: student.name,
+        classId: student.class_id,
+        createdAt: new Date(student.created_at),
+      });
+    });
+
+    // إنشاء الفصول مع طلابها
+    const classesWithStudents = classesData.map(classData => ({
+      id: classData.id,
+      name: classData.name,
+      section: classData.section,
+      teacherId: classData.teacher_id,
+      students: studentsByClass[classData.id] || [],
+      createdAt: new Date(classData.created_at),
+    }));
 
     return classesWithStudents;
   },

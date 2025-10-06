@@ -152,7 +152,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           const teacher: Teacher = {
             id: session.user.id,
             name: session.user.user_metadata?.name || 'معلم',
-            phoneNumber: session.user.user_metadata?.phone_number || session.user.email?.replace('@teacher.app', '') || '',
+            phoneNumber: session.user.user_metadata?.phone_number || session.user.email?.replace('@teacher.local', '') || '',
             createdAt: new Date(session.user.created_at),
           };
           dispatch({ type: 'SET_TEACHER', payload: teacher });
@@ -167,6 +167,99 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // Real-time listeners for classes, students, and attendance
+  useEffect(() => {
+    if (!state.currentTeacher) return;
+
+    // Listen for classes changes
+    const classesSubscription = supabase
+      .channel('classes_changes')
+      .on('postgres_changes', 
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'classes',
+          filter: `teacher_id=eq.${state.currentTeacher.id}`
+        }, 
+        async (payload) => {
+          console.log('Classes change detected:', payload);
+          // Reload classes data
+          const classes = await classService.getClassesByTeacher(state.currentTeacher!.id);
+          dispatch({ type: 'SET_CLASSES', payload: classes });
+        }
+      )
+      .subscribe();
+
+    // Listen for students changes
+    const studentsSubscription = supabase
+      .channel('students_changes')
+      .on('postgres_changes', 
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'students'
+        }, 
+        async (payload) => {
+          console.log('Students change detected:', payload);
+          // Reload all classes to get updated students
+          const classes = await classService.getClassesByTeacher(state.currentTeacher!.id);
+          dispatch({ type: 'SET_CLASSES', payload: classes });
+        }
+      )
+      .subscribe();
+
+    // Listen for attendance sessions changes
+    const attendanceSubscription = supabase
+      .channel('attendance_sessions_changes')
+      .on('postgres_changes', 
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'attendance_sessions'
+        }, 
+        async (payload) => {
+          console.log('Attendance sessions change detected:', payload);
+          // Reload attendance sessions
+          const allSessions: AttendanceSession[] = [];
+          for (const classItem of state.classes) {
+            const sessions = await attendanceService.getAttendanceSessionsByClass(classItem.id);
+            allSessions.push(...sessions);
+          }
+          dispatch({ type: 'SET_ATTENDANCE_SESSIONS', payload: allSessions });
+        }
+      )
+      .subscribe();
+
+    // Listen for attendance records changes
+    const recordsSubscription = supabase
+      .channel('attendance_records_changes')
+      .on('postgres_changes', 
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'attendance_records'
+        }, 
+        async (payload) => {
+          console.log('Attendance records change detected:', payload);
+          // Reload attendance sessions to get updated records
+          const allSessions: AttendanceSession[] = [];
+          for (const classItem of state.classes) {
+            const sessions = await attendanceService.getAttendanceSessionsByClass(classItem.id);
+            allSessions.push(...sessions);
+          }
+          dispatch({ type: 'SET_ATTENDANCE_SESSIONS', payload: allSessions });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      classesSubscription.unsubscribe();
+      studentsSubscription.unsubscribe();
+      attendanceSubscription.unsubscribe();
+      recordsSubscription.unsubscribe();
+    };
+  }, [state.currentTeacher, state.classes]);
 
   // Save data to AsyncStorage whenever state changes
   useEffect(() => {
@@ -185,28 +278,38 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-        // إنشاء كائن المعلم من بيانات الجلسة
-        const teacher: Teacher = {
-          id: session.user.id,
-          name: session.user.user_metadata?.name || 'معلم',
-          phoneNumber: session.user.user_metadata?.phone_number || session.user.email?.replace('@teacher.app', '') || '',
-          createdAt: new Date(session.user.created_at),
-        };
+      // إنشاء كائن المعلم من بيانات الجلسة
+      const teacher: Teacher = {
+        id: session.user.id,
+        name: session.user.user_metadata?.name || 'معلم',
+        phoneNumber: session.user.user_metadata?.phone_number || session.user.email?.replace('@teacher.local', '') || '',
+        createdAt: new Date(session.user.created_at),
+      };
 
-      // جلب الفصول الدراسية من قاعدة البيانات
+      // تحميل الفصول أولاً وإظهارها فوراً
       const classes = await classService.getClassesByTeacher(teacher.id);
       
-      // جلب جلسات الحضور لجميع الفصول
-      const allSessions: AttendanceSession[] = [];
-      for (const classItem of classes) {
-        const sessions = await attendanceService.getAttendanceSessionsByClass(classItem.id);
-        allSessions.push(...sessions);
-      }
-
+      // إظهار الفصول فوراً للمستخدم
       dispatch({
         type: 'LOAD_DATA',
-        payload: { teacher, classes, sessions: allSessions },
+        payload: { teacher, classes, sessions: [] },
       });
+
+      // تحميل جلسات الحضور في الخلفية
+      if (classes.length > 0) {
+        const sessionPromises = classes.map(classItem => 
+          attendanceService.getAttendanceSessionsByClass(classItem.id)
+        );
+        
+        const allSessionsArrays = await Promise.all(sessionPromises);
+        const allSessions: AttendanceSession[] = allSessionsArrays.flat();
+
+        // تحديث البيانات مع جلسات الحضور
+        dispatch({
+          type: 'LOAD_DATA',
+          payload: { teacher, classes, sessions: allSessions },
+        });
+      }
     } catch (error) {
       console.error('Error loading data:', error);
       dispatch({ type: 'SET_LOADING', payload: false });

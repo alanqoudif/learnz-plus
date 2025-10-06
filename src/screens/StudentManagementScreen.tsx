@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
 import { useApp } from '../context/AppContext';
 import { Student } from '../types';
 import { fontFamilies } from '../utils/theme';
+import { supabase } from '../config/supabase';
 
 interface StudentManagementScreenProps {
   navigation: any;
@@ -28,6 +29,29 @@ export default function StudentManagementScreen({ navigation, route }: StudentMa
   const [showAddModal, setShowAddModal] = useState(false);
   const [newStudentName, setNewStudentName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  // Real-time listener for students in this class
+  useEffect(() => {
+    const studentsSubscription = supabase
+      .channel(`students_class_${classId}`)
+      .on('postgres_changes', 
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'students',
+          filter: `class_id=eq.${classId}`
+        }, 
+        (payload) => {
+          console.log('Students change detected for class:', classId, payload);
+          // The AppContext will handle updating the classes with new students
+        }
+      )
+      .subscribe();
+
+    return () => {
+      studentsSubscription.unsubscribe();
+    };
+  }, [classId]);
 
   const currentClass = state.classes.find(cls => cls.id === classId);
 

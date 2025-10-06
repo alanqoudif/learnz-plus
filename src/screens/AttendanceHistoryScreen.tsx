@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
 import { useApp } from '../context/AppContext';
 import { AttendanceSession } from '../types';
 import { fontFamilies } from '../utils/theme';
+import { RealtimeService } from '../services/realtimeService';
+import RealtimeStatus from '../components/RealtimeStatus';
 
 interface AttendanceHistoryScreenProps {
   navigation: any;
@@ -29,6 +31,24 @@ export default function AttendanceHistoryScreen({ navigation, route }: Attendanc
   const classSessions = state.attendanceSessions
     .filter(session => session.classId === classId)
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  // Real-time listener for attendance changes in this class
+  useEffect(() => {
+    console.log('Setting up realtime listener for attendance history, class:', classId);
+    
+    const attendanceSubscription = RealtimeService.subscribeToClassAttendance(
+      classId,
+      (payload) => {
+        console.log('📅 Attendance change detected in history:', payload.eventType);
+        // البيانات ستتحدث تلقائياً من خلال AppContext
+      }
+    );
+
+    return () => {
+      console.log('Cleaning up attendance history realtime listener for class:', classId);
+      attendanceSubscription.unsubscribe();
+    };
+  }, [classId]);
 
   const getAttendanceStats = (session: AttendanceSession) => {
     const presentCount = session.records.filter(r => r.status === 'present').length;
@@ -146,6 +166,7 @@ export default function AttendanceHistoryScreen({ navigation, route }: Attendanc
             {currentClass.name} - شعبة {currentClass.section}
           </Text>
         </View>
+        <RealtimeStatus />
       </View>
 
       <View style={styles.content}>

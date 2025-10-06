@@ -2,6 +2,7 @@ import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Teacher, Class, Student, AttendanceRecord, AttendanceSession } from '../types';
 import { classService, studentService, attendanceService } from '../services/supabaseService';
+import { RealtimeService } from '../services/realtimeService';
 import { supabase } from '../config/supabase';
 
 interface AppState {
@@ -21,6 +22,8 @@ type AppAction =
   | { type: 'UPDATE_STUDENT'; payload: { classId: string; student: Student } }
   | { type: 'DELETE_STUDENT'; payload: { classId: string; studentId: string } }
   | { type: 'ADD_ATTENDANCE_SESSION'; payload: AttendanceSession }
+  | { type: 'SET_ATTENDANCE_SESSIONS'; payload: AttendanceSession[] }
+  | { type: 'UPDATE_ATTENDANCE_SESSION'; payload: AttendanceSession }
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'LOAD_DATA'; payload: { teacher: Teacher | null; classes: Class[]; sessions: AttendanceSession[] } };
 
@@ -101,6 +104,20 @@ function appReducer(state: AppState, action: AppAction): AppState {
         attendanceSessions: [...state.attendanceSessions, action.payload],
       };
     
+    case 'SET_ATTENDANCE_SESSIONS':
+      return {
+        ...state,
+        attendanceSessions: action.payload,
+      };
+    
+    case 'UPDATE_ATTENDANCE_SESSION':
+      return {
+        ...state,
+        attendanceSessions: state.attendanceSessions.map(session =>
+          session.id === action.payload.id ? action.payload : session
+        ),
+      };
+    
     case 'SET_LOADING':
       return { ...state, isLoading: action.payload };
     
@@ -172,76 +189,59 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!state.currentTeacher) return;
 
+    console.log('Setting up realtime subscriptions for teacher:', state.currentTeacher.id);
+
     // Listen for classes changes
-    const classesSubscription = supabase
-      .channel('classes_changes')
-      .on('postgres_changes', 
-        { 
-          event: '*', 
-          schema: 'public', 
-          table: 'classes',
-          filter: `teacher_id=eq.${state.currentTeacher.id}`
-        }, 
-        async (payload) => {
-          console.log('Classes change detected:', payload);
+    const classesSubscription = RealtimeService.subscribeToClasses(
+      state.currentTeacher.id,
+      async (payload) => {
+        try {
           // Reload classes data
           const classes = await classService.getClassesByTeacher(state.currentTeacher!.id);
           dispatch({ type: 'SET_CLASSES', payload: classes });
+        } catch (error) {
+          console.error('Error reloading classes:', error);
         }
-      )
-      .subscribe();
+      }
+    );
 
     // Listen for students changes
-    const studentsSubscription = supabase
-      .channel('students_changes')
-      .on('postgres_changes', 
-        { 
-          event: '*', 
-          schema: 'public', 
-          table: 'students'
-        }, 
-        async (payload) => {
-          console.log('Students change detected:', payload);
+    const studentsSubscription = RealtimeService.subscribeToStudents(
+      state.currentTeacher.id,
+      async (payload) => {
+        try {
           // Reload all classes to get updated students
           const classes = await classService.getClassesByTeacher(state.currentTeacher!.id);
           dispatch({ type: 'SET_CLASSES', payload: classes });
+        } catch (error) {
+          console.error('Error reloading students:', error);
         }
-      )
-      .subscribe();
+      }
+    );
 
     // Listen for attendance sessions changes
-    const attendanceSubscription = supabase
-      .channel('attendance_sessions_changes')
-      .on('postgres_changes', 
-        { 
-          event: '*', 
-          schema: 'public', 
-          table: 'attendance_sessions'
-        }, 
-        async (payload) => {
-          console.log('Attendance sessions change detected:', payload);
-          // Reload attendance sessions
+    const attendanceSubscription = RealtimeService.subscribeToAttendanceSessions(
+      state.currentTeacher.id,
+      async (payload) => {
+        try {
+          // Reload attendance sessions for all classes
           const allSessions: AttendanceSession[] = [];
           for (const classItem of state.classes) {
             const sessions = await attendanceService.getAttendanceSessionsByClass(classItem.id);
             allSessions.push(...sessions);
           }
           dispatch({ type: 'SET_ATTENDANCE_SESSIONS', payload: allSessions });
+        } catch (error) {
+          console.error('Error reloading attendance sessions:', error);
         }
-      )
-      .subscribe();
+      }
+    );
 
     // Listen for attendance records changes
-    const recordsSubscription = supabase
-      .channel('attendance_records_changes')
-      .on('postgres_changes', 
-        { 
-          event: '*', 
-          schema: 'public', 
-          table: 'attendance_records'
-        }, 
-        async (payload) => {
-          console.log('Attendance records change detected:', payload);
+    const recordsSubscription = RealtimeService.subscribeToAttendanceRecords(
+      state.currentTeacher.id,
+      async (payload) => {
+        try {
           // Reload attendance sessions to get updated records
           const allSessions: AttendanceSession[] = [];
           for (const classItem of state.classes) {
@@ -249,17 +249,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             allSessions.push(...sessions);
           }
           dispatch({ type: 'SET_ATTENDANCE_SESSIONS', payload: allSessions });
+        } catch (error) {
+          console.error('Error reloading attendance records:', error);
         }
-      )
-      .subscribe();
+      }
+    );
 
     return () => {
+      console.log('Cleaning up realtime subscriptions');
       classesSubscription.unsubscribe();
       studentsSubscription.unsubscribe();
       attendanceSubscription.unsubscribe();
       recordsSubscription.unsubscribe();
     };
-  }, [state.currentTeacher, state.classes]);
+  }, [state.currentTeacher?.id]); // Only depend on teacher ID, not the entire classes array
 
   // Save data to AsyncStorage whenever state changes
   useEffect(() => {

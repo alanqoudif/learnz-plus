@@ -12,7 +12,11 @@ import { useApp } from '../context/AppContext';
 import { AttendanceRecord, AttendanceSession } from '../types';
 import { showErrorAlert, showAttendanceCompleteAlert } from '../utils/notifications';
 import { fontFamilies } from '../utils/theme';
-import { supabase } from '../config/supabase';
+import { RealtimeService } from '../services/realtimeService';
+import RealtimeStatus from '../components/RealtimeStatus';
+import RealtimeNotification from '../components/RealtimeNotification';
+import { useRealtimeNotifications } from '../hooks/useRealtimeNotifications';
+import { RealtimeTest } from '../utils/realtimeTest';
 
 interface AttendanceScreenProps {
   navigation: any;
@@ -30,6 +34,7 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
   const [attendanceRecords, setAttendanceRecords] = useState<{ [key: string]: 'present' | 'absent' }>({});
   const [isSessionStarted, setIsSessionStarted] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const { notifications, addNotification, removeNotification } = useRealtimeNotifications();
 
   const currentClass = state.classes.find(cls => cls.id === classId);
   const students = currentClass?.students || [];
@@ -37,64 +42,61 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
 
   // Real-time listener for attendance changes in this class
   useEffect(() => {
-    const attendanceSubscription = supabase
-      .channel(`attendance_class_${classId}`)
-      .on('postgres_changes', 
-        { 
-          event: '*', 
-          schema: 'public', 
-          table: 'attendance_sessions',
-          filter: `class_id=eq.${classId}`
-        }, 
-        (payload) => {
-          console.log('Attendance session change detected for class:', classId, payload);
-          // Reload attendance sessions for this class
-          const today = new Date().toDateString();
-          const existingSession = state.attendanceSessions.find(
-            session => session.classId === classId && new Date(session.date).toDateString() === today
-          );
+    console.log('Setting up realtime listener for class:', classId);
+    
+    const attendanceSubscription = RealtimeService.subscribeToClassAttendance(
+      classId,
+      (payload) => {
+        console.log('📅 Attendance change detected for class:', classId, payload.eventType);
+        // تحديث حالة الجلسة بناءً على التغييرات
+        const today = new Date().toDateString();
+        const existingSession = state.attendanceSessions.find(
+          session => session.classId === classId && new Date(session.date).toDateString() === today
+        );
+        
+        if (existingSession) {
+          setIsSessionStarted(true);
+          setSessionId(existingSession.id);
+          // تحميل سجلات الحضور الموجودة
+          const records: { [key: string]: 'present' | 'absent' } = {};
+          existingSession.records.forEach(record => {
+            records[record.studentId] = record.status;
+          });
+          setAttendanceRecords(records);
           
-          if (existingSession) {
-            setIsSessionStarted(true);
-            setSessionId(existingSession.id);
-            // تحميل سجلات الحضور الموجودة
-            const records: { [key: string]: 'present' | 'absent' } = {};
-            existingSession.records.forEach(record => {
-              records[record.studentId] = record.status;
-            });
-            setAttendanceRecords(records);
+          // إظهار إشعار للمستخدم عند تحديث الحضور
+          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+            console.log('🔄 Attendance updated in real-time!');
+            addNotification('تم تحديث الحضور تلقائياً', 'success');
           }
         }
-      )
-      .on('postgres_changes', 
-        { 
-          event: '*', 
-          schema: 'public', 
-          table: 'attendance_records'
-        }, 
-        (payload) => {
-          console.log('Attendance record change detected:', payload);
-          // Reload attendance records
-          const today = new Date().toDateString();
-          const existingSession = state.attendanceSessions.find(
-            session => session.classId === classId && new Date(session.date).toDateString() === today
-          );
-          
-          if (existingSession) {
-            const records: { [key: string]: 'present' | 'absent' } = {};
-            existingSession.records.forEach(record => {
-              records[record.studentId] = record.status;
-            });
-            setAttendanceRecords(records);
-          }
-        }
-      )
-      .subscribe();
+      }
+    );
 
     return () => {
+      console.log('Cleaning up attendance realtime listener for class:', classId);
       attendanceSubscription.unsubscribe();
     };
-  }, [classId, state.attendanceSessions]);
+  }, [classId]); // إزالة state.attendanceSessions من dependencies لتجنب إعادة إنشاء الـ subscription
+
+  // تحديث البيانات المحلية عند تغيير state.attendanceSessions
+  useEffect(() => {
+    const today = new Date().toDateString();
+    const existingSession = state.attendanceSessions.find(
+      session => session.classId === classId && new Date(session.date).toDateString() === today
+    );
+
+    if (existingSession) {
+      setIsSessionStarted(true);
+      setSessionId(existingSession.id);
+      // تحميل سجلات الحضور الموجودة
+      const records: { [key: string]: 'present' | 'absent' } = {};
+      existingSession.records.forEach(record => {
+        records[record.studentId] = record.status;
+      });
+      setAttendanceRecords(records);
+    }
+  }, [state.attendanceSessions, classId]);
 
   const translateX = new Animated.Value(0);
   const scale = new Animated.Value(1);
@@ -210,6 +212,20 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
       editMode: true,
       existingClass: currentClass 
     });
+  };
+
+  const handleTestRealtime = async () => {
+    addNotification('جاري اختبار Realtime...', 'info');
+    try {
+      const results = await RealtimeTest.runAllTests();
+      if (results.overall) {
+        addNotification('جميع اختبارات Realtime نجحت! ✅', 'success');
+      } else {
+        addNotification('بعض اختبارات Realtime فشلت ❌', 'error');
+      }
+    } catch (error) {
+      addNotification('خطأ في اختبار Realtime', 'error');
+    }
   };
 
   const onGestureEvent = Animated.event(
@@ -352,6 +368,13 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
           </Text>
         </View>
         <View style={styles.headerActions}>
+          <RealtimeStatus />
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={handleTestRealtime}
+          >
+            <Text style={styles.actionButtonText}>🧪</Text>
+          </TouchableOpacity>
           <TouchableOpacity
             style={styles.actionButton}
             onPress={handleEditClass}
@@ -432,6 +455,17 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
           </View>
         )}
       </View>
+
+      {/* إشعارات Realtime */}
+      {notifications.map((notification) => (
+        <RealtimeNotification
+          key={notification.id}
+          message={notification.message}
+          type={notification.type}
+          visible={true}
+          onHide={() => removeNotification(notification.id)}
+        />
+      ))}
     </View>
   );
 }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -16,13 +16,32 @@ import { fontFamilies } from '../utils/theme';
 
 interface AddClassScreenProps {
   navigation: any;
+  route?: {
+    params?: {
+      classId?: string;
+      editMode?: boolean;
+      existingClass?: any;
+    };
+  };
 }
 
-export default function AddClassScreen({ navigation }: AddClassScreenProps) {
+export default function AddClassScreen({ navigation, route }: AddClassScreenProps) {
   const [className, setClassName] = useState('');
   const [section, setSection] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const { state, dispatch } = useApp();
+  const { state, dispatch, createClass, updateClass } = useApp();
+
+  // التحقق من وضع التعديل
+  const editMode = route?.params?.editMode || false;
+  const existingClass = route?.params?.existingClass;
+
+  // تحميل بيانات الفصل في وضع التعديل
+  useEffect(() => {
+    if (editMode && existingClass) {
+      setClassName(existingClass.name);
+      setSection(existingClass.section);
+    }
+  }, [editMode, existingClass]);
 
   const handleAddClass = async () => {
     if (!className.trim()) {
@@ -40,42 +59,58 @@ export default function AddClassScreen({ navigation }: AddClassScreenProps) {
       return;
     }
 
-    // التحقق من عدم وجود فصل بنفس الاسم والشعبة
-    const existingClass = state.classes.find(
-      cls => cls.name === className.trim() && cls.section === section.trim()
-    );
+    // التحقق من عدم وجود فصل بنفس الاسم والشعبة (في وضع الإضافة فقط)
+    if (!editMode) {
+      const existingClass = state.classes.find(
+        cls => cls.name === className.trim() && cls.section === section.trim()
+      );
 
-    if (existingClass) {
-      Alert.alert('خطأ', 'يوجد بالفعل فصل بنفس الاسم والشعبة');
-      return;
+      if (existingClass) {
+        Alert.alert('خطأ', 'يوجد بالفعل فصل بنفس الاسم والشعبة');
+        return;
+      }
     }
 
     setIsLoading(true);
 
     try {
-      const newClass: Class = {
-        id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        name: className.trim(),
-        section: section.trim(),
-        teacherId: state.currentTeacher.id,
-        students: [],
-        createdAt: new Date(),
-      };
-
-      dispatch({ type: 'ADD_CLASS', payload: newClass });
-      
-      Alert.alert(
-        'تم بنجاح',
-        'تم إضافة الفصل الدراسي بنجاح',
-        [
-          {
-            text: 'موافق',
-            onPress: () => navigation.goBack(),
-          },
-        ]
-      );
+      if (editMode && existingClass) {
+        // تحديث الفصل الموجود
+        await updateClass(existingClass.id, {
+          name: className.trim(),
+          section: section.trim(),
+        });
+        Alert.alert(
+          'تم بنجاح',
+          'تم تحديث الفصل الدراسي بنجاح',
+          [
+            {
+              text: 'موافق',
+              onPress: () => navigation.goBack(),
+            },
+          ]
+        );
+      } else {
+        // إضافة فصل جديد
+        const newClass = await createClass({
+          name: className.trim(),
+          section: section.trim(),
+          teacherId: state.currentTeacher.id,
+        });
+        Alert.alert(
+          'تم بنجاح',
+          'تم إضافة الفصل الدراسي بنجاح',
+          [
+            {
+              text: 'موافق',
+              onPress: () => navigation.goBack(),
+            },
+          ]
+        );
+      }
     } catch (error) {
-      Alert.alert('خطأ', 'حدث خطأ أثناء إضافة الفصل');
+      console.error('Error saving class:', error);
+      Alert.alert('خطأ', editMode ? 'حدث خطأ أثناء تحديث الفصل' : 'حدث خطأ أثناء إضافة الفصل');
     } finally {
       setIsLoading(false);
     }
@@ -89,8 +124,12 @@ export default function AddClassScreen({ navigation }: AddClassScreenProps) {
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <View style={styles.content}>
           <View style={styles.header}>
-            <Text style={styles.title}>إضافة فصل دراسي جديد</Text>
-            <Text style={styles.subtitle}>أدخل تفاصيل الفصل الدراسي</Text>
+            <Text style={styles.title}>
+              {editMode ? 'تعديل الفصل الدراسي' : 'إضافة فصل دراسي جديد'}
+            </Text>
+            <Text style={styles.subtitle}>
+              {editMode ? 'عدّل تفاصيل الفصل الدراسي' : 'أدخل تفاصيل الفصل الدراسي'}
+            </Text>
           </View>
 
           <View style={styles.form}>
@@ -144,7 +183,10 @@ export default function AddClassScreen({ navigation }: AddClassScreenProps) {
                 disabled={isLoading}
               >
                 <Text style={styles.addButtonText}>
-                  {isLoading ? 'جاري الإضافة...' : 'إضافة الفصل'}
+                  {isLoading 
+                    ? (editMode ? 'جاري التحديث...' : 'جاري الإضافة...') 
+                    : (editMode ? 'تحديث الفصل' : 'إضافة الفصل')
+                  }
                 </Text>
               </TouchableOpacity>
             </View>

@@ -11,14 +11,15 @@ import {
 import { useApp } from '../context/AppContext';
 import { Class } from '../types';
 import { fontFamilies } from '../utils/theme';
+import { supabase } from '../config/supabase';
 
 interface DashboardScreenProps {
   navigation: any;
 }
 
 export default function DashboardScreen({ navigation }: DashboardScreenProps) {
-  const { state, dispatch } = useApp();
-  const { currentTeacher, classes } = state;
+  const { state, dispatch, deleteClass, refreshData } = useApp();
+  const { currentTeacher, classes, isLoading } = state;
 
   const handleAddClass = () => {
     navigation.navigate('AddClass');
@@ -38,8 +39,14 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
         {
           text: 'حذف',
           style: 'destructive',
-          onPress: () => {
-            dispatch({ type: 'DELETE_CLASS', payload: classId });
+          onPress: async () => {
+            try {
+              await deleteClass(classId);
+              Alert.alert('تم بنجاح', 'تم حذف الفصل الدراسي بنجاح');
+            } catch (error) {
+              console.error('Error deleting class:', error);
+              Alert.alert('خطأ', 'حدث خطأ أثناء حذف الفصل');
+            }
           },
         },
       ]
@@ -117,8 +124,8 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
               {
                 text: 'تسجيل الخروج',
                 style: 'destructive',
-                onPress: () => {
-                  dispatch({ type: 'SET_TEACHER', payload: null });
+                onPress: async () => {
+                  await supabase.auth.signOut();
                   // سيتم الانتقال تلقائياً عند تحديث state.currentTeacher
                 },
               },
@@ -132,9 +139,20 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
       <View style={styles.content}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>الفصول الدراسية</Text>
-          <TouchableOpacity style={styles.addButton} onPress={handleAddClass}>
-            <Text style={styles.addButtonText}>+ إضافة فصل</Text>
-          </TouchableOpacity>
+          <View style={styles.headerButtons}>
+            <TouchableOpacity 
+              style={styles.refreshButton} 
+              onPress={refreshData}
+              disabled={isLoading}
+            >
+              <Text style={styles.refreshButtonText}>
+                {isLoading ? 'جاري التحديث...' : 'تحديث'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.addButton} onPress={handleAddClass}>
+              <Text style={styles.addButtonText}>+ إضافة فصل</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {classes.length === 0 ? (
@@ -200,6 +218,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 20,
     marginBottom: 16,
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  refreshButton: {
+    backgroundColor: '#17a2b8',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    marginRight: 8,
+  },
+  refreshButtonText: {
+    color: 'white',
+    fontFamily: fontFamilies.semibold,
+    fontSize: 12,
   },
   sectionTitle: {
     fontSize: 20,

@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Animated,
+  Alert,
 } from 'react-native';
 import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import { useApp } from '../context/AppContext';
@@ -23,7 +24,7 @@ interface AttendanceScreenProps {
 
 export default function AttendanceScreen({ navigation, route }: AttendanceScreenProps) {
   const { classId } = route.params;
-  const { state, dispatch } = useApp();
+  const { state, dispatch, createAttendanceSession, recordAttendance, deleteClass } = useApp();
   const [currentStudentIndex, setCurrentStudentIndex] = useState(0);
   const [attendanceRecords, setAttendanceRecords] = useState<{ [key: string]: 'present' | 'absent' }>({});
   const [isSessionStarted, setIsSessionStarted] = useState(false);
@@ -55,72 +56,98 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
     }
   }, [classId, state.attendanceSessions]);
 
-  const startAttendanceSession = () => {
+  const startAttendanceSession = async () => {
     if (students.length === 0) {
       showErrorAlert('لا يوجد طلاب في هذا الفصل');
       return;
     }
 
-    const newSession: AttendanceSession = {
-      id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      classId: classId,
-      date: new Date(),
-      records: [],
-      createdAt: new Date(),
-    };
+    try {
+      const newSession = await createAttendanceSession({
+        classId: classId,
+        date: new Date(),
+      });
 
-    dispatch({ type: 'ADD_ATTENDANCE_SESSION', payload: newSession });
-    setSessionId(newSession.id);
-    setIsSessionStarted(true);
-    setCurrentStudentIndex(0);
-    setAttendanceRecords({});
+      setSessionId(newSession.id);
+      setIsSessionStarted(true);
+      setCurrentStudentIndex(0);
+      setAttendanceRecords({});
+    } catch (error) {
+      console.error('Error starting attendance session:', error);
+      showErrorAlert('حدث خطأ أثناء بدء جلسة الحضور');
+    }
   };
 
-  const markAttendance = (status: 'present' | 'absent') => {
+  const markAttendance = async (status: 'present' | 'absent') => {
     if (!currentStudent || !sessionId) return;
 
-    setAttendanceRecords(prev => ({
-      ...prev,
-      [currentStudent.id]: status,
-    }));
+    try {
+      // حفظ سجل الحضور في قاعدة البيانات
+      await recordAttendance({
+        studentId: currentStudent.id,
+        classId: classId,
+        sessionId: sessionId,
+        status: status,
+        date: new Date(),
+      });
 
-    // الانتقال للطالب التالي
-    if (currentStudentIndex < students.length - 1) {
-      setCurrentStudentIndex(prev => prev + 1);
-    } else {
-      // انتهاء تسجيل الحضور
-      finishAttendanceSession();
+      setAttendanceRecords(prev => ({
+        ...prev,
+        [currentStudent.id]: status,
+      }));
+
+      // الانتقال للطالب التالي
+      if (currentStudentIndex < students.length - 1) {
+        setCurrentStudentIndex(prev => prev + 1);
+      } else {
+        // انتهاء تسجيل الحضور
+        finishAttendanceSession();
+      }
+    } catch (error) {
+      console.error('Error recording attendance:', error);
+      showErrorAlert('حدث خطأ أثناء تسجيل الحضور');
     }
   };
 
   const finishAttendanceSession = () => {
     if (!sessionId) return;
 
-    // إنشاء سجلات الحضور
-    const records: AttendanceRecord[] = students.map(student => ({
-      id: `${sessionId}_${student.id}_${Math.random().toString(36).substr(2, 9)}`,
-      studentId: student.id,
-      classId: classId,
-      date: new Date(),
-      status: attendanceRecords[student.id] || 'absent',
-      createdAt: new Date(),
-    }));
-
-    // تحديث جلسة الحضور
-    const updatedSession: AttendanceSession = {
-      id: sessionId,
-      classId: classId,
-      date: new Date(),
-      records: records,
-      createdAt: new Date(),
-    };
-
-    dispatch({ type: 'ADD_ATTENDANCE_SESSION', payload: updatedSession });
-
-    const presentCount = records.filter(r => r.status === 'present').length;
-    const absentCount = records.filter(r => r.status === 'absent').length;
+    // حساب عدد الحاضرين والغائبين
+    const presentCount = Object.values(attendanceRecords).filter(status => status === 'present').length;
+    const absentCount = students.length - presentCount;
 
     showAttendanceCompleteAlert(presentCount, absentCount, () => navigation.goBack());
+  };
+
+  const handleDeleteClass = () => {
+    Alert.alert(
+      'حذف الفصل',
+      `هل أنت متأكد من حذف الفصل "${currentClass?.name} - شعبة ${currentClass?.section}"؟\n\nسيتم حذف جميع الطلاب وسجلات الحضور المرتبطة بهذا الفصل.`,
+      [
+        { text: 'إلغاء', style: 'cancel' },
+        {
+          text: 'حذف',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteClass(classId);
+              navigation.goBack();
+            } catch (error) {
+              console.error('Error deleting class:', error);
+              showErrorAlert('حدث خطأ أثناء حذف الفصل');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleEditClass = () => {
+    navigation.navigate('AddClass', { 
+      classId: classId,
+      editMode: true,
+      existingClass: currentClass 
+    });
   };
 
   const onGestureEvent = Animated.event(
@@ -262,6 +289,20 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
             {currentClass.name} - شعبة {currentClass.section}
           </Text>
         </View>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={handleEditClass}
+          >
+            <Text style={styles.actionButtonText}>✏️</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={handleDeleteClass}
+          >
+            <Text style={styles.actionButtonText}>🗑️</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.content}>
@@ -370,6 +411,24 @@ const styles = StyleSheet.create({
     fontFamily: fontFamilies.regular,
     color: '#6c757d',
     marginTop: 2,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  actionButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#f8f9fa',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  actionButtonText: {
+    fontSize: 16,
   },
   content: {
     flex: 1,

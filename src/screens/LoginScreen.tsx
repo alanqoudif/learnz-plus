@@ -14,6 +14,7 @@ import { useApp } from '../context/AppContext';
 import { Teacher } from '../types';
 import { validateName, validatePhoneNumber, formatName } from '../utils/validation';
 import { fontFamilies } from '../utils/theme';
+import { supabase } from '../config/supabase';
 
 interface LoginScreenProps {
   navigation: any;
@@ -50,21 +51,68 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
     setIsLoading(true);
 
     try {
-      const teacher: Teacher = {
-        id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        name: formatName(name),
-        phoneNumber: phoneNumber.replace(/\s/g, ''),
-        createdAt: new Date(),
-      };
+      const formattedPhone = phoneNumber.replace(/\s/g, '');
+      const formattedName = formatName(name);
 
-      // حفظ بيانات المعلم
-      dispatch({ type: 'SET_TEACHER', payload: teacher });
+      // استخدام Supabase Auth للتسجيل/تسجيل الدخول
+      // إنشاء إيميل وهمي من رقم الهاتف (مخفي من المستخدم)
+      const email = `${formattedPhone}@teacher.local`;
       
-      // الانتقال للصفحة الرئيسية
-      // سيتم الانتقال تلقائياً عند تحديث state.currentTeacher
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email,
+        password: 'default123', // كلمة مرور افتراضية
+      });
+
+      if (error) {
+        // إذا فشل تسجيل الدخول، جرب التسجيل
+        if (error.message.includes('Invalid login credentials') || error.message.includes('User not found')) {
+          const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+            email: email,
+            password: 'default123',
+            options: {
+              data: {
+                name: formattedName,
+                phone_number: formattedPhone,
+              }
+            }
+          });
+
+          if (signUpError) {
+            console.error('Sign up error:', signUpError);
+            throw signUpError;
+          }
+
+          // إنشاء معلم في جدول المعلمين
+          const teacher: Teacher = {
+            id: signUpData.user!.id,
+            name: formattedName,
+            phoneNumber: formattedPhone,
+            createdAt: new Date(),
+          };
+
+          // حفظ بيانات المعلم في Context
+          dispatch({ type: 'SET_TEACHER', payload: teacher });
+        } else {
+          console.error('Login error:', error);
+          throw error;
+        }
+      } else {
+        // تسجيل الدخول نجح
+        const teacher: Teacher = {
+          id: data.user.id,
+          name: formattedName,
+          phoneNumber: formattedPhone,
+          createdAt: new Date(data.user.created_at),
+        };
+
+        // حفظ بيانات المعلم في Context
+        dispatch({ type: 'SET_TEACHER', payload: teacher });
+      }
+      
     } catch (error) {
       console.error('Login error:', error);
-      Alert.alert('خطأ', 'حدث خطأ أثناء تسجيل الدخول. يرجى المحاولة مرة أخرى.');
+      const errorMessage = error instanceof Error ? error.message : 'خطأ غير معروف';
+      Alert.alert('خطأ', `حدث خطأ أثناء تسجيل الدخول: ${errorMessage}`);
     } finally {
       setIsLoading(false);
     }

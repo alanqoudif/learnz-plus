@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Teacher, Class, Student, AttendanceRecord, AttendanceSession } from '../types';
+import { classService, studentService, attendanceService } from '../services/supabaseService';
+import { supabase } from '../config/supabase';
 
 interface AppState {
   currentTeacher: Teacher | null;
@@ -116,17 +118,54 @@ function appReducer(state: AppState, action: AppAction): AppState {
   }
 }
 
-const AppContext = createContext<{
+interface AppContextType {
   state: AppState;
   dispatch: React.Dispatch<AppAction>;
-} | null>(null);
+  // دوال Supabase
+  createTeacher: (teacher: Omit<Teacher, 'id' | 'createdAt'>) => Promise<Teacher>;
+  createClass: (classData: Omit<Class, 'id' | 'createdAt' | 'students'>) => Promise<Class>;
+  updateClass: (id: string, updates: Partial<Omit<Class, 'id' | 'createdAt' | 'students' | 'teacherId'>>) => Promise<Class>;
+  deleteClass: (id: string) => Promise<void>;
+  createStudent: (student: Omit<Student, 'id' | 'createdAt'>) => Promise<Student>;
+  updateStudent: (id: string, updates: Partial<Omit<Student, 'id' | 'createdAt' | 'classId'>>) => Promise<Student>;
+  deleteStudent: (id: string) => Promise<void>;
+  createAttendanceSession: (session: Omit<AttendanceSession, 'id' | 'createdAt' | 'records'>) => Promise<AttendanceSession>;
+  recordAttendance: (record: Omit<AttendanceRecord, 'id' | 'createdAt'>) => Promise<AttendanceRecord>;
+  refreshData: () => Promise<void>;
+}
+
+const AppContext = createContext<AppContextType | null>(null);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, initialState);
 
-  // Load data from AsyncStorage on app start
+  // Load data from Supabase Auth on app start
   useEffect(() => {
     loadData();
+  }, []);
+
+  // Listen for auth state changes
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+        if (event === 'SIGNED_IN' && session) {
+          // تسجيل دخول جديد
+          const teacher: Teacher = {
+            id: session.user.id,
+            name: session.user.user_metadata?.name || 'معلم',
+            phoneNumber: session.user.user_metadata?.phone_number || session.user.email?.replace('@teacher.local', '') || '',
+            createdAt: new Date(session.user.created_at),
+          };
+          dispatch({ type: 'SET_TEACHER', payload: teacher });
+          loadData();
+        } else if (event === 'SIGNED_OUT') {
+        // تسجيل خروج
+        dispatch({ type: 'SET_TEACHER', payload: null });
+        dispatch({ type: 'SET_CLASSES', payload: [] });
+        dispatch({ type: 'SET_LOADING', payload: false });
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   // Save data to AsyncStorage whenever state changes
@@ -138,37 +177,35 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const loadData = async () => {
     try {
-      const [teacherData, classesData, sessionsData] = await Promise.all([
-        AsyncStorage.getItem('teacher'),
-        AsyncStorage.getItem('classes'),
-        AsyncStorage.getItem('attendanceSessions'),
-      ]);
-
-      let teacher = null;
-      let classes = [];
-      let sessions = [];
-
-      try {
-        teacher = teacherData ? JSON.parse(teacherData) : null;
-      } catch (e) {
-        console.error('Error parsing teacher data:', e);
+      // التحقق من وجود جلسة نشطة في Supabase Auth
+      const { data: { session }, error } = await supabase.auth.getSession();
+      
+      if (error || !session) {
+        dispatch({ type: 'SET_LOADING', payload: false });
+        return;
       }
 
-      try {
-        classes = classesData ? JSON.parse(classesData) : [];
-      } catch (e) {
-        console.error('Error parsing classes data:', e);
-      }
+        // إنشاء كائن المعلم من بيانات الجلسة
+        const teacher: Teacher = {
+          id: session.user.id,
+          name: session.user.user_metadata?.name || 'معلم',
+          phoneNumber: session.user.user_metadata?.phone_number || session.user.email?.replace('@teacher.local', '') || '',
+          createdAt: new Date(session.user.created_at),
+        };
 
-      try {
-        sessions = sessionsData ? JSON.parse(sessionsData) : [];
-      } catch (e) {
-        console.error('Error parsing sessions data:', e);
+      // جلب الفصول الدراسية من قاعدة البيانات
+      const classes = await classService.getClassesByTeacher(teacher.id);
+      
+      // جلب جلسات الحضور لجميع الفصول
+      const allSessions: AttendanceSession[] = [];
+      for (const classItem of classes) {
+        const sessions = await attendanceService.getAttendanceSessionsByClass(classItem.id);
+        allSessions.push(...sessions);
       }
 
       dispatch({
         type: 'LOAD_DATA',
-        payload: { teacher, classes, sessions },
+        payload: { teacher, classes, sessions: allSessions },
       });
     } catch (error) {
       console.error('Error loading data:', error);
@@ -178,23 +215,101 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const saveData = async () => {
     try {
-      const promises = [];
-      
-      if (state.currentTeacher) {
-        promises.push(AsyncStorage.setItem('teacher', JSON.stringify(state.currentTeacher)));
-      }
-      
-      promises.push(AsyncStorage.setItem('classes', JSON.stringify(state.classes)));
-      promises.push(AsyncStorage.setItem('attendanceSessions', JSON.stringify(state.attendanceSessions)));
-      
-      await Promise.all(promises);
+      // لا نحتاج لحفظ بيانات في AsyncStorage لأن Supabase Auth يتولى ذلك
+      // يمكن إضافة منطق إضافي هنا إذا لزم الأمر
     } catch (error) {
       console.error('Error saving data:', error);
     }
   };
 
+  // دوال Supabase
+  const createTeacher = async (teacher: Omit<Teacher, 'id' | 'createdAt'>): Promise<Teacher> => {
+    // لا نحتاج لهذه الدالة بعد الآن لأن Supabase Auth يتولى إنشاء المستخدمين
+    throw new Error('Use Supabase Auth for teacher creation');
+  };
+
+  const createClass = async (classData: Omit<Class, 'id' | 'createdAt' | 'students'>): Promise<Class> => {
+    const newClass = await classService.createClass(classData);
+    dispatch({ type: 'ADD_CLASS', payload: newClass });
+    return newClass;
+  };
+
+  const updateClass = async (id: string, updates: Partial<Omit<Class, 'id' | 'createdAt' | 'students' | 'teacherId'>>): Promise<Class> => {
+    const updatedClass = await classService.updateClass(id, updates);
+    dispatch({ type: 'UPDATE_CLASS', payload: updatedClass });
+    return updatedClass;
+  };
+
+  const deleteClass = async (id: string): Promise<void> => {
+    await classService.deleteClass(id);
+    dispatch({ type: 'DELETE_CLASS', payload: id });
+  };
+
+  const createStudent = async (student: Omit<Student, 'id' | 'createdAt'>): Promise<Student> => {
+    const newStudent = await studentService.createStudent(student);
+    dispatch({ type: 'ADD_STUDENT', payload: { classId: student.classId, student: newStudent } });
+    return newStudent;
+  };
+
+  const updateStudent = async (id: string, updates: Partial<Omit<Student, 'id' | 'createdAt' | 'classId'>>): Promise<Student> => {
+    const updatedStudent = await studentService.updateStudent(id, updates);
+    // العثور على classId للطالب المحدث
+    const classItem = state.classes.find(cls => cls.students.some(s => s.id === id));
+    if (classItem) {
+      dispatch({ type: 'UPDATE_STUDENT', payload: { classId: classItem.id, student: updatedStudent } });
+    }
+    return updatedStudent;
+  };
+
+  const deleteStudent = async (id: string): Promise<void> => {
+    await studentService.deleteStudent(id);
+    // العثور على classId للطالب المحذوف
+    const classItem = state.classes.find(cls => cls.students.some(s => s.id === id));
+    if (classItem) {
+      dispatch({ type: 'DELETE_STUDENT', payload: { classId: classItem.id, studentId: id } });
+    }
+  };
+
+  const createAttendanceSession = async (session: Omit<AttendanceSession, 'id' | 'createdAt' | 'records'>): Promise<AttendanceSession> => {
+    const newSession = await attendanceService.createAttendanceSession(session);
+    dispatch({ type: 'ADD_ATTENDANCE_SESSION', payload: newSession });
+    return newSession;
+  };
+
+  const recordAttendance = async (record: Omit<AttendanceRecord, 'id' | 'createdAt'>): Promise<AttendanceRecord> => {
+    const newRecord = await attendanceService.recordAttendance(record);
+    // تحديث الجلسة في state
+    const sessionIndex = state.attendanceSessions.findIndex(s => s.id === record.sessionId);
+    if (sessionIndex !== -1) {
+      const updatedSession = {
+        ...state.attendanceSessions[sessionIndex],
+        records: [...state.attendanceSessions[sessionIndex].records, newRecord]
+      };
+      dispatch({ type: 'ADD_ATTENDANCE_SESSION', payload: updatedSession });
+    }
+    return newRecord;
+  };
+
+  const refreshData = async (): Promise<void> => {
+    dispatch({ type: 'SET_LOADING', payload: true });
+    await loadData();
+  };
+
   return (
-    <AppContext.Provider value={{ state, dispatch }}>
+    <AppContext.Provider value={{ 
+      state, 
+      dispatch,
+      createTeacher,
+      createClass,
+      updateClass,
+      deleteClass,
+      createStudent,
+      updateStudent,
+      deleteStudent,
+      createAttendanceSession,
+      recordAttendance,
+      refreshData
+    }}>
       {children}
     </AppContext.Provider>
   );

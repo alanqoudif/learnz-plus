@@ -24,7 +24,7 @@ interface StudentManagementScreenProps {
 
 export default function StudentManagementScreen({ navigation, route }: StudentManagementScreenProps) {
   const { classId } = route.params;
-  const { state, dispatch } = useApp();
+  const { state, dispatch, createStudent, deleteStudent } = useApp();
   const [showAddModal, setShowAddModal] = useState(false);
   const [newStudentName, setNewStudentName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -55,19 +55,16 @@ export default function StudentManagementScreen({ navigation, route }: StudentMa
     setIsLoading(true);
 
     try {
-      const newStudent: Student = {
-        id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      const newStudent = await createStudent({
         name: newStudentName.trim(),
         classId: classId,
-        createdAt: new Date(),
-      };
-
-      dispatch({ type: 'ADD_STUDENT', payload: { classId, student: newStudent } });
+      });
       
       setNewStudentName('');
       setShowAddModal(false);
       Alert.alert('تم بنجاح', 'تم إضافة الطالب بنجاح');
     } catch (error) {
+      console.error('Error adding student:', error);
       Alert.alert('خطأ', 'حدث خطأ أثناء إضافة الطالب');
     } finally {
       setIsLoading(false);
@@ -83,8 +80,14 @@ export default function StudentManagementScreen({ navigation, route }: StudentMa
         {
           text: 'حذف',
           style: 'destructive',
-          onPress: () => {
-            dispatch({ type: 'DELETE_STUDENT', payload: { classId, studentId } });
+          onPress: async () => {
+            try {
+              await deleteStudent(studentId);
+              Alert.alert('تم بنجاح', 'تم حذف الطالب بنجاح');
+            } catch (error) {
+              console.error('Error deleting student:', error);
+              Alert.alert('خطأ', 'حدث خطأ أثناء حذف الطالب');
+            }
           },
         },
       ]

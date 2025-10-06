@@ -25,6 +25,7 @@ export interface AttendanceRecord {
   id: string;
   studentId: string;
   classId: string;
+  sessionId?: string;
   date: Date;
   status: 'present' | 'absent';
   createdAt: Date;

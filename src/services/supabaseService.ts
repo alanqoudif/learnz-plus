@@ -323,7 +323,7 @@ export const attendanceService = {
         .from('attendance_records')
         .update({
           status: record.status,
-          attendance_time: record.date.toISOString(),
+          attendance_time: record.attendanceTime.toISOString(),
         })
         .eq('student_id', record.studentId)
         .eq('session_id', record.sessionId || '')
@@ -341,7 +341,7 @@ export const attendanceService = {
           class_id: record.classId,
           session_id: record.sessionId || '',
           status: record.status,
-          attendance_time: record.date.toISOString(),
+          attendance_time: record.attendanceTime.toISOString(),
         })
         .select()
         .single();

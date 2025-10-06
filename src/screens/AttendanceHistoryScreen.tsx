@@ -53,9 +53,22 @@ export default function AttendanceHistoryScreen({ navigation, route }: Attendanc
   const getAttendanceStats = (session: AttendanceSession) => {
     const presentCount = session.records.filter(r => r.status === 'present').length;
     const absentCount = session.records.filter(r => r.status === 'absent').length;
-    const totalCount = session.records.length;
+    const totalStudents = currentClass?.students.length || 0;
+    const totalRecorded = presentCount + absentCount;
     
-    return { presentCount, absentCount, totalCount };
+    // إضافة تشخيص للإحصائيات
+    console.log('إحصائيات الجلسة:', {
+      sessionId: session.id,
+      sessionDate: session.date,
+      totalStudents,
+      totalRecords: session.records.length,
+      presentCount,
+      absentCount,
+      totalRecorded,
+      records: session.records.map(r => ({ studentId: r.studentId, status: r.status }))
+    });
+    
+    return { presentCount, absentCount, totalCount: totalStudents };
   };
 
   const renderSessionItem = ({ item }: { item: AttendanceSession }) => {
@@ -76,9 +89,10 @@ export default function AttendanceHistoryScreen({ navigation, route }: Attendanc
             })}
           </Text>
           <Text style={styles.sessionTime}>
-            {date.toLocaleTimeString('en-US', {
+            {date.toLocaleTimeString('ar-SA', {
               hour: '2-digit',
               minute: '2-digit',
+              hour12: true
             })}
           </Text>
         </View>
@@ -97,6 +111,15 @@ export default function AttendanceHistoryScreen({ navigation, route }: Attendanc
             <Text style={styles.statLabel}>المجموع</Text>
           </View>
         </View>
+        
+        {/* إظهار تحذير إذا لم يتم تسجيل جميع الطلاب */}
+        {stats.presentCount + stats.absentCount < stats.totalCount && (
+          <View style={styles.warningContainer}>
+            <Text style={styles.warningText}>
+              ⚠️ لم يتم تسجيل {stats.totalCount - (stats.presentCount + stats.absentCount)} طالب
+            </Text>
+          </View>
+        )}
       </TouchableOpacity>
     );
   };
@@ -106,6 +129,17 @@ export default function AttendanceHistoryScreen({ navigation, route }: Attendanc
     if (!student) return null;
 
     const attendanceTime = new Date(item.attendanceTime || item.date);
+    
+    // إضافة تشخيص للوقت
+    console.log('Attendance time for', student.name, ':', {
+      raw: item.attendanceTime || item.date,
+      parsed: attendanceTime,
+      formatted: attendanceTime.toLocaleTimeString('ar-SA', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      })
+    });
 
     return (
       <View style={styles.studentRecord}>
@@ -448,5 +482,20 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
+  },
+  warningContainer: {
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#fff3cd',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#ffeaa7',
+  },
+  warningText: {
+    fontSize: 12,
+    fontFamily: fontFamilies.regular,
+    color: '#856404',
+    textAlign: 'center',
   },
 });

@@ -126,6 +126,8 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
     if (!currentStudent || !sessionId) return;
 
     try {
+      console.log(`تسجيل ${status} للطالب:`, currentStudent.name, currentStudent.id);
+      
       // حفظ سجل الحضور في قاعدة البيانات
       await recordAttendance({
         studentId: currentStudent.id,
@@ -136,10 +138,15 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
         attendanceTime: new Date(),
       });
 
-      setAttendanceRecords(prev => ({
-        ...prev,
+      // تحديث السجلات المحلية
+      const newRecords = {
+        ...attendanceRecords,
         [currentStudent.id]: status,
-      }));
+      };
+      
+      setAttendanceRecords(newRecords);
+      
+      console.log('السجلات المحدثة:', newRecords);
 
       // الانتقال للطالب التالي
       if (currentStudentIndex < students.length - 1) {
@@ -160,20 +167,33 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
     // حساب عدد الحاضرين والغائبين بناءً على السجلات الفعلية
     const presentCount = Object.values(attendanceRecords).filter(status => status === 'present').length;
     const absentCount = Object.values(attendanceRecords).filter(status => status === 'absent').length;
-    
-    // التأكد من أن العدد الإجمالي صحيح
-    const totalRecorded = presentCount + absentCount;
     const totalStudents = students.length;
+    
+    // التأكد من أن جميع الطلاب تم تسجيل حضورهم
+    const totalRecorded = presentCount + absentCount;
     
     console.log('إحصائيات الحضور:', {
       presentCount,
       absentCount,
       totalRecorded,
       totalStudents,
-      attendanceRecords
+      attendanceRecords,
+      students: students.map(s => ({ id: s.id, name: s.name }))
     });
 
-    showAttendanceCompleteAlert(presentCount, absentCount, () => navigation.goBack());
+    // إذا لم يتم تسجيل جميع الطلاب، إظهار تحذير
+    if (totalRecorded < totalStudents) {
+      Alert.alert(
+        'تحذير',
+        `لم يتم تسجيل حضور جميع الطلاب.\nتم تسجيل ${totalRecorded} من أصل ${totalStudents} طالب.`,
+        [
+          { text: 'متابعة', onPress: () => showAttendanceCompleteAlert(presentCount, absentCount, () => navigation.goBack()) },
+          { text: 'إلغاء', style: 'cancel' }
+        ]
+      );
+    } else {
+      showAttendanceCompleteAlert(presentCount, absentCount, () => navigation.goBack());
+    }
   };
 
   const handleDeleteClass = () => {
@@ -199,13 +219,6 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
     );
   };
 
-  const handleEditClass = () => {
-    navigation.navigate('AddClass', { 
-      classId: classId,
-      editMode: true,
-      existingClass: currentClass 
-    });
-  };
 
 
   const onGestureEvent = Animated.event(
@@ -331,20 +344,14 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
             {currentClass.name} - شعبة {currentClass.section}
           </Text>
         </View>
-        <View style={styles.headerActions}>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={handleEditClass}
-          >
-            <Text style={styles.actionButtonText}>✏️</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={handleDeleteClass}
-          >
-            <Text style={styles.actionButtonText}>🗑️</Text>
-          </TouchableOpacity>
-        </View>
+         <View style={styles.headerActions}>
+           <TouchableOpacity
+             style={styles.actionButton}
+             onPress={handleDeleteClass}
+           >
+             <Text style={styles.actionButtonText}>🗑️</Text>
+           </TouchableOpacity>
+         </View>
       </View>
 
       <View style={styles.content}>

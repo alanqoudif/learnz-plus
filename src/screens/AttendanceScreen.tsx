@@ -471,7 +471,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 0,
   },
   studentCard: {
     backgroundColor: 'white',
@@ -518,7 +518,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     direction: 'rtl',
-    marginTop: 50,
+    marginTop: 20,
     paddingHorizontal: 20,
   },
   manualButton: {

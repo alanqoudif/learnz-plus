@@ -152,7 +152,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           const teacher: Teacher = {
             id: session.user.id,
             name: session.user.user_metadata?.name || 'معلم',
-            phoneNumber: session.user.user_metadata?.phone_number || session.user.email?.replace('@teacher.local', '') || '',
+            phoneNumber: session.user.user_metadata?.phone_number || session.user.email?.replace('@teacher.app', '') || '',
             createdAt: new Date(session.user.created_at),
           };
           dispatch({ type: 'SET_TEACHER', payload: teacher });
@@ -189,7 +189,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const teacher: Teacher = {
           id: session.user.id,
           name: session.user.user_metadata?.name || 'معلم',
-          phoneNumber: session.user.user_metadata?.phone_number || session.user.email?.replace('@teacher.local', '') || '',
+          phoneNumber: session.user.user_metadata?.phone_number || session.user.email?.replace('@teacher.app', '') || '',
           createdAt: new Date(session.user.created_at),
         };
 

@@ -56,7 +56,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
 
       // استخدام Supabase Auth للتسجيل/تسجيل الدخول
       // إنشاء إيميل وهمي من رقم الهاتف (مخفي من المستخدم)
-      const email = `${formattedPhone}@teacher.local`;
+      const email = `${formattedPhone}@teacher.app`;
       
       const { data, error } = await supabase.auth.signInWithPassword({
         email: email,

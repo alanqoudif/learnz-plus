@@ -7,7 +7,6 @@ import {
   Animated,
   Alert,
 } from 'react-native';
-import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import { useApp } from '../context/AppContext';
 import { AttendanceRecord, AttendanceSession } from '../types';
 import { showErrorAlert, showAttendanceCompleteAlert } from '../utils/notifications';
@@ -96,8 +95,6 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
     };
   }, [classId, state.attendanceSessions]);
 
-  const translateX = new Animated.Value(0);
-  const scale = new Animated.Value(1);
 
   useEffect(() => {
     // التحقق من وجود جلسة حضور اليوم
@@ -151,6 +148,7 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
         sessionId: sessionId,
         status: status,
         date: new Date(),
+        attendanceTime: new Date(),
       });
 
       setAttendanceRecords(prev => ({
@@ -212,97 +210,19 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
     });
   };
 
-  const onGestureEvent = Animated.event(
-    [{ nativeEvent: { translationX: translateX } }],
-    { useNativeDriver: true }
-  );
-
-  const onHandlerStateChange = (event: any) => {
-    if (event.nativeEvent.state === State.END) {
-      const { translationX, velocityX } = event.nativeEvent;
-      
-      // إذا كان السحب لليمين (present)
-      if (translationX > 100 || velocityX > 500) {
-        Animated.parallel([
-          Animated.timing(translateX, {
-            toValue: 300,
-            duration: 200,
-            useNativeDriver: true,
-          }),
-          Animated.timing(scale, {
-            toValue: 0.8,
-            duration: 200,
-            useNativeDriver: true,
-          }),
-        ]).start(() => {
-          markAttendance('present');
-          translateX.setValue(0);
-          scale.setValue(1);
-        });
-      }
-      // إذا كان السحب لليسار (absent)
-      else if (translationX < -100 || velocityX < -500) {
-        Animated.parallel([
-          Animated.timing(translateX, {
-            toValue: -300,
-            duration: 200,
-            useNativeDriver: true,
-          }),
-          Animated.timing(scale, {
-            toValue: 0.8,
-            duration: 200,
-            useNativeDriver: true,
-          }),
-        ]).start(() => {
-          markAttendance('absent');
-          translateX.setValue(0);
-          scale.setValue(1);
-        });
-      }
-      // إرجاع الكارت لمكانه
-      else {
-        Animated.parallel([
-          Animated.spring(translateX, {
-            toValue: 0,
-            useNativeDriver: true,
-          }),
-          Animated.spring(scale, {
-            toValue: 1,
-            useNativeDriver: true,
-          }),
-        ]).start();
-      }
-    }
-  };
 
   const renderStudentCard = () => {
     if (!currentStudent) return null;
 
-    const cardStyle = {
-      transform: [
-        { translateX: translateX },
-        { scale: scale },
-      ],
-    };
-
     return (
-      <PanGestureHandler
-        onGestureEvent={onGestureEvent}
-        onHandlerStateChange={onHandlerStateChange}
-      >
-        <Animated.View style={[styles.studentCard, cardStyle]}>
-          <View style={styles.studentNumber}>
-            <Text style={styles.studentNumberText}>{currentStudentIndex + 1}</Text>
-          </View>
-          <View style={styles.studentInfo}>
-            <Text style={styles.studentName}>{currentStudent.name}</Text>
-            <Text style={styles.studentStatus}>
-              {attendanceRecords[currentStudent.id] === 'present' ? 'حاضر' :
-               attendanceRecords[currentStudent.id] === 'absent' ? 'غائب' : 'لم يتم التسجيل'}
-            </Text>
-          </View>
-        </Animated.View>
-      </PanGestureHandler>
+      <View style={styles.studentCard}>
+        <View style={styles.studentNumber}>
+          <Text style={styles.studentNumberText}>{currentStudentIndex + 1}</Text>
+        </View>
+        <View style={styles.studentInfo}>
+          <Text style={styles.studentName}>{currentStudent.name}</Text>
+        </View>
+      </View>
     );
   };
 
@@ -375,7 +295,7 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
               عدد الطلاب: {students.length}
             </Text>
             <Text style={styles.startInstructions}>
-              اسحب الكارت لليمين للحضور أو لليسار للغياب
+              اضغط على الأزرار لتسجيل حضور أو غياب الطلاب
             </Text>
             <TouchableOpacity
               style={styles.startButton}
@@ -402,17 +322,6 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
 
             <View style={styles.cardContainer}>
               {renderStudentCard()}
-            </View>
-
-            <View style={styles.instructionsContainer}>
-              <View style={styles.instructionItem}>
-                <View style={[styles.instructionColor, { backgroundColor: '#28a745' }]} />
-                <Text style={styles.instructionText}>اسحب لليمين = حاضر</Text>
-              </View>
-              <View style={styles.instructionItem}>
-                <View style={[styles.instructionColor, { backgroundColor: '#dc3545' }]} />
-                <Text style={styles.instructionText}>اسحب لليسار = غائب</Text>
-              </View>
             </View>
 
             <View style={styles.manualButtons}>
@@ -562,7 +471,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 30,
+    marginBottom: 10,
   },
   studentCard: {
     backgroundColor: 'white',
@@ -605,42 +514,24 @@ const styles = StyleSheet.create({
     color: '#2c3e50',
     marginBottom: 4,
   },
-  studentStatus: {
-    fontSize: 14,
-    fontFamily: fontFamilies.regular,
-    color: '#6c757d',
-  },
-  instructionsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 30,
-  },
-  instructionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  instructionColor: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    marginRight: 8,
-  },
-  instructionText: {
-    fontSize: 14,
-    fontFamily: fontFamilies.regular,
-    color: '#6c757d',
-  },
   manualButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     direction: 'rtl',
+    marginTop: 50,
+    paddingHorizontal: 20,
   },
   manualButton: {
     flex: 1,
-    paddingVertical: 16,
-    borderRadius: 8,
+    paddingVertical: 18,
+    borderRadius: 12,
     alignItems: 'center',
     marginHorizontal: 8,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   absentButton: {
     backgroundColor: '#dc3545',
@@ -650,8 +541,8 @@ const styles = StyleSheet.create({
   },
   manualButtonText: {
     color: 'white',
-    fontSize: 16,
-    fontFamily: fontFamilies.semibold,
+    fontSize: 18,
+    fontFamily: fontFamilies.bold,
   },
   emptyState: {
     flex: 1,

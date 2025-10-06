@@ -32,19 +32,23 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   const handleDeleteClass = (classId: string, className: string) => {
     Alert.alert(
       'تأكيد الحذف',
-      `هل أنت متأكد من حذف الفصل "${className}"؟ سيتم حذف جميع الطلاب وسجلات الحضور المرتبطة به.`,
+      `هل أنت متأكد من حذف الشعبة "${className}"؟\n\n⚠️ تحذير: سيتم حذف:\n• جميع الطلاب في هذه الشعبة\n• جميع سجلات الحضور\n• تاريخ الحضور الكامل\n\nهذا الإجراء لا يمكن التراجع عنه!`,
       [
         { text: 'إلغاء', style: 'cancel' },
         {
-          text: 'حذف',
+          text: 'حذف نهائياً',
           style: 'destructive',
           onPress: async () => {
             try {
               await deleteClass(classId);
-              Alert.alert('تم بنجاح', 'تم حذف الفصل الدراسي بنجاح');
+              Alert.alert(
+                'تم الحذف بنجاح', 
+                `تم حذف الشعبة "${className}" وجميع البيانات المرتبطة بها من قاعدة البيانات.`,
+                [{ text: 'موافق' }]
+              );
             } catch (error) {
               console.error('Error deleting class:', error);
-              Alert.alert('خطأ', 'حدث خطأ أثناء حذف الفصل');
+              Alert.alert('خطأ', 'حدث خطأ أثناء حذف الشعبة من قاعدة البيانات');
             }
           },
         },
@@ -56,11 +60,18 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
     <TouchableOpacity
       style={styles.classCard}
       onPress={() => handleClassPress(item)}
-      onLongPress={() => handleDeleteClass(item.id, `${item.name} ${item.section}`)}
     >
       <View style={styles.classHeader}>
         <Text style={styles.className}>{item.name}</Text>
         <Text style={styles.classSection}>شعبة {item.section}</Text>
+      </View>
+      <View style={styles.classHeaderActions}>
+        <TouchableOpacity
+          style={styles.deleteClassButton}
+          onPress={() => handleDeleteClass(item.id, `${item.name} - شعبة ${item.section}`)}
+        >
+          <Text style={styles.deleteClassButtonText}>🗑️</Text>
+        </TouchableOpacity>
       </View>
       <View style={styles.classInfo}>
         <Text style={styles.studentCount}>
@@ -247,9 +258,6 @@ const styles = StyleSheet.create({
     direction: 'rtl',
   },
   classHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     marginBottom: 8,
   },
   className: {
@@ -261,6 +269,25 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: fontFamilies.regular,
     color: '#6c757d',
+  },
+  classHeaderActions: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    zIndex: 1,
+  },
+  deleteClassButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#ffebee',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#ffcdd2',
+  },
+  deleteClassButtonText: {
+    fontSize: 16,
   },
   classInfo: {
     marginBottom: 12,

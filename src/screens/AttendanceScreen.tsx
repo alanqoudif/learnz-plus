@@ -14,10 +14,8 @@ import { AttendanceRecord, AttendanceSession } from '../types';
 import { showErrorAlert, showAttendanceCompleteAlert } from '../utils/notifications';
 import { fontFamilies } from '../utils/theme';
 import { RealtimeService } from '../services/realtimeService';
-import RealtimeStatus from '../components/RealtimeStatus';
 import RealtimeNotification from '../components/RealtimeNotification';
 import { useRealtimeNotifications } from '../hooks/useRealtimeNotifications';
-import { RealtimeTest } from '../utils/realtimeTest';
 
 interface AttendanceScreenProps {
   navigation: any;
@@ -159,9 +157,21 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
   const finishAttendanceSession = () => {
     if (!sessionId) return;
 
-    // حساب عدد الحاضرين والغائبين
+    // حساب عدد الحاضرين والغائبين بناءً على السجلات الفعلية
     const presentCount = Object.values(attendanceRecords).filter(status => status === 'present').length;
-    const absentCount = students.length - presentCount;
+    const absentCount = Object.values(attendanceRecords).filter(status => status === 'absent').length;
+    
+    // التأكد من أن العدد الإجمالي صحيح
+    const totalRecorded = presentCount + absentCount;
+    const totalStudents = students.length;
+    
+    console.log('إحصائيات الحضور:', {
+      presentCount,
+      absentCount,
+      totalRecorded,
+      totalStudents,
+      attendanceRecords
+    });
 
     showAttendanceCompleteAlert(presentCount, absentCount, () => navigation.goBack());
   };
@@ -197,19 +207,6 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
     });
   };
 
-  const handleTestRealtime = async () => {
-    addNotification('جاري اختبار Realtime...', 'info');
-    try {
-      const results = await RealtimeTest.runAllTests();
-      if (results.overall) {
-        addNotification('جميع اختبارات Realtime نجحت! ✅', 'success');
-      } else {
-        addNotification('بعض اختبارات Realtime فشلت ❌', 'error');
-      }
-    } catch (error) {
-      addNotification('خطأ في اختبار Realtime', 'error');
-    }
-  };
 
   const onGestureEvent = Animated.event(
     [{ nativeEvent: { translationX: translateX } }],
@@ -335,13 +332,6 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
           </Text>
         </View>
         <View style={styles.headerActions}>
-          <RealtimeStatus />
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={handleTestRealtime}
-          >
-            <Text style={styles.actionButtonText}>🧪</Text>
-          </TouchableOpacity>
           <TouchableOpacity
             style={styles.actionButton}
             onPress={handleEditClass}

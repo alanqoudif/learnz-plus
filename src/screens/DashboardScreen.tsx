@@ -6,7 +6,6 @@ import {
   StyleSheet,
   FlatList,
   Alert,
-  RefreshControl,
 } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { Class } from '../types';
@@ -18,7 +17,7 @@ interface DashboardScreenProps {
 }
 
 export default function DashboardScreen({ navigation }: DashboardScreenProps) {
-  const { state, dispatch, deleteClass, refreshData } = useApp();
+  const { state, dispatch, deleteClass } = useApp();
   const { currentTeacher, classes, isLoading } = state;
 
   const handleAddClass = () => {
@@ -140,15 +139,6 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>الفصول الدراسية</Text>
           <View style={styles.headerButtons}>
-            <TouchableOpacity 
-              style={styles.refreshButton} 
-              onPress={refreshData}
-              disabled={isLoading}
-            >
-              <Text style={styles.refreshButtonText}>
-                {isLoading ? 'جاري التحديث...' : 'تحديث'}
-              </Text>
-            </TouchableOpacity>
             <TouchableOpacity style={styles.addButton} onPress={handleAddClass}>
               <Text style={styles.addButtonText}>+ إضافة فصل</Text>
             </TouchableOpacity>
@@ -222,18 +212,6 @@ const styles = StyleSheet.create({
   headerButtons: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  refreshButton: {
-    backgroundColor: '#17a2b8',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 6,
-    marginRight: 8,
-  },
-  refreshButtonText: {
-    color: 'white',
-    fontFamily: fontFamilies.semibold,
-    fontSize: 12,
   },
   sectionTitle: {
     fontSize: 20,

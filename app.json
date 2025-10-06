@@ -6,7 +6,6 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
     "description": "تطبيق بسيط لإدارة حضور وغياب الطلاب للمعلمين",
     "splash": {
       "image": "./assets/splash-icon.png",

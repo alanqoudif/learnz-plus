@@ -1,4 +1,11 @@
+// Polyfills for React Native
+import 'react-native-url-polyfill/auto';
+import 'react-native-get-random-values';
+import { Buffer } from '@craftzdog/react-native-buffer';
 import { registerRootComponent } from 'expo';
+
+// Make Buffer globally available
+global.Buffer = Buffer;
 
 import App from './App';
 

@@ -100,6 +100,7 @@ export interface Database {
           class_id: string;
           session_id: string;
           status: 'present' | 'absent';
+          attendance_time: string;
           created_at: string;
         };
         Insert: {
@@ -108,6 +109,7 @@ export interface Database {
           class_id: string;
           session_id: string;
           status: 'present' | 'absent';
+          attendance_time?: string;
           created_at?: string;
         };
         Update: {
@@ -116,6 +118,7 @@ export interface Database {
           class_id?: string;
           session_id?: string;
           status?: 'present' | 'absent';
+          attendance_time?: string;
           created_at?: string;
         };
       };

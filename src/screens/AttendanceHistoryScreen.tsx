@@ -85,9 +85,20 @@ export default function AttendanceHistoryScreen({ navigation, route }: Attendanc
     const student = currentClass?.students.find(s => s.id === item.studentId);
     if (!student) return null;
 
+    const attendanceTime = new Date(item.attendanceTime || item.date);
+
     return (
       <View style={styles.studentRecord}>
-        <Text style={styles.studentName}>{student.name}</Text>
+        <View style={styles.studentInfo}>
+          <Text style={styles.studentName}>{student.name}</Text>
+          <Text style={styles.attendanceTime}>
+            {attendanceTime.toLocaleTimeString('ar-SA', {
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: true
+            })}
+          </Text>
+        </View>
         <View style={[
           styles.statusBadge,
           item.status === 'present' ? styles.presentBadge : styles.absentBadge
@@ -366,11 +377,19 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#f8f9fa',
   },
+  studentInfo: {
+    flex: 1,
+  },
   studentName: {
     fontSize: 16,
-    fontFamily: fontFamilies.regular,
+    fontFamily: fontFamilies.medium,
     color: '#2c3e50',
-    flex: 1,
+    marginBottom: 4,
+  },
+  attendanceTime: {
+    fontSize: 14,
+    fontFamily: fontFamilies.regular,
+    color: '#6c757d',
   },
   statusBadge: {
     paddingHorizontal: 12,

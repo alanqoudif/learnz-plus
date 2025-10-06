@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS attendance_records (
     class_id UUID NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
     session_id UUID NOT NULL REFERENCES attendance_sessions(id) ON DELETE CASCADE,
     status VARCHAR(10) NOT NULL CHECK (status IN ('present', 'absent')),
+    attendance_time TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     UNIQUE(student_id, session_id)
 );

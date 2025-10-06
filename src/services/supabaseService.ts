@@ -296,16 +296,52 @@ export const attendanceService = {
 
   // تسجيل حضور/غياب
   async recordAttendance(record: Omit<AttendanceRecord, 'id' | 'createdAt'>): Promise<AttendanceRecord> {
-    const { data, error } = await supabase
+    // أولاً، تحقق من وجود سجل موجود
+    const { data: existingRecord, error: checkError } = await supabase
       .from('attendance_records')
-      .insert({
-        student_id: record.studentId,
-        class_id: record.classId,
-        session_id: record.sessionId || '',
-        status: record.status,
-      })
-      .select()
+      .select('*')
+      .eq('student_id', record.studentId)
+      .eq('session_id', record.sessionId || '')
       .single();
+
+    if (checkError && checkError.code !== 'PGRST116') {
+      throw checkError; // PGRST116 = no rows returned
+    }
+
+    let data, error;
+
+    if (existingRecord) {
+      // تحديث السجل الموجود
+      const result = await supabase
+        .from('attendance_records')
+        .update({
+          status: record.status,
+          attendance_time: record.date.toISOString(),
+        })
+        .eq('student_id', record.studentId)
+        .eq('session_id', record.sessionId || '')
+        .select()
+        .single();
+      
+      data = result.data;
+      error = result.error;
+    } else {
+      // إنشاء سجل جديد
+      const result = await supabase
+        .from('attendance_records')
+        .insert({
+          student_id: record.studentId,
+          class_id: record.classId,
+          session_id: record.sessionId || '',
+          status: record.status,
+          attendance_time: record.date.toISOString(),
+        })
+        .select()
+        .single();
+      
+      data = result.data;
+      error = result.error;
+    }
 
     if (error) throw error;
 
@@ -315,7 +351,8 @@ export const attendanceService = {
       classId: data.class_id,
       sessionId: data.session_id,
       status: data.status,
-      date: new Date(data.created_at),
+      date: new Date(data.attendance_time),
+      attendanceTime: new Date(data.attendance_time),
       createdAt: new Date(data.created_at),
     };
   },
@@ -347,7 +384,8 @@ export const attendanceService = {
           classId: record.class_id,
           sessionId: record.session_id,
           status: record.status,
-          date: new Date(record.created_at),
+          date: new Date(record.attendance_time),
+          attendanceTime: new Date(record.attendance_time),
           createdAt: new Date(record.created_at),
         }));
 
@@ -381,7 +419,8 @@ export const attendanceService = {
       classId: record.class_id,
       sessionId: record.session_id,
       status: record.status,
-      date: new Date(record.created_at),
+      date: new Date(record.attendance_time),
+      attendanceTime: new Date(record.attendance_time),
       createdAt: new Date(record.created_at),
     }));
   },

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -41,7 +41,21 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
 
   const currentClass = state.classes.find(cls => cls.id === classId);
   const students = currentClass?.students || [];
-  const currentStudent = students[currentStudentIndex];
+  
+  // استخدام useMemo لضمان تحديث currentStudent بشكل صحيح
+  const currentStudent = useMemo(() => {
+    const student = students[currentStudentIndex];
+    console.log(`🔍 useMemo: حساب الطالب الحالي - الفهرس: ${currentStudentIndex}, الطالب: ${student?.name || 'غير موجود'}`);
+    return student;
+  }, [students, currentStudentIndex]);
+
+  // إعادة تعيين الـ animations عند تغيير الطالب
+  useEffect(() => {
+    console.log(`━━━ تحديث الطالب ━━━`);
+    console.log(`📍 الفهرس: ${currentStudentIndex}`);
+    console.log(`👤 الطالب: ${currentStudent?.name || 'غير موجود'}`);
+    console.log(`━━━━━━━━━━━━━━━━━━━━━`);
+  }, [currentStudentIndex, currentStudent]);
 
   // Real-time listener for attendance changes in this class
   useEffect(() => {
@@ -131,17 +145,19 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
       return;
     }
 
-    // حفظ البيانات المطلوبة في متغيرات محلية
-    const studentToRecord = currentStudent;
+    // حفظ البيانات المطلوبة في متغيرات محلية قبل أي تحديث
+    const studentToRecord = { ...currentStudent };
     const currentIndex = currentStudentIndex;
     const nextIndex = currentIndex + 1;
     const isLastStudent = nextIndex >= students.length;
     
     console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
     console.log(`🎯 تسجيل ${status} للطالب: ${studentToRecord.name}`);
-    console.log(`📍 الفهرس: ${currentIndex + 1}/${students.length} ${isLastStudent ? '(آخر طالب)' : ''}`);
+    console.log(`📍 الفهرس الحالي: ${currentIndex}`);
+    console.log(`📍 العدد الكلي: ${students.length}`);
+    console.log(`📍 الفهرس التالي: ${nextIndex} ${isLastStudent ? '(آخر طالب)' : ''}`);
     
-    // قفل التسجيل
+    // قفل التسجيل لمنع الضغط المتكرر
     setIsRecording(true);
 
     try {
@@ -159,7 +175,7 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
         }),
       ]).start();
 
-      // حفظ سجل الحضور
+      // حفظ سجل الحضور في قاعدة البيانات
       await recordAttendance({
         studentId: studentToRecord.id,
         classId: classId,
@@ -168,47 +184,51 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
         attendanceTime: new Date(),
       });
 
-      console.log(`✅ تم حفظ السجل في قاعدة البيانات`);
+      console.log(`✅ تم حفظ السجل في قاعدة البيانات للطالب: ${studentToRecord.name}`);
 
       // تحديث السجلات المحلية
       const updatedRecords = {
         ...attendanceRecords,
         [studentToRecord.id]: status,
       };
-      
       setAttendanceRecords(updatedRecords);
       console.log(`📝 تم تحديث السجلات المحلية`);
 
-      // تحديد ما يجب فعله بعد ذلك
+      // إذا كان آخر طالب
       if (isLastStudent) {
-        // آخر طالب - انتظر قليلاً ثم أنهِ الجلسة
         console.log(`🏁 هذا آخر طالب - جاري إنهاء الجلسة`);
         setTimeout(() => {
           setIsRecording(false);
           finishAttendanceSessionWithRecords(updatedRecords);
         }, 400);
       } else {
-        // ليس آخر طالب - انتقل للتالي مع animation
-        console.log(`➡️ الانتقال للطالب التالي: ${students[nextIndex].name}`);
+        // الانتقال للطالب التالي
+        console.log(`➡️ جاري الانتقال من "${studentToRecord.name}" إلى "${students[nextIndex].name}"`);
         
-        // Fade out animation
+        // بدء fade out
         Animated.timing(fadeAnim, {
           toValue: 0,
-          duration: 150,
+          duration: 200,
           useNativeDriver: true,
         }).start(() => {
-          // تحديث الفهرس بعد الـ fade out
+          console.log(`🔄 Animation انتهت - تحديث الفهرس من ${currentIndex} إلى ${nextIndex}`);
+          
+          // تحديث الفهرس فوراً
           setCurrentStudentIndex(nextIndex);
           
-          // Fade in animation للطالب الجديد
-          Animated.timing(fadeAnim, {
-            toValue: 1,
-            duration: 150,
-            useNativeDriver: true,
-          }).start(() => {
-            // فك القفل بعد انتهاء الـ animation
-            setIsRecording(false);
-          });
+          // انتظار قصير للتأكد من التحديث، ثم fade in
+          setTimeout(() => {
+            console.log(`✨ بدء fade in للطالب الجديد`);
+            
+            Animated.timing(fadeAnim, {
+              toValue: 1,
+              duration: 200,
+              useNativeDriver: true,
+            }).start(() => {
+              console.log(`✅ اكتمل الانتقال - الطالب الحالي: ${students[nextIndex]?.name}`);
+              setIsRecording(false);
+            });
+          }, 50);
         });
       }
       
@@ -218,7 +238,6 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
       console.error('❌ خطأ في تسجيل الحضور:', error);
       showErrorAlert('حدث خطأ أثناء تسجيل الحضور');
       setIsRecording(false);
-      // إعادة تعيين الـ animations في حالة الخطأ
       fadeAnim.setValue(1);
       scaleAnim.setValue(1);
     }
@@ -311,6 +330,7 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
 
     return (
       <Animated.View 
+        key={`student-${currentStudentIndex}-${currentStudent.id}`}
         style={[
           styles.studentCard, 
           { 

@@ -51,35 +51,9 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
       async (payload) => {
         console.log('📅 Attendance change detected for class:', classId, payload.eventType);
         
-        // تحديث البيانات من قاعدة البيانات
-        try {
-          await refreshData();
-          
-          // تحديث حالة الجلسة بناءً على التغييرات
-          const today = new Date().toDateString();
-          const existingSession = state.attendanceSessions.find(
-            session => session.classId === classId && new Date(session.date).toDateString() === today
-          );
-          
-          if (existingSession) {
-            setIsSessionStarted(true);
-            setSessionId(existingSession.id);
-            // تحميل سجلات الحضور الموجودة
-            const records: { [key: string]: 'present' | 'absent' } = {};
-            existingSession.records.forEach(record => {
-              records[record.studentId] = record.status;
-            });
-            setAttendanceRecords(records);
-            
-            // إظهار إشعار للمستخدم عند تحديث الحضور
-            if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-              console.log('🔄 Attendance updated in real-time!');
-              addNotification('تم تحديث الحضور تلقائياً', 'success');
-            }
-          }
-        } catch (error) {
-          console.error('❌ فشل في تحديث البيانات:', error);
-        }
+        // تجاهل التحديثات الآنية تماماً أثناء جلسة الحضور النشطة
+        console.log('⏸️ تجاهل التحديث الآني أثناء الجلسة النشطة');
+        // لا نفعل شيء - سيتم تحديث البيانات فقط عند إعادة فتح الشاشة
       }
     );
 
@@ -87,26 +61,41 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
       console.log('Cleaning up attendance realtime listener for class:', classId);
       attendanceSubscription.unsubscribe();
     };
-  }, [classId]); // إزالة state.attendanceSessions من dependencies لتجنب إعادة إنشاء الـ subscription
+  }, [classId]);
 
-  // تحديث البيانات المحلية عند تغيير state.attendanceSessions
+  // تحميل الجلسة الموجودة عند فتح الشاشة فقط - مرة واحدة
   useEffect(() => {
+    console.log('🔍 فحص وجود جلسة سابقة...');
     const today = new Date().toDateString();
     const existingSession = state.attendanceSessions.find(
       session => session.classId === classId && new Date(session.date).toDateString() === today
     );
 
     if (existingSession) {
+      console.log('📂 تم العثور على جلسة موجودة:', existingSession.id);
       setIsSessionStarted(true);
       setSessionId(existingSession.id);
+      
       // تحميل سجلات الحضور الموجودة
       const records: { [key: string]: 'present' | 'absent' } = {};
       existingSession.records.forEach(record => {
         records[record.studentId] = record.status;
       });
       setAttendanceRecords(records);
+      
+      // حساب عدد الطلاب المسجلين وتحديد الفهرس التالي
+      const recordedStudentsCount = existingSession.records.length;
+      console.log(`📊 عدد الطلاب المسجلين: ${recordedStudentsCount} من أصل ${students.length}`);
+      
+      if (recordedStudentsCount > 0 && recordedStudentsCount < students.length) {
+        setCurrentStudentIndex(recordedStudentsCount);
+        console.log(`📍 الانتقال للطالب رقم ${recordedStudentsCount + 1} لاستكمال التسجيل`);
+      }
+    } else {
+      console.log('✨ لا توجد جلسة سابقة - جاهز لبدء جلسة جديدة');
     }
-  }, [state.attendanceSessions, classId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // فقط عند تحميل الشاشة - مرة واحدة
 
   const startAttendanceSession = async () => {
     if (students.length === 0) {
@@ -131,119 +120,83 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
   };
 
   const markAttendance = async (status: 'present' | 'absent') => {
-    if (!currentStudent || !sessionId || isRecording) {
-      console.log('❌ لا يمكن تسجيل الحضور:', { 
-        currentStudent: !!currentStudent, 
-        sessionId, 
-        isRecording,
-        currentStudentIndex,
-        totalStudents: students.length
-      });
+    if (!currentStudent || !sessionId) {
+      console.log('❌ لا يمكن تسجيل الحضور - بيانات غير مكتملة');
       return;
     }
 
-    // التأكد من أن الطالب الحالي موجود في قائمة الطلاب
-    if (currentStudentIndex >= students.length) {
-      console.log('❌ فهرس الطالب خارج النطاق:', currentStudentIndex, students.length);
+    if (isRecording) {
+      console.log('⏸️ تسجيل جاري، يرجى الانتظار');
       return;
     }
 
-    // السماح بتعديل حالة الطالب إذا كان مسجلاً مسبقاً
-    if (attendanceRecords[currentStudent.id]) {
-      console.log('🔄 تعديل حالة الطالب:', currentStudent.name, 'من', attendanceRecords[currentStudent.id], 'إلى', status);
-    }
-
+    // حفظ البيانات المطلوبة في متغيرات محلية
+    const studentToRecord = currentStudent;
+    const currentIndex = currentStudentIndex;
+    const nextIndex = currentIndex + 1;
+    
+    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    console.log(`🎯 تسجيل ${status} للطالب: ${studentToRecord.name}`);
+    console.log(`📍 الفهرس الحالي: ${currentIndex} (${currentIndex + 1}/${students.length})`);
+    console.log(`📍 الفهرس التالي: ${nextIndex} (${nextIndex + 1}/${students.length})`);
+    
+    // قفل التسجيل
     setIsRecording(true);
 
     try {
-      const attendanceTime = new Date();
-      
-      // التأكد من صحة التاريخ
-      if (isNaN(attendanceTime.getTime())) {
-        throw new Error('تاريخ غير صحيح');
-      }
-      
-      console.log(`🎯 تسجيل ${status} للطالب:`, {
-        studentName: currentStudent.name,
-        studentId: currentStudent.id,
-        sessionId,
-        attendanceTime: attendanceTime.toLocaleString('ar-SA', { timeZone: 'Asia/Muscat' }),
-        utcTime: attendanceTime.toISOString(),
-        timestamp: attendanceTime.getTime(),
-        isValid: !isNaN(attendanceTime.getTime())
-      });
-      
-      // حفظ سجل الحضور في قاعدة البيانات
-      const savedRecord = await recordAttendance({
-        studentId: currentStudent.id,
+      // حفظ سجل الحضور
+      await recordAttendance({
+        studentId: studentToRecord.id,
         classId: classId,
         sessionId: sessionId,
         status: status,
-        attendanceTime: attendanceTime,
+        attendanceTime: new Date(),
       });
 
-      console.log('✅ تم حفظ السجل في قاعدة البيانات:', savedRecord);
+      console.log(`✅ تم حفظ السجل في قاعدة البيانات`);
 
       // تحديث السجلات المحلية
-      const newRecords = {
-        ...attendanceRecords,
-        [currentStudent.id]: status,
-      };
-      
-      setAttendanceRecords(newRecords);
-      
-      console.log('📝 السجلات المحلية المحدثة:', newRecords);
-      
-      // التأكد من أن التحديث تم قبل الانتقال
-      console.log('🔄 تم تسجيل الحضور بنجاح، جاري الانتقال للطالب التالي...');
+      setAttendanceRecords(prev => ({
+        ...prev,
+        [studentToRecord.id]: status,
+      }));
 
-      // إظهار رسالة تأكيد إذا تم تعديل الحالة
-      if (attendanceRecords[currentStudent.id]) {
-        const previousStatus = attendanceRecords[currentStudent.id];
-        if (previousStatus !== status) {
-          console.log(`✅ تم تعديل حالة ${currentStudent.name} من ${previousStatus} إلى ${status}`);
-        }
-      }
+      // تأثير بصري سريع
+      Animated.sequence([
+        Animated.timing(scale, {
+          toValue: 0.9,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+        Animated.timing(scale, {
+          toValue: 1,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+      ]).start();
 
-      // الانتقال للطالب التالي
-      const nextIndex = currentStudentIndex + 1;
-      console.log(`🔄 الانتقال للطالب التالي: ${currentStudentIndex + 1} -> ${nextIndex + 1} من أصل ${students.length}`);
-      
+      // الانتقال للطالب التالي أو إنهاء الجلسة
       if (nextIndex < students.length) {
-        // تأثير بصري عند الانتقال
-        Animated.sequence([
-          Animated.timing(scale, {
-            toValue: 0.95,
-            duration: 100,
-            useNativeDriver: true,
-          }),
-          Animated.timing(scale, {
-            toValue: 1,
-            duration: 100,
-            useNativeDriver: true,
-          }),
-        ]).start();
-        
-        // الانتقال الفوري للطالب التالي
+        console.log(`➡️ الانتقال إلى الطالب التالي: ${students[nextIndex].name}`);
         setCurrentStudentIndex(nextIndex);
-        setIsRecording(false);
-        console.log(`✅ تم الانتقال للطالب: ${students[nextIndex].name} (${nextIndex + 1}/${students.length})`);
+        console.log(`✅ تم تحديث الفهرس إلى: ${nextIndex}`);
+        
+        // فك القفل بعد 300ms
+        setTimeout(() => {
+          setIsRecording(false);
+          console.log(`🔓 فك قفل التسجيل`);
+        }, 300);
       } else {
-        // انتهاء تسجيل الحضور
-        console.log('🏁 انتهاء تسجيل الحضور لجميع الطلاب');
+        console.log(`🏁 انتهى التسجيل - تم تسجيل جميع الطلاب`);
         setIsRecording(false);
         finishAttendanceSession();
       }
+      
+      console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+      
     } catch (error) {
       console.error('❌ خطأ في تسجيل الحضور:', error);
-      
-      // معالجة أخطاء التاريخ بشكل خاص
-      if (error instanceof Error && error.message.includes('تاريخ')) {
-        showErrorAlert('خطأ في التاريخ: ' + error.message);
-      } else {
-        showErrorAlert('حدث خطأ أثناء تسجيل الحضور');
-      }
-      
+      showErrorAlert('حدث خطأ أثناء تسجيل الحضور');
       setIsRecording(false);
     }
   };
@@ -444,9 +397,18 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
                    (isRecording || !currentStudent) && styles.disabledButton
                  ]}
                  onPress={() => {
+                   console.log('🔘 تم الضغط على زر غائب');
+                   console.log('   • الطالب الحالي:', currentStudent?.name || 'غير موجود');
+                   console.log('   • الفهرس:', currentStudentIndex);
+                   console.log('   • حالة التسجيل:', isRecording ? 'مقفل' : 'متاح');
+                   
                    if (!isRecording && currentStudent) {
-                     console.log('🔴 الضغط على زر غائب للطالب:', currentStudent.name);
                      markAttendance('absent');
+                   } else {
+                     console.log('   ⚠️ لا يمكن التسجيل:', {
+                       isRecording,
+                       hasCurrentStudent: !!currentStudent
+                     });
                    }
                  }}
                  disabled={isRecording || !currentStudent}
@@ -460,9 +422,18 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
                    (isRecording || !currentStudent) && styles.disabledButton
                  ]}
                  onPress={() => {
+                   console.log('🔘 تم الضغط على زر حاضر');
+                   console.log('   • الطالب الحالي:', currentStudent?.name || 'غير موجود');
+                   console.log('   • الفهرس:', currentStudentIndex);
+                   console.log('   • حالة التسجيل:', isRecording ? 'مقفل' : 'متاح');
+                   
                    if (!isRecording && currentStudent) {
-                     console.log('🟢 الضغط على زر حاضر للطالب:', currentStudent.name);
                      markAttendance('present');
+                   } else {
+                     console.log('   ⚠️ لا يمكن التسجيل:', {
+                       isRecording,
+                       hasCurrentStudent: !!currentStudent
+                     });
                    }
                  }}
                  disabled={isRecording || !currentStudent}

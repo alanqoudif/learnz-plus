@@ -35,8 +35,9 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
   const [isRecording, setIsRecording] = useState(false);
   const { notifications, addNotification, removeNotification } = useRealtimeNotifications();
 
-  const translateX = new Animated.Value(0);
-  const scale = new Animated.Value(1);
+  // Animation values
+  const fadeAnim = useState(new Animated.Value(1))[0];
+  const scaleAnim = useState(new Animated.Value(1))[0];
 
   const currentClass = state.classes.find(cls => cls.id === classId);
   const students = currentClass?.students || [];
@@ -134,16 +135,30 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
     const studentToRecord = currentStudent;
     const currentIndex = currentStudentIndex;
     const nextIndex = currentIndex + 1;
+    const isLastStudent = nextIndex >= students.length;
     
     console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
     console.log(`🎯 تسجيل ${status} للطالب: ${studentToRecord.name}`);
-    console.log(`📍 الفهرس الحالي: ${currentIndex} (${currentIndex + 1}/${students.length})`);
-    console.log(`📍 الفهرس التالي: ${nextIndex} (${nextIndex + 1}/${students.length})`);
+    console.log(`📍 الفهرس: ${currentIndex + 1}/${students.length} ${isLastStudent ? '(آخر طالب)' : ''}`);
     
     // قفل التسجيل
     setIsRecording(true);
 
     try {
+      // تأثير بصري للضغط
+      Animated.sequence([
+        Animated.timing(scaleAnim, {
+          toValue: 0.95,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+        Animated.timing(scaleAnim, {
+          toValue: 1,
+          duration: 100,
+          useNativeDriver: true,
+        }),
+      ]).start();
+
       // حفظ سجل الحضور
       await recordAttendance({
         studentId: studentToRecord.id,
@@ -156,40 +171,45 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
       console.log(`✅ تم حفظ السجل في قاعدة البيانات`);
 
       // تحديث السجلات المحلية
-      setAttendanceRecords(prev => ({
-        ...prev,
+      const updatedRecords = {
+        ...attendanceRecords,
         [studentToRecord.id]: status,
-      }));
+      };
+      
+      setAttendanceRecords(updatedRecords);
+      console.log(`📝 تم تحديث السجلات المحلية`);
 
-      // تأثير بصري سريع
-      Animated.sequence([
-        Animated.timing(scale, {
-          toValue: 0.9,
-          duration: 100,
-          useNativeDriver: true,
-        }),
-        Animated.timing(scale, {
-          toValue: 1,
-          duration: 100,
-          useNativeDriver: true,
-        }),
-      ]).start();
-
-      // الانتقال للطالب التالي أو إنهاء الجلسة
-      if (nextIndex < students.length) {
-        console.log(`➡️ الانتقال إلى الطالب التالي: ${students[nextIndex].name}`);
-        setCurrentStudentIndex(nextIndex);
-        console.log(`✅ تم تحديث الفهرس إلى: ${nextIndex}`);
-        
-        // فك القفل بعد 300ms
+      // تحديد ما يجب فعله بعد ذلك
+      if (isLastStudent) {
+        // آخر طالب - انتظر قليلاً ثم أنهِ الجلسة
+        console.log(`🏁 هذا آخر طالب - جاري إنهاء الجلسة`);
         setTimeout(() => {
           setIsRecording(false);
-          console.log(`🔓 فك قفل التسجيل`);
-        }, 300);
+          finishAttendanceSessionWithRecords(updatedRecords);
+        }, 400);
       } else {
-        console.log(`🏁 انتهى التسجيل - تم تسجيل جميع الطلاب`);
-        setIsRecording(false);
-        finishAttendanceSession();
+        // ليس آخر طالب - انتقل للتالي مع animation
+        console.log(`➡️ الانتقال للطالب التالي: ${students[nextIndex].name}`);
+        
+        // Fade out animation
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 150,
+          useNativeDriver: true,
+        }).start(() => {
+          // تحديث الفهرس بعد الـ fade out
+          setCurrentStudentIndex(nextIndex);
+          
+          // Fade in animation للطالب الجديد
+          Animated.timing(fadeAnim, {
+            toValue: 1,
+            duration: 150,
+            useNativeDriver: true,
+          }).start(() => {
+            // فك القفل بعد انتهاء الـ animation
+            setIsRecording(false);
+          });
+        });
       }
       
       console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
@@ -198,14 +218,17 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
       console.error('❌ خطأ في تسجيل الحضور:', error);
       showErrorAlert('حدث خطأ أثناء تسجيل الحضور');
       setIsRecording(false);
+      // إعادة تعيين الـ animations في حالة الخطأ
+      fadeAnim.setValue(1);
+      scaleAnim.setValue(1);
     }
   };
 
-  const finishAttendanceSession = () => {
+  const finishAttendanceSessionWithRecords = (records: { [key: string]: 'present' | 'absent' }) => {
     if (!sessionId) return;
       // حساب الإحصائيات بدقة - فقط للطلاب المسجلين فعلياً
-      const actualPresentCount = students.filter(s => attendanceRecords[s.id] === 'present').length;
-      const actualAbsentCount = students.filter(s => attendanceRecords[s.id] === 'absent').length;
+      const actualPresentCount = students.filter(s => records[s.id] === 'present').length;
+      const actualAbsentCount = students.filter(s => records[s.id] === 'absent').length;
       const totalStudents = students.length;
       const totalRecorded = actualPresentCount + actualAbsentCount;
       
@@ -215,21 +238,21 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
         totalRecorded,
         actualPresentCount,
         actualAbsentCount,
-        attendanceRecords: attendanceRecords,
+        attendanceRecords: records,
         sessionId: sessionId,
         verification: {
-          presentStudents: students.filter(s => attendanceRecords[s.id] === 'present').map(s => s.name),
-          absentStudents: students.filter(s => attendanceRecords[s.id] === 'absent').map(s => s.name),
-          unrecordedStudents: students.filter(s => !attendanceRecords[s.id]).map(s => s.name)
+          presentStudents: students.filter(s => records[s.id] === 'present').map(s => s.name),
+          absentStudents: students.filter(s => records[s.id] === 'absent').map(s => s.name),
+          unrecordedStudents: students.filter(s => !records[s.id]).map(s => s.name)
         }
       });
 
       // التحقق من أن جميع الطلاب تم تسجيل حضورهم
-      const missingStudents = students.filter(student => !attendanceRecords[student.id]);
+      const missingStudents = students.filter(student => !records[student.id]);
       
       // التحقق من دقة الإحصائيات
-      const verificationPresent = Object.values(attendanceRecords).filter(status => status === 'present').length;
-      const verificationAbsent = Object.values(attendanceRecords).filter(status => status === 'absent').length;
+      const verificationPresent = Object.values(records).filter(status => status === 'present').length;
+      const verificationAbsent = Object.values(records).filter(status => status === 'absent').length;
       
       console.log('✅ التحقق النهائي من الإحصائيات:', {
         actualPresent: actualPresentCount,
@@ -283,18 +306,19 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
 
 
 
-  const onGestureEvent = Animated.event(
-    [{ nativeEvent: { translationX: translateX } }],
-    { useNativeDriver: true }
-  );
-
-  // تم إزالة دالة onHandlerStateChange لأنها تستخدم PanGestureHandler غير المتوفر
-
   const renderStudentCard = () => {
     if (!currentStudent) return null;
 
     return (
-      <Animated.View style={[styles.studentCard, { transform: [{ scale }] }]}>
+      <Animated.View 
+        style={[
+          styles.studentCard, 
+          { 
+            opacity: fadeAnim,
+            transform: [{ scale: scaleAnim }] 
+          }
+        ]}
+      >
         <View style={styles.studentNumber}>
           <Text style={styles.studentNumberText}>{currentStudentIndex + 1}</Text>
         </View>

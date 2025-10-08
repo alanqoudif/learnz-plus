@@ -42,7 +42,13 @@ export default function AttendanceHistoryScreen({ navigation, route }: Attendanc
   // تشخيص تحميل البيانات
   console.log('📊 تشخيص بيانات تاريخ الحضور:', {
     classId,
-    currentClass: currentClass ? { id: currentClass.id, name: currentClass.name } : null,
+    currentClass: currentClass ? { 
+      id: currentClass.id, 
+      name: currentClass.name, 
+      section: currentClass.section,
+      studentsCount: currentClass.students?.length || 0
+    } : null,
+    allClasses: state.classes.map(c => ({ id: c.id, name: c.name, section: c.section })),
     totalSessions: state.attendanceSessions.length,
     classSessionsCount: classSessions.length,
     classSessions: classSessions.map(s => ({
@@ -240,7 +246,7 @@ export default function AttendanceHistoryScreen({ navigation, route }: Attendanc
         <View style={styles.headerInfo}>
           <Text style={styles.headerTitle}>تاريخ الحضور</Text>
           <Text style={styles.headerSubtitle}>
-            {currentClass.name} - شعبة {currentClass.section}
+            {currentClass ? `${currentClass.name} - شعبة ${currentClass.section}` : 'فصل غير محدد'}
           </Text>
         </View>
       </View>

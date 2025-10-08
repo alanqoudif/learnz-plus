@@ -161,7 +161,7 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
     setIsRecording(true);
 
     try {
-      // تأثير بصري للضغط
+      // تأثير بصري بسيط للضغط
       Animated.sequence([
         Animated.timing(scaleAnim, {
           toValue: 0.95,
@@ -200,36 +200,19 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
         setTimeout(() => {
           setIsRecording(false);
           finishAttendanceSessionWithRecords(updatedRecords);
-        }, 400);
+        }, 300);
       } else {
-        // الانتقال للطالب التالي
+        // الانتقال للطالب التالي - طريقة مبسطة
         console.log(`➡️ جاري الانتقال من "${studentToRecord.name}" إلى "${students[nextIndex].name}"`);
         
-        // بدء fade out
-        Animated.timing(fadeAnim, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
-        }).start(() => {
-          console.log(`🔄 Animation انتهت - تحديث الفهرس من ${currentIndex} إلى ${nextIndex}`);
-          
-          // تحديث الفهرس فوراً
-          setCurrentStudentIndex(nextIndex);
-          
-          // انتظار قصير للتأكد من التحديث، ثم fade in
-          setTimeout(() => {
-            console.log(`✨ بدء fade in للطالب الجديد`);
-            
-            Animated.timing(fadeAnim, {
-              toValue: 1,
-              duration: 200,
-              useNativeDriver: true,
-            }).start(() => {
-              console.log(`✅ اكتمل الانتقال - الطالب الحالي: ${students[nextIndex]?.name}`);
-              setIsRecording(false);
-            });
-          }, 50);
-        });
+        // تحديث الفهرس مباشرة بدون animations معقدة
+        setCurrentStudentIndex(nextIndex);
+        
+        // انتظار قصير ثم فك القفل
+        setTimeout(() => {
+          console.log(`✅ اكتمل الانتقال - الطالب الحالي: ${students[nextIndex]?.name}`);
+          setIsRecording(false);
+        }, 200);
       }
       
       console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
@@ -334,7 +317,6 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
         style={[
           styles.studentCard, 
           { 
-            opacity: fadeAnim,
             transform: [{ scale: scaleAnim }] 
           }
         ]}

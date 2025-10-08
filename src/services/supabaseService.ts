@@ -303,6 +303,16 @@ export const attendanceService = {
 
   // تسجيل حضور/غياب
   async recordAttendance(record: Omit<AttendanceRecord, 'id' | 'createdAt'>): Promise<AttendanceRecord> {
+    console.log('💾 حفظ سجل الحضور في قاعدة البيانات:', {
+      studentId: record.studentId,
+      sessionId: record.sessionId,
+      status: record.status,
+      attendanceTime: record.attendanceTime.toISOString(),
+      localTime: record.attendanceTime.toLocaleString('ar-SA', { timeZone: 'Asia/Muscat' }),
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      timestamp: record.attendanceTime.getTime()
+    });
+
     // أولاً، تحقق من وجود سجل موجود
     const { data: existingRecord, error: checkError } = await supabase
       .from('attendance_records')
@@ -312,8 +322,11 @@ export const attendanceService = {
       .single();
 
     if (checkError && checkError.code !== 'PGRST116') {
+      console.error('❌ خطأ في التحقق من السجل الموجود:', checkError);
       throw checkError; // PGRST116 = no rows returned
     }
+
+    console.log('🔍 السجل الموجود:', existingRecord ? 'موجود' : 'غير موجود');
 
     let data, error;
 
@@ -350,18 +363,31 @@ export const attendanceService = {
       error = result.error;
     }
 
-    if (error) throw error;
+    if (error) {
+      console.error('❌ خطأ في حفظ سجل الحضور:', error);
+      throw error;
+    }
 
-    return {
+    const result = {
       id: data.id,
       studentId: data.student_id,
       classId: data.class_id,
       sessionId: data.session_id,
       status: data.status,
-      date: new Date(data.attendance_time),
       attendanceTime: new Date(data.attendance_time),
       createdAt: new Date(data.created_at),
     };
+
+    console.log('✅ تم حفظ سجل الحضور بنجاح:', {
+      id: result.id,
+      studentId: result.studentId,
+      status: result.status,
+      attendanceTime: result.attendanceTime.toLocaleString('ar-SA', { timeZone: 'Asia/Muscat' }),
+      rawAttendanceTime: result.attendanceTime.toISOString(),
+      savedTime: data.attendance_time
+    });
+
+    return result;
   },
 
   // جلب جلسات الحضور لفصل معين
@@ -391,7 +417,6 @@ export const attendanceService = {
           classId: record.class_id,
           sessionId: record.session_id,
           status: record.status,
-          date: new Date(record.attendance_time),
           attendanceTime: new Date(record.attendance_time),
           createdAt: new Date(record.created_at),
         }));
@@ -426,7 +451,6 @@ export const attendanceService = {
       classId: record.class_id,
       sessionId: record.session_id,
       status: record.status,
-      date: new Date(record.attendance_time),
       attendanceTime: new Date(record.attendance_time),
       createdAt: new Date(record.created_at),
     }));

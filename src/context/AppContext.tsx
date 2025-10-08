@@ -1,9 +1,11 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Teacher, Class, Student, AttendanceRecord, AttendanceSession } from '../types';
-import { classService, studentService, attendanceService } from '../services/supabaseService';
-import { RealtimeService } from '../services/realtimeService';
-import { supabase } from '../config/supabase';
+import { smartClassService as classService, smartStudentService as studentService, smartAttendanceService as attendanceService, smartAuthService as authService } from '../services/smartService';
+import { teacherService } from '../services/firebaseService';
+import { FirebaseRealtimeService } from '../services/firebaseRealtimeService';
+import { auth } from '../config/firebase';
+import { onAuthStateChanged, User } from 'firebase/auth';
 
 interface AppState {
   currentTeacher: Teacher | null;
@@ -163,18 +165,30 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // Listen for auth state changes
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-        if (event === 'SIGNED_IN' && session) {
-          // تسجيل دخول جديد
+    const unsubscribe = onAuthStateChanged(auth, async (user: User | null) => {
+      if (user) {
+        console.log('🔄 تغيير حالة المصادقة - تسجيل دخول:', user.uid);
+        
+        // إنشاء أو تحديث المعلم في كولكشن المعلمين
+        try {
+          const teacher = await teacherService.createOrUpdateTeacherFromAuth(user);
+          console.log('✅ تم إنشاء/تحديث المعلم في كولكشن المعلمين:', teacher.id);
+          dispatch({ type: 'SET_TEACHER', payload: teacher });
+        } catch (error) {
+          console.warn('⚠️ تحذير: فشل في إنشاء/تحديث المعلم في كولكشن المعلمين:', error);
+          // استخدام بيانات المستخدم كبديل
           const teacher: Teacher = {
-            id: session.user.id,
-            name: session.user.user_metadata?.name || 'معلم',
-            phoneNumber: session.user.user_metadata?.phone_number || session.user.email?.replace('@teacher.local', '') || '',
-            createdAt: new Date(session.user.created_at),
+            id: user.uid,
+            name: user.displayName || 'معلم',
+            phoneNumber: user.email || '',
+            createdAt: new Date(user.metadata.creationTime || Date.now()),
           };
           dispatch({ type: 'SET_TEACHER', payload: teacher });
-          loadData();
-        } else if (event === 'SIGNED_OUT') {
+        }
+        
+        loadData();
+      } else {
+        console.log('🔄 تغيير حالة المصادقة - تسجيل خروج');
         // تسجيل خروج
         dispatch({ type: 'SET_TEACHER', payload: null });
         dispatch({ type: 'SET_CLASSES', payload: [] });
@@ -182,7 +196,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => unsubscribe();
   }, []);
 
   // Real-time listeners for classes, students, and attendance
@@ -191,38 +205,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     console.log('Setting up realtime subscriptions for teacher:', state.currentTeacher.id);
 
-    // Listen for classes changes
-    const classesSubscription = RealtimeService.subscribeToClasses(
+    // Listen for attendance updates
+    const attendanceSubscription = FirebaseRealtimeService.subscribeToAttendanceUpdates(
       state.currentTeacher.id,
-      async (payload) => {
-        try {
-          // Reload classes data
-          const classes = await classService.getClassesByTeacher(state.currentTeacher!.id);
-          dispatch({ type: 'SET_CLASSES', payload: classes });
-        } catch (error) {
-          console.error('Error reloading classes:', error);
-        }
-      }
-    );
-
-    // Listen for students changes
-    const studentsSubscription = RealtimeService.subscribeToStudents(
-      state.currentTeacher.id,
-      async (payload) => {
-        try {
-          // Reload all classes to get updated students
-          const classes = await classService.getClassesByTeacher(state.currentTeacher!.id);
-          dispatch({ type: 'SET_CLASSES', payload: classes });
-        } catch (error) {
-          console.error('Error reloading students:', error);
-        }
-      }
-    );
-
-    // Listen for attendance sessions changes
-    const attendanceSubscription = RealtimeService.subscribeToAttendanceSessions(
-      state.currentTeacher.id,
-      async (payload) => {
+      async (data) => {
         try {
           // Reload attendance sessions for all classes
           const allSessions: AttendanceSession[] = [];
@@ -237,30 +223,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
     );
 
-    // Listen for attendance records changes
-    const recordsSubscription = RealtimeService.subscribeToAttendanceRecords(
+    // Listen for notifications
+    const notificationsSubscription = FirebaseRealtimeService.subscribeToNotifications(
       state.currentTeacher.id,
-      async (payload) => {
-        try {
-          // Reload attendance sessions to get updated records
-          const allSessions: AttendanceSession[] = [];
-          for (const classItem of state.classes) {
-            const sessions = await attendanceService.getAttendanceSessionsByClass(classItem.id);
-            allSessions.push(...sessions);
-          }
-          dispatch({ type: 'SET_ATTENDANCE_SESSIONS', payload: allSessions });
-        } catch (error) {
-          console.error('Error reloading attendance records:', error);
-        }
+      (data) => {
+        console.log('New notification received:', data);
+        // يمكن إضافة منطق إضافي هنا لعرض الإشعارات
       }
     );
 
     return () => {
       console.log('Cleaning up realtime subscriptions');
-      classesSubscription.unsubscribe();
-      studentsSubscription.unsubscribe();
       attendanceSubscription.unsubscribe();
-      recordsSubscription.unsubscribe();
+      notificationsSubscription.unsubscribe();
     };
   }, [state.currentTeacher?.id]); // Only depend on teacher ID, not the entire classes array
 
@@ -273,20 +248,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const loadData = async () => {
     try {
-      // التحقق من وجود جلسة نشطة في Supabase Auth
-      const { data: { session }, error } = await supabase.auth.getSession();
+      // التحقق من وجود جلسة نشطة في Firebase Auth
+      const user = auth.currentUser;
       
-      if (error || !session) {
+      if (!user) {
         dispatch({ type: 'SET_LOADING', payload: false });
         return;
       }
 
-      // إنشاء كائن المعلم من بيانات الجلسة
+      // إنشاء كائن المعلم من بيانات المستخدم
       const teacher: Teacher = {
-        id: session.user.id,
-        name: session.user.user_metadata?.name || 'معلم',
-        phoneNumber: session.user.user_metadata?.phone_number || session.user.email?.replace('@teacher.local', '') || '',
-        createdAt: new Date(session.user.created_at),
+        id: user.uid,
+        name: user.displayName || 'معلم',
+        phoneNumber: user.email || '', // استخدام البريد الإلكتروني كمعرف
+        createdAt: new Date(user.metadata.creationTime || Date.now()),
       };
 
       // تحميل الفصول أولاً وإظهارها فوراً
@@ -300,12 +275,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       // تحميل جلسات الحضور في الخلفية
       if (classes.length > 0) {
+        console.log('🔄 تحميل جلسات الحضور للفصول:', classes.map(c => ({ id: c.id, name: c.name })));
+        
         const sessionPromises = classes.map(classItem => 
           attendanceService.getAttendanceSessionsByClass(classItem.id)
         );
         
         const allSessionsArrays = await Promise.all(sessionPromises);
         const allSessions: AttendanceSession[] = allSessionsArrays.flat();
+
+        console.log('📅 جلسات الحضور المحملة:', {
+          totalSessions: allSessions.length,
+          sessionsByClass: classes.map(c => ({
+            classId: c.id,
+            className: c.name,
+            sessionsCount: allSessions.filter(s => s.classId === c.id).length
+          }))
+        });
 
         // تحديث البيانات مع جلسات الحضور
         dispatch({
@@ -321,17 +307,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const saveData = async () => {
     try {
-      // لا نحتاج لحفظ بيانات في AsyncStorage لأن Supabase Auth يتولى ذلك
+      // لا نحتاج لحفظ بيانات في AsyncStorage لأن Firebase Auth يتولى ذلك
       // يمكن إضافة منطق إضافي هنا إذا لزم الأمر
     } catch (error) {
       console.error('Error saving data:', error);
     }
   };
 
-  // دوال Supabase
+  // دوال Firebase
   const createTeacher = async (teacher: Omit<Teacher, 'id' | 'createdAt'>): Promise<Teacher> => {
-    // لا نحتاج لهذه الدالة بعد الآن لأن Supabase Auth يتولى إنشاء المستخدمين
-    throw new Error('Use Supabase Auth for teacher creation');
+    // لا نحتاج لهذه الدالة بعد الآن لأن Firebase Auth يتولى إنشاء المستخدمين
+    throw new Error('Use Firebase Auth for teacher creation');
   };
 
   const createClass = async (classData: Omit<Class, 'id' | 'createdAt' | 'students'>): Promise<Class> => {
@@ -384,15 +370,50 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const recordAttendance = async (record: Omit<AttendanceRecord, 'id' | 'createdAt'>): Promise<AttendanceRecord> => {
     const newRecord = await attendanceService.recordAttendance(record);
+    
     // تحديث الجلسة في state
     const sessionIndex = state.attendanceSessions.findIndex(s => s.id === record.sessionId);
     if (sessionIndex !== -1) {
+      const existingSession = state.attendanceSessions[sessionIndex];
+      
+      // التحقق من وجود السجل مسبقاً لتجنب التكرار
+      const existingRecordIndex = existingSession.records.findIndex(r => r.studentId === record.studentId);
+      
+      let updatedRecords;
+      if (existingRecordIndex !== -1) {
+        // تحديث السجل الموجود
+        updatedRecords = [...existingSession.records];
+        updatedRecords[existingRecordIndex] = newRecord;
+      } else {
+        // إضافة سجل جديد
+        updatedRecords = [...existingSession.records, newRecord];
+      }
+      
       const updatedSession = {
-        ...state.attendanceSessions[sessionIndex],
-        records: [...state.attendanceSessions[sessionIndex].records, newRecord]
+        ...existingSession,
+        records: updatedRecords
       };
-      dispatch({ type: 'ADD_ATTENDANCE_SESSION', payload: updatedSession });
+      
+      // تحديث الجلسة في القائمة
+      const updatedSessions = [...state.attendanceSessions];
+      updatedSessions[sessionIndex] = updatedSession;
+      
+      dispatch({ type: 'SET_ATTENDANCE_SESSIONS', payload: updatedSessions });
+      
+      // إرسال تحديث في الوقت الفعلي
+      try {
+        await FirebaseRealtimeService.sendAttendanceUpdate(state.currentTeacher?.id || '', {
+          type: 'attendance_recorded',
+          sessionId: record.sessionId,
+          studentId: record.studentId,
+          status: record.status,
+          timestamp: Date.now()
+        });
+      } catch (error) {
+        console.warn('⚠️ فشل في إرسال التحديث في الوقت الفعلي:', error);
+      }
     }
+    
     return newRecord;
   };
 

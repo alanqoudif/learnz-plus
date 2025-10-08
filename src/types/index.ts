@@ -26,8 +26,7 @@ export interface AttendanceRecord {
   studentId: string;
   classId: string;
   sessionId?: string;
-  date: Date;
-  attendanceTime: Date;
+  attendanceTime: Date; // وقت تسجيل الحضور الفعلي
   status: 'present' | 'absent';
   createdAt: Date;
 }

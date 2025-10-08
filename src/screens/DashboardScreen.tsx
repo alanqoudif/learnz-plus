@@ -10,7 +10,7 @@ import {
 import { useApp } from '../context/AppContext';
 import { Class } from '../types';
 import { fontFamilies } from '../utils/theme';
-import { supabase } from '../config/supabase';
+import { smartAuthService as authService } from '../services/smartService';
 
 interface DashboardScreenProps {
   navigation: any;
@@ -143,7 +143,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
                 text: 'تسجيل الخروج',
                 style: 'destructive',
                 onPress: async () => {
-                  await supabase.auth.signOut();
+                  await authService.signOut();
                   // سيتم الانتقال تلقائياً عند تحديث state.currentTeacher
                 },
               },

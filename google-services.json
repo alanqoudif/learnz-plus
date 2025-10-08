@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "687728850541",
+    "project_id": "aanuni-33c7e",
+    "storage_bucket": "aanuni-33c7e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:687728850541:android:392fbf7f1ac2373613f164",
+        "android_client_info": {
+          "package_name": "aanuni.com"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBriqBOh1kIu7nyD8GPyMzpe5i8TQxOpcc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

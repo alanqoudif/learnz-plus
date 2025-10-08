@@ -11,7 +11,6 @@ import { useApp } from '../context/AppContext';
 import { AttendanceSession } from '../types';
 import { fontFamilies } from '../utils/theme';
 import { RealtimeService } from '../services/realtimeService';
-import RealtimeStatus from '../components/RealtimeStatus';
 
 interface AttendanceHistoryScreenProps {
   navigation: any;
@@ -24,13 +23,37 @@ interface AttendanceHistoryScreenProps {
 
 export default function AttendanceHistoryScreen({ navigation, route }: AttendanceHistoryScreenProps) {
   const { classId } = route.params;
-  const { state } = useApp();
+  const { state, refreshData } = useApp();
   const [selectedSession, setSelectedSession] = useState<AttendanceSession | null>(null);
 
   const currentClass = state.classes.find(cls => cls.id === classId);
   const classSessions = state.attendanceSessions
     .filter(session => session.classId === classId)
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    .sort((a, b) => {
+      // ترتيب حسب التاريخ أولاً، ثم حسب وقت الإنشاء
+      const dateComparison = new Date(b.date).getTime() - new Date(a.date).getTime();
+      if (dateComparison === 0) {
+        // إذا كان نفس التاريخ، رتب حسب وقت الإنشاء
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      }
+      return dateComparison;
+    });
+
+  // تشخيص تحميل البيانات
+  console.log('📊 تشخيص بيانات تاريخ الحضور:', {
+    classId,
+    currentClass: currentClass ? { id: currentClass.id, name: currentClass.name } : null,
+    totalSessions: state.attendanceSessions.length,
+    classSessionsCount: classSessions.length,
+    classSessions: classSessions.map(s => ({
+      id: s.id,
+      date: s.date,
+      createdAt: s.createdAt,
+      recordsCount: s.records.length,
+      presentCount: s.records.filter(r => r.status === 'present').length,
+      absentCount: s.records.filter(r => r.status === 'absent').length
+    }))
+  });
 
   // Real-time listener for attendance changes in this class
   useEffect(() => {
@@ -38,9 +61,15 @@ export default function AttendanceHistoryScreen({ navigation, route }: Attendanc
     
     const attendanceSubscription = RealtimeService.subscribeToClassAttendance(
       classId,
-      (payload) => {
+      async (payload) => {
         console.log('📅 Attendance change detected in history:', payload.eventType);
-        // البيانات ستتحدث تلقائياً من خلال AppContext
+        // تحديث البيانات من قاعدة البيانات
+        try {
+          await refreshData();
+          console.log('🔄 تم تحديث تاريخ الحضور تلقائياً');
+        } catch (error) {
+          console.error('❌ فشل في تحديث البيانات:', error);
+        }
       }
     );
 
@@ -74,6 +103,7 @@ export default function AttendanceHistoryScreen({ navigation, route }: Attendanc
   const renderSessionItem = ({ item }: { item: AttendanceSession }) => {
     const stats = getAttendanceStats(item);
     const date = new Date(item.date);
+    const createdAt = new Date(item.createdAt);
     
     return (
       <TouchableOpacity
@@ -81,19 +111,25 @@ export default function AttendanceHistoryScreen({ navigation, route }: Attendanc
         onPress={() => setSelectedSession(item)}
       >
         <View style={styles.sessionHeader}>
-          <Text style={styles.sessionDate}>
-            {date.toLocaleDateString('en-US', {
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric',
-            })}
-          </Text>
-          <Text style={styles.sessionTime}>
-            {date.toLocaleTimeString('ar-SA', {
-              hour: '2-digit',
-              minute: '2-digit',
-              hour12: true
-            })}
+          <View style={styles.sessionDateContainer}>
+            <Text style={styles.sessionDate}>
+              {date.toLocaleDateString('ar-SA', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+              })}
+            </Text>
+            <Text style={styles.sessionTime}>
+              {createdAt.toLocaleTimeString('ar-SA', {
+                timeZone: 'Asia/Muscat', // منطقة زمنية عمان
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true
+              })}
+            </Text>
+          </View>
+          <Text style={styles.sessionId}>
+            جلسة #{item.id.slice(-6)}
           </Text>
         </View>
         
@@ -128,17 +164,23 @@ export default function AttendanceHistoryScreen({ navigation, route }: Attendanc
     const student = currentClass?.students.find(s => s.id === item.studentId);
     if (!student) return null;
 
-    const attendanceTime = new Date(item.attendanceTime || item.date);
+    // إصلاح مشكلة المنطقة الزمنية
+    const rawTime = item.attendanceTime;
+    const attendanceTime = new Date(rawTime);
     
     // إضافة تشخيص للوقت
-    console.log('Attendance time for', student.name, ':', {
-      raw: item.attendanceTime || item.date,
+    console.log('🕐 تشخيص الوقت للطالب', student.name, ':', {
+      raw: rawTime,
       parsed: attendanceTime,
-      formatted: attendanceTime.toLocaleTimeString('ar-SA', {
+      localTime: attendanceTime.toLocaleString('ar-SA', {
+        timeZone: 'Asia/Muscat', // منطقة زمنية عمان
         hour: '2-digit',
         minute: '2-digit',
         hour12: true
-      })
+      }),
+      utcTime: attendanceTime.toUTCString(),
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      timestamp: attendanceTime.getTime()
     });
 
     return (
@@ -147,6 +189,7 @@ export default function AttendanceHistoryScreen({ navigation, route }: Attendanc
           <Text style={styles.studentName}>{student.name}</Text>
           <Text style={styles.attendanceTime}>
             {attendanceTime.toLocaleTimeString('ar-SA', {
+              timeZone: 'Asia/Muscat', // منطقة زمنية عمان
               hour: '2-digit',
               minute: '2-digit',
               hour12: true
@@ -200,7 +243,6 @@ export default function AttendanceHistoryScreen({ navigation, route }: Attendanc
             {currentClass.name} - شعبة {currentClass.section}
           </Text>
         </View>
-        <RealtimeStatus />
       </View>
 
       <View style={styles.content}>
@@ -223,7 +265,11 @@ export default function AttendanceHistoryScreen({ navigation, route }: Attendanc
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
-                تفاصيل الحضور - {new Date(selectedSession.date).toLocaleDateString('en-US')}
+                تفاصيل الحضور - {new Date(selectedSession.date).toLocaleDateString('ar-SA', {
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric'
+                })}
               </Text>
               <TouchableOpacity
                 style={styles.closeButton}
@@ -322,6 +368,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
+  sessionDateContainer: {
+    flex: 1,
+  },
   sessionDate: {
     fontSize: 16,
     fontFamily: fontFamilies.bold,
@@ -331,6 +380,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: fontFamilies.regular,
     color: '#6c757d',
+    marginTop: 2,
+  },
+  sessionId: {
+    fontSize: 12,
+    fontFamily: fontFamilies.regular,
+    color: '#007bff',
+    backgroundColor: '#e3f2fd',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
   sessionStats: {
     flexDirection: 'row',

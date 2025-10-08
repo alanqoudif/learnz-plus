@@ -14,7 +14,7 @@ import { useApp } from '../context/AppContext';
 import { Teacher } from '../types';
 import { validateName, validatePhoneNumber, formatName } from '../utils/validation';
 import { fontFamilies } from '../utils/theme';
-import { supabase } from '../config/supabase';
+import { smartAuthService as authService } from '../services/smartService';
 
 interface LoginScreenProps {
   navigation: any;
@@ -22,7 +22,8 @@ interface LoginScreenProps {
 
 export default function LoginScreen({ navigation }: LoginScreenProps) {
   const [name, setName] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { dispatch } = useApp();
 
@@ -33,8 +34,13 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
       return;
     }
 
-    if (!phoneNumber.trim()) {
-      Alert.alert('خطأ', 'يرجى إدخال رقم الهاتف');
+    if (!email.trim()) {
+      Alert.alert('خطأ', 'يرجى إدخال البريد الإلكتروني');
+      return;
+    }
+
+    if (!password.trim()) {
+      Alert.alert('خطأ', 'يرجى إدخال كلمة المرور');
       return;
     }
 
@@ -43,76 +49,57 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
       return;
     }
 
-    if (!validatePhoneNumber(phoneNumber)) {
-      Alert.alert('خطأ', 'يرجى إدخال رقم هاتف صحيح (8 أرقام على الأقل)');
+    // التحقق من صحة البريد الإلكتروني
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      Alert.alert('خطأ', 'يرجى إدخال بريد إلكتروني صحيح');
+      return;
+    }
+
+    if (password.length < 6) {
+      Alert.alert('خطأ', 'كلمة المرور يجب أن تكون 6 أحرف على الأقل');
       return;
     }
 
     setIsLoading(true);
 
     try {
-      const formattedPhone = phoneNumber.replace(/\s/g, '');
       const formattedName = formatName(name);
+      const formattedEmail = email.toLowerCase().trim();
 
-      // استخدام Supabase Auth للتسجيل/تسجيل الدخول
-      // إنشاء إيميل وهمي من رقم الهاتف (مخفي من المستخدم)
-      const email = `${formattedPhone}@teacher.app`;
-      
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: email,
-        password: 'default123', // كلمة مرور افتراضية
-      });
+      console.log('🔄 بدء عملية تسجيل الدخول للمعلم:', formattedName);
 
-      if (error) {
+      // استخدام Firebase Auth للتسجيل/تسجيل الدخول
+      try {
+        // محاولة تسجيل الدخول أولاً
+        console.log('🔄 محاولة تسجيل الدخول...');
+        const user = await authService.signInWithEmail(formattedEmail, password);
+        
+        console.log('✅ تم تسجيل الدخول بنجاح');
+        // لا نحتاج لإنشاء teacher هنا لأن AppContext سيتولى ذلك
+        
+      } catch (loginError: any) {
+        console.log('🔄 فشل تسجيل الدخول، محاولة إنشاء حساب جديد...');
+        
         // إذا فشل تسجيل الدخول، جرب التسجيل
-        if (error.message.includes('Invalid login credentials') || error.message.includes('User not found')) {
-          const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-            email: email,
-            password: 'default123',
-            options: {
-              data: {
-                name: formattedName,
-                phone_number: formattedPhone,
-              }
-            }
-          });
-
-          if (signUpError) {
-            console.error('Sign up error:', signUpError);
-            throw signUpError;
-          }
-
-          // إنشاء معلم في جدول المعلمين
-          const teacher: Teacher = {
-            id: signUpData.user!.id,
-            name: formattedName,
-            phoneNumber: formattedPhone,
-            createdAt: new Date(),
-          };
-
-          // حفظ بيانات المعلم في Context
-          dispatch({ type: 'SET_TEACHER', payload: teacher });
+        if (loginError.message.includes('المستخدم غير موجود') || 
+            loginError.message.includes('كلمة المرور غير صحيحة') ||
+            loginError.code === 'auth/user-not-found' || 
+            loginError.code === 'auth/wrong-password') {
+          
+          const user = await authService.createAccount(formattedEmail, password, formattedName);
+          console.log('✅ تم إنشاء الحساب بنجاح');
+          // لا نحتاج لإنشاء teacher هنا لأن AppContext سيتولى ذلك
+          
         } else {
-          console.error('Login error:', error);
-          throw error;
+          throw loginError;
         }
-      } else {
-        // تسجيل الدخول نجح
-        const teacher: Teacher = {
-          id: data.user.id,
-          name: formattedName,
-          phoneNumber: formattedPhone,
-          createdAt: new Date(data.user.created_at),
-        };
-
-        // حفظ بيانات المعلم في Context
-        dispatch({ type: 'SET_TEACHER', payload: teacher });
       }
       
     } catch (error) {
-      console.error('Login error:', error);
+      console.error('❌ خطأ في تسجيل الدخول:', error);
       const errorMessage = error instanceof Error ? error.message : 'خطأ غير معروف';
-      Alert.alert('خطأ', `حدث خطأ أثناء تسجيل الدخول: ${errorMessage}`);
+      Alert.alert('خطأ', errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -145,16 +132,32 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
             </View>
 
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>رقم الهاتف</Text>
+              <Text style={styles.label}>البريد الإلكتروني</Text>
               <TextInput
                 style={styles.input}
-                value={phoneNumber}
-                onChangeText={setPhoneNumber}
-                placeholder="أدخل رقم هاتفك (8 أرقام على الأقل)"
+                value={email}
+                onChangeText={setEmail}
+                placeholder="أدخل بريدك الإلكتروني"
                 placeholderTextColor="#999"
-                keyboardType="phone-pad"
+                keyboardType="email-address"
                 textAlign="right"
-                maxLength={15}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>كلمة المرور</Text>
+              <TextInput
+                style={styles.input}
+                value={password}
+                onChangeText={setPassword}
+                placeholder="أدخل كلمة المرور (6 أحرف على الأقل)"
+                placeholderTextColor="#999"
+                textAlign="right"
+                secureTextEntry={true}
+                autoCapitalize="none"
+                autoCorrect={false}
               />
             </View>
 

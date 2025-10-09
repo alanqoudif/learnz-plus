@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -35,6 +35,7 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [isSessionCompleted, setIsSessionCompleted] = useState(false);
+  const isFinishingRef = useRef(false); // لتجنب تنفيذ finishAttendanceSessionWithRecords مرتين
   // Realtime notifications removed - using simple alerts instead
 
   // Animation values
@@ -66,26 +67,63 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
   useFocusEffect(
     React.useCallback(() => {
       console.log('🔄 الشاشة أصبحت نشطة - إعادة تحميل البيانات...');
+      console.log('🔍 حالة الجلسة الحالية:', {
+        isSessionCompleted,
+        currentStudentIndex,
+        studentsLength: students.length,
+        sessionId,
+        isFinishing: isFinishingRef.current
+      });
       
-      // إذا كانت الجلسة مكتملة، لا نعيد تعيين أي شيء
-      if (isSessionCompleted) {
-        console.log('✅ الجلسة مكتملة - لا حاجة لإعادة التعيين');
+      // إذا كانت الجلسة مكتملة محلياً أو في حالة إنهاء، لا نعيد تعيين أي شيء
+      if (isSessionCompleted || isFinishingRef.current) {
+        console.log('✅ الجلسة مكتملة أو في حالة إنهاء - لا حاجة لإعادة التعيين');
         return;
       }
       
-      // إعادة تعيين الـ state إلى القيم الافتراضية أولاً
-      setCurrentStudentIndex(0);
-      setAttendanceRecords({});
-      setIsSessionStarted(false);
-      setSessionId(null);
-      setIsRecording(false);
+      // تحقق إضافي: إذا كان الفهرس يساوي أو أكبر من عدد الطلاب، الجلسة مكتملة
+      if (currentStudentIndex >= students.length && students.length > 0) {
+        console.log('✅ الفهرس يشير إلى اكتمال الجلسة - تحديد حالة الإكمال');
+        setIsSessionCompleted(true);
+        return;
+      }
+      
+      // تحقق من وجود جلسة مكتملة اليوم في قاعدة البيانات
+      const today = new Date().toDateString();
+      const completedSessionToday = state.attendanceSessions.find(
+        session => session.classId === classId && 
+        new Date(session.date).toDateString() === today &&
+        session.records.length >= students.length
+      );
+      
+      if (completedSessionToday) {
+        console.log('✅ تم العثور على جلسة مكتملة اليوم - تحديد حالة الإكمال');
+        console.log('🔍 تفاصيل الجلسة المكتملة:', {
+          sessionId: completedSessionToday.id,
+          recordsCount: completedSessionToday.records.length,
+          studentsCount: students.length
+        });
+        setIsSessionCompleted(true);
+        setIsSessionStarted(true);
+        setSessionId(completedSessionToday.id);
+        
+        // تحميل سجلات الحضور الموجودة
+        const records: { [key: string]: 'present' | 'absent' } = {};
+        completedSessionToday.records.forEach(record => {
+          records[record.studentId] = record.status;
+        });
+        setAttendanceRecords(records);
+        
+        // لا نعيد تعيين الفهرس - نتركه كما هو
+        console.log('🚫 لا نعيد تعيين الفهرس للجلسة المكتملة');
+        return;
+      }
       
       console.log('🔍 فحص وجود جلسة سابقة...');
-      const today = new Date().toDateString();
       const existingSession = state.attendanceSessions.find(
         session => session.classId === classId && new Date(session.date).toDateString() === today
       );
-
+      
       if (existingSession) {
         console.log('📂 تم العثور على جلسة موجودة:', existingSession.id);
         setIsSessionStarted(true);
@@ -106,18 +144,32 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
           setCurrentStudentIndex(recordedStudentsCount);
           console.log(`📍 الانتقال للطالب رقم ${recordedStudentsCount + 1} لاستكمال التسجيل`);
         } else if (recordedStudentsCount >= students.length) {
-          // الجلسة مكتملة - نبدأ من الأول للمراجعة
-          setCurrentStudentIndex(0);
-          console.log(`✅ الجلسة مكتملة - عرض الطالب الأول للمراجعة`);
+          // الجلسة مكتملة - تحديد أن الجلسة مكتملة
+          setIsSessionCompleted(true);
+          console.log(`✅ الجلسة مكتملة - تم تحديد حالة الإكمال`);
+          // لا نعيد تعيين الفهرس للجلسة المكتملة
+          console.log('🚫 لا نعيد تعيين الفهرس للجلسة المكتملة الموجودة');
         }
       } else {
         console.log('✨ لا توجد جلسة سابقة - جاهز لبدء جلسة جديدة');
+        // إعادة تعيين الـ state إلى القيم الافتراضية فقط عند عدم وجود جلسة سابقة
+        // ولكن فقط إذا لم تكن الجلسة مكتملة
+        if (!isSessionCompleted) {
+          setCurrentStudentIndex(0);
+          setAttendanceRecords({});
+          setIsSessionStarted(false);
+          setSessionId(null);
+          setIsRecording(false);
+          isFinishingRef.current = false; // إعادة تعيين حالة الإنهاء
+        } else {
+          console.log('🚫 الجلسة مكتملة - لا نعيد تعيين أي شيء');
+        }
       }
       
       return () => {
         console.log('🧹 تنظيف عند مغادرة الشاشة...');
       };
-    }, [classId, state.attendanceSessions, students.length, isSessionCompleted])
+    }, [classId, state.attendanceSessions, students.length, isSessionCompleted, currentStudentIndex])
   );
 
   const startAttendanceSession = async () => {
@@ -167,17 +219,27 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
       return;
     }
 
+    // فحص إضافي: إذا كانت الجلسة مكتملة، لا نسمح بتسجيل جديد
+    if (isSessionCompleted) {
+      console.log('❌ الجلسة مكتملة - لا يمكن تسجيل حضور جديد');
+      return;
+    }
+
     // حفظ البيانات المطلوبة في متغيرات محلية قبل أي تحديث
     const studentToRecord = { ...currentStudent };
     const currentIndex = currentStudentIndex;
     const nextIndex = currentIndex + 1;
     const isLastStudent = nextIndex >= students.length;
     
+    // فحص إضافي: التأكد من أن هذا هو آخر طالب فعلياً
+    const isActuallyLastStudent = currentIndex === students.length - 1;
+    
     console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
     console.log(`🎯 تسجيل ${status} للطالب: ${studentToRecord.name}`);
     console.log(`📍 الفهرس الحالي: ${currentIndex}`);
     console.log(`📍 العدد الكلي: ${students.length}`);
     console.log(`📍 الفهرس التالي: ${nextIndex} ${isLastStudent ? '(آخر طالب)' : ''}`);
+    console.log(`🔍 فحص إضافي - آخر طالب فعلي: ${isActuallyLastStudent}`);
     
     // Haptic feedback للتسجيل
     lightHaptic();
@@ -228,14 +290,32 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
         successHaptic();
       }
 
-      // إذا كان آخر طالب
-      if (isLastStudent) {
+      // إذا كان آخر طالب (استخدام الفحص الإضافي للتأكد)
+      if (isLastStudent && isActuallyLastStudent) {
         console.log(`🏁 هذا آخر طالب - جاري إنهاء الجلسة`);
+        console.log(`🔍 تفاصيل آخر طالب:`, {
+          studentName: studentToRecord.name,
+          currentIndex: currentIndex,
+          nextIndex: nextIndex,
+          studentsLength: students.length,
+          isLastStudent: isLastStudent,
+          isActuallyLastStudent: isActuallyLastStudent,
+          sessionId: sessionId
+        });
         successHaptic(); // Haptic للإنجاز
+        
+        // تحديد أن الجلسة مكتملة فوراً لمنع أي تداخل
+        setIsSessionCompleted(true);
+        isFinishingRef.current = true; // منع التنفيذ المتعدد
+        console.log(`✅ تم تحديد الجلسة كمكتملة`);
+        
+        // فك القفل فوراً
+        setIsRecording(false);
+        
+        // تأخير قصير لضمان اكتمال تحديث الـ state قبل إنهاء الجلسة
         setTimeout(() => {
-          setIsRecording(false);
           finishAttendanceSessionWithRecords(updatedRecords);
-        }, 300);
+        }, 50);
       } else {
         // الانتقال للطالب التالي - طريقة محسنة
         console.log(`➡️ جاري الانتقال من "${studentToRecord.name}" إلى "${students[nextIndex].name}"`);
@@ -261,6 +341,20 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
 
   const finishAttendanceSessionWithRecords = (records: { [key: string]: 'present' | 'absent' }) => {
     if (!sessionId) return;
+    
+    // فحص إضافي لمنع التنفيذ المتعدد
+    if (isFinishingRef.current && isSessionCompleted) {
+      console.log('🚫 الجلسة في حالة إنهاء بالفعل - تجاهل الطلب');
+      return;
+    }
+    
+    console.log('🎯 بدء إنهاء الجلسة مع السجلات:', {
+      sessionId,
+      recordsCount: Object.keys(records).length,
+      studentsCount: students.length,
+      isSessionCompleted,
+      isFinishing: isFinishingRef.current
+    });
       // حساب الإحصائيات بدقة - فقط للطلاب المسجلين فعلياً
       const actualPresentCount = students.filter(s => records[s.id] === 'present').length;
       const actualAbsentCount = students.filter(s => records[s.id] === 'absent').length;
@@ -305,7 +399,13 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
           [
             { text: 'متابعة', onPress: () => {
               setIsSessionCompleted(true);
-              showAttendanceCompleteAlert(actualPresentCount, actualAbsentCount, () => navigation.goBack());
+              showAttendanceCompleteAlert(actualPresentCount, actualAbsentCount, () => {
+                console.log('🚪 العودة للشاشة السابقة بعد إكمال الجلسة الجزئية');
+                // التأكد من أن الجلسة مكتملة قبل العودة
+                setIsSessionCompleted(true);
+                isFinishingRef.current = false; // إعادة تعيين حالة الإنهاء
+                navigation.goBack();
+              });
             }},
             { text: 'إلغاء', style: 'cancel' }
           ]
@@ -338,9 +438,17 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
           console.warn('⚠️ فشل في إرسال تحديث انتهاء الجلسة:', error);
         }
         
-        // تحديد أن الجلسة مكتملة قبل إظهار النتائج
+        // التأكد من أن الجلسة مكتملة (قد تكون محددة مسبقاً)
         setIsSessionCompleted(true);
-        showAttendanceCompleteAlert(finalPresentCount, finalAbsentCount, () => navigation.goBack());
+        
+        // عرض التنبيه مباشرة بدون تأخير
+        showAttendanceCompleteAlert(finalPresentCount, finalAbsentCount, () => {
+          console.log('🚪 العودة للشاشة السابقة بعد إكمال الجلسة');
+          // التأكد من أن الجلسة مكتملة قبل العودة
+          setIsSessionCompleted(true);
+          isFinishingRef.current = false; // إعادة تعيين حالة الإنهاء
+          navigation.goBack();
+        });
       }
   };
 
@@ -433,6 +541,7 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
                 setIsSessionStarted(false);
                 setSessionId(null);
                 setIsRecording(false);
+                isFinishingRef.current = false; // إعادة تعيين حالة الإنهاء
               }}
             >
               <Text style={styles.newSessionButtonText}>جلسة جديدة</Text>
@@ -786,12 +895,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     paddingHorizontal: 32,
     paddingVertical: 16,
-    borderRadius: borderRadius.large,
+    borderRadius: borderRadius.xl,
     marginBottom: 16,
-    ...shadows.medium,
+    ...shadows.md,
   },
   newSessionButtonText: {
-    color: colors.white,
+    color: '#ffffff',
     fontSize: 18,
     fontFamily: fontFamilies.bold,
     textAlign: 'center',
@@ -800,7 +909,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background.secondary,
     paddingHorizontal: 32,
     paddingVertical: 16,
-    borderRadius: borderRadius.large,
+    borderRadius: borderRadius.xl,
     borderWidth: 2,
     borderColor: colors.primary,
   },

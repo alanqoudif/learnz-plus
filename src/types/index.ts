@@ -41,6 +41,7 @@ export interface AttendanceSession {
 
 export type RootStackParamList = {
   Login: undefined;
+  Onboarding: undefined;
   Dashboard: undefined;
   ClassManagement: undefined;
   AddClass: undefined;

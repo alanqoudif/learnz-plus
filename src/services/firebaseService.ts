@@ -566,11 +566,10 @@ export const attendanceService = {
   async getAttendanceSessionsByClass(classId: string, maxResults: number = 10): Promise<AttendanceSession[]> {
     console.log(`🚀 تحميل جلسات الحضور للفصل: ${classId} (limit: ${maxResults})`);
     
-    // جلب الجلسات مع ترتيب وتحديد العدد
+    // جلب الجلسات بدون orderBy لتجنب مشكلة الـ index
     const sessionsQuery = query(
       collection(firestore, COLLECTIONS.ATTENDANCE_SESSIONS),
       where('classId', '==', classId),
-      orderBy('createdAt', 'desc'),
       limit(maxResults)
     );
 
@@ -625,6 +624,9 @@ export const attendanceService = {
       });
     }
 
+    // ترتيب الجلسات يدوياً حسب التاريخ (الأحدث أولاً)
+    sessions.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    
     console.log(`✅ تم تحميل ${sessions.length} جلسة`);
     return sessions;
   },

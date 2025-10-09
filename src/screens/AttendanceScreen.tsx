@@ -15,8 +15,7 @@ import { colors, fontFamilies, shadows, borderRadius, spacing } from '../utils/t
 import { fadeIn, fadeOut, scaleButton } from '../utils/animations';
 import { lightHaptic, successHaptic, errorHaptic } from '../utils/haptics';
 import { FirebaseRealtimeService } from '../services/firebaseRealtimeService';
-import RealtimeNotification from '../components/RealtimeNotification';
-import { useRealtimeNotifications } from '../hooks/useRealtimeNotifications';
+// RealtimeNotification component removed - using simple notifications instead
 
 interface AttendanceScreenProps {
   navigation: any;
@@ -36,7 +35,7 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [isSessionCompleted, setIsSessionCompleted] = useState(false);
-  const { notifications, addNotification, removeNotification } = useRealtimeNotifications();
+  // Realtime notifications removed - using simple alerts instead
 
   // Animation values
   const fadeAnim = useState(new Animated.Value(1))[0];
@@ -537,16 +536,7 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
         )}
       </View>
 
-      {/* إشعارات Realtime */}
-      {notifications.map((notification) => (
-        <RealtimeNotification
-          key={notification.id}
-          message={notification.message}
-          type={notification.type}
-          visible={true}
-          onHide={() => removeNotification(notification.id)}
-        />
-      ))}
+      {/* Realtime notifications removed - using simple alerts instead */}
     </View>
   );
 }

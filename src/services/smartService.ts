@@ -92,9 +92,9 @@ export const smartAttendanceService = {
     return await attendanceService.recordAttendance(record);
   },
 
-  async getAttendanceSessionsByClass(classId: string) {
+  async getAttendanceSessionsByClass(classId: string, maxResults: number = 10) {
     console.log('🔥 Using Firebase Attendance Service');
-    return await attendanceService.getAttendanceSessionsByClass(classId);
+    return await attendanceService.getAttendanceSessionsByClass(classId, maxResults);
   },
 
   async getStudentAttendanceHistory(studentId: string, classId: string) {

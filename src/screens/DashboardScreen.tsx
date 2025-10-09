@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -6,38 +6,45 @@ import {
   StyleSheet,
   FlatList,
   Alert,
+  RefreshControl,
 } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { Class } from '../types';
-import { fontFamilies } from '../utils/theme';
+import { colors, fontFamilies, shadows, borderRadius, spacing } from '../utils/theme';
 import { smartAuthService as authService } from '../services/smartService';
+import ClassCard from '../components/ClassCard';
+import { ClassListSkeleton } from '../components/SkeletonLoader';
+import { lightHaptic, mediumHaptic } from '../utils/haptics';
 
 interface DashboardScreenProps {
   navigation: any;
 }
 
 export default function DashboardScreen({ navigation }: DashboardScreenProps) {
-  const { state, dispatch, deleteClass } = useApp();
+  const { state, deleteClass, refreshData } = useApp();
   const { currentTeacher, classes, isLoading } = state;
-  const [isInitialLoad, setIsInitialLoad] = React.useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // إخفاء loading state عند تحميل الفصول
-  React.useEffect(() => {
-    if (classes.length > 0 && isInitialLoad) {
-      setIsInitialLoad(false);
-    }
-  }, [classes, isInitialLoad]);
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    lightHaptic();
+    await refreshData();
+    setIsRefreshing(false);
+  }, [refreshData]);
 
-  const handleAddClass = () => {
+  const handleAddClass = useCallback(() => {
+    lightHaptic();
     navigation.navigate('AddClass');
-  };
+  }, [navigation]);
 
-  const handleClassPress = (classItem: Class) => {
+  const handleClassPress = useCallback((classItem: Class) => {
+    lightHaptic();
     // يمكن إضافة شاشة تفاصيل الفصل لاحقاً
     console.log('Class pressed:', classItem.id);
-  };
+  }, []);
 
-  const handleDeleteClass = (classId: string, className: string) => {
+  const handleDeleteClass = useCallback((classId: string, className: string) => {
+    mediumHaptic();
     Alert.alert(
       'تأكيد الحذف',
       `هل أنت متأكد من حذف الشعبة "${className}"؟\n\n⚠️ تحذير: سيتم حذف:\n• جميع الطلاب في هذه الشعبة\n• جميع سجلات الحضور\n• تاريخ الحضور الكامل\n\nهذا الإجراء لا يمكن التراجع عنه!`,
@@ -49,6 +56,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
           onPress: async () => {
             try {
               await deleteClass(classId);
+              mediumHaptic();
               Alert.alert(
                 'تم الحذف بنجاح', 
                 `تم حذف الشعبة "${className}" وجميع البيانات المرتبطة بها من قاعدة البيانات.`,
@@ -62,94 +70,98 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
         },
       ]
     );
-  };
+  }, [deleteClass]);
 
-  const renderClassItem = ({ item }: { item: Class }) => (
-    <TouchableOpacity
-      style={styles.classCard}
-      onPress={() => handleClassPress(item)}
-    >
-      <View style={styles.classHeader}>
-        <Text style={styles.className}>{item.name}</Text>
-        <Text style={styles.classSection}>شعبة {item.section}</Text>
-      </View>
-      <View style={styles.classHeaderActions}>
-        <TouchableOpacity
-          style={styles.deleteClassButton}
-          onPress={() => handleDeleteClass(item.id, `${item.name} - شعبة ${item.section}`)}
-        >
-          <Text style={styles.deleteClassButtonText}>🗑️</Text>
-        </TouchableOpacity>
-      </View>
-      <View style={styles.classInfo}>
-        <Text style={styles.studentCount}>
-          عدد الطلاب: {item.students.length}
-        </Text>
-        <Text style={styles.classDate}>
-          تم الإنشاء: {new Date(item.createdAt).toLocaleDateString('en-US')}
-        </Text>
-      </View>
-      <View style={styles.classActions}>
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={() => navigation.navigate('StudentManagement', { classId: item.id })}
-        >
-          <Text style={styles.actionButtonText}>إدارة الطلاب</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.actionButton, styles.attendanceButton]}
-          onPress={() => navigation.navigate('Attendance', { classId: item.id })}
-        >
-          <Text style={[styles.actionButtonText, styles.attendanceButtonText]}>
-            تسجيل الحضور
-          </Text>
-        </TouchableOpacity>
-      </View>
-      <TouchableOpacity
-        style={styles.historyButton}
-        onPress={() => navigation.navigate('AttendanceHistory', { classId: item.id })}
-      >
-        <Text style={styles.historyButtonText}>عرض تاريخ الحضور</Text>
-      </TouchableOpacity>
-    </TouchableOpacity>
-  );
+  const handleManageStudents = useCallback((classId: string) => {
+    navigation.navigate('StudentManagement', { classId });
+  }, [navigation]);
 
-  const renderEmptyState = () => (
+  const handleAttendance = useCallback((classId: string) => {
+    navigation.navigate('Attendance', { classId });
+  }, [navigation]);
+
+  const handleViewHistory = useCallback((classId: string) => {
+    navigation.navigate('AttendanceHistory', { classId });
+  }, [navigation]);
+
+  const renderClassItem = useCallback(({ item }: { item: Class }) => (
+    <ClassCard
+      item={item}
+      onPress={handleClassPress}
+      onDelete={handleDeleteClass}
+      onManageStudents={handleManageStudents}
+      onAttendance={handleAttendance}
+      onViewHistory={handleViewHistory}
+    />
+  ), [handleClassPress, handleDeleteClass, handleManageStudents, handleAttendance, handleViewHistory]);
+
+  const keyExtractor = useCallback((item: Class, index: number) => `class-${item.id}-${index}`, []);
+
+  const getItemLayout = useCallback((data: any, index: number) => ({
+    length: 240, // تقريباً ارتفاع ClassCard
+    offset: 240 * index,
+    index,
+  }), []);
+
+  const renderEmptyState = useCallback(() => (
     <View style={styles.emptyState}>
+      <Text style={styles.emptyIcon}>📚</Text>
       <Text style={styles.emptyStateTitle}>لا توجد فصول دراسية</Text>
       <Text style={styles.emptyStateSubtitle}>
         ابدأ بإضافة فصل دراسي جديد لإدارة حضور وغياب الطلاب
       </Text>
       <TouchableOpacity style={styles.addFirstClassButton} onPress={handleAddClass}>
-        <Text style={styles.addFirstClassButtonText}>إضافة فصل دراسي</Text>
+        <Text style={styles.addFirstClassButtonText}>+ إضافة فصل دراسي</Text>
       </TouchableOpacity>
     </View>
-  );
+  ), [handleAddClass]);
+
+  const handleLogout = useCallback(() => {
+    mediumHaptic();
+    Alert.alert(
+      'تسجيل الخروج',
+      'هل أنت متأكد من تسجيل الخروج؟',
+      [
+        { text: 'إلغاء', style: 'cancel' },
+        {
+          text: 'تسجيل الخروج',
+          style: 'destructive',
+          onPress: async () => {
+            await authService.signOut();
+            // سيتم الانتقال تلقائياً عند تحديث state.currentTeacher
+          },
+        },
+      ]
+    );
+  }, []);
+
+  if (isLoading) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.welcomeText}>مرحباً</Text>
+            <Text style={styles.teacherName}>{currentTeacher?.name || 'معلم'}</Text>
+          </View>
+        </View>
+        <View style={styles.content}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>الفصول الدراسية</Text>
+          </View>
+          <ClassListSkeleton />
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <View>
-          <Text style={styles.welcomeText}>مرحباً</Text>
+          <Text style={styles.welcomeText}>مرحباً 👋</Text>
           <Text style={styles.teacherName}>{currentTeacher?.name}</Text>
         </View>
-        <TouchableOpacity style={styles.logoutButton} onPress={() => {
-          Alert.alert(
-            'تسجيل الخروج',
-            'هل أنت متأكد من تسجيل الخروج؟',
-            [
-              { text: 'إلغاء', style: 'cancel' },
-              {
-                text: 'تسجيل الخروج',
-                style: 'destructive',
-                onPress: async () => {
-                  await authService.signOut();
-                  // سيتم الانتقال تلقائياً عند تحديث state.currentTeacher
-                },
-              },
-            ]
-          );
-        }}>
+        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <Text style={styles.logoutButtonText}>خروج</Text>
         </TouchableOpacity>
       </View>
@@ -157,11 +169,9 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
       <View style={styles.content}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>الفصول الدراسية</Text>
-          <View style={styles.headerButtons}>
-            <TouchableOpacity style={styles.addButton} onPress={handleAddClass}>
-              <Text style={styles.addButtonText}>+ إضافة فصل</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity style={styles.addButton} onPress={handleAddClass}>
+            <Text style={styles.addButtonText}>+ إضافة فصل</Text>
+          </TouchableOpacity>
         </View>
 
         {classes.length === 0 ? (
@@ -170,9 +180,24 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
           <FlatList
             data={classes}
             renderItem={renderClassItem}
-            keyExtractor={(item, index) => `${item.id}-${index}`}
+            keyExtractor={keyExtractor}
+            getItemLayout={getItemLayout}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.classesList}
+            refreshControl={
+              <RefreshControl
+                refreshing={isRefreshing}
+                onRefresh={handleRefresh}
+                colors={[colors.primary]}
+                tintColor={colors.primary}
+              />
+            }
+            // Performance optimizations
+            windowSize={5}
+            maxToRenderPerBatch={5}
+            removeClippedSubviews={true}
+            initialNumToRender={5}
+            updateCellsBatchingPeriod={50}
           />
         )}
       </View>
@@ -183,199 +208,108 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: colors.background.secondary,
     direction: 'rtl',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: spacing.xl,
     paddingTop: 60,
-    paddingBottom: 20,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e9ecef',
+    paddingBottom: spacing.xl,
+    backgroundColor: colors.background.primary,
+    ...shadows.sm,
   },
   welcomeText: {
     fontSize: 16,
     fontFamily: fontFamilies.regular,
-    color: '#6c757d',
+    color: colors.text.secondary,
   },
   teacherName: {
     fontSize: 24,
     fontFamily: fontFamilies.bold,
-    color: '#2c3e50',
+    color: colors.text.primary,
+    marginTop: 4,
   },
   logoutButton: {
-    backgroundColor: '#dc3545',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
+    backgroundColor: colors.danger,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.lg,
+    ...shadows.sm,
   },
   logoutButtonText: {
-    color: 'white',
+    color: colors.text.light,
     fontFamily: fontFamilies.semibold,
+    fontSize: 14,
   },
   content: {
     flex: 1,
-    paddingHorizontal: 20,
+    paddingHorizontal: spacing.xl,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 20,
-    marginBottom: 16,
-  },
-  headerButtons: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    marginTop: spacing.xl,
+    marginBottom: spacing.lg,
+    direction: 'rtl',
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontFamily: fontFamilies.bold,
-    color: '#2c3e50',
+    color: colors.text.primary,
   },
   addButton: {
-    backgroundColor: '#28a745',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
+    backgroundColor: colors.success,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.lg,
+    ...shadows.sm,
   },
   addButtonText: {
-    color: 'white',
+    color: colors.text.light,
     fontFamily: fontFamilies.semibold,
+    fontSize: 14,
   },
   classesList: {
-    paddingBottom: 20,
-  },
-  classCard: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    direction: 'rtl',
-  },
-  classHeader: {
-    marginBottom: 8,
-  },
-  className: {
-    fontSize: 18,
-    fontFamily: fontFamilies.bold,
-    color: '#2c3e50',
-  },
-  classSection: {
-    fontSize: 16,
-    fontFamily: fontFamilies.regular,
-    color: '#6c757d',
-  },
-  classHeaderActions: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    zIndex: 1,
-  },
-  deleteClassButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#ffebee',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#ffcdd2',
-  },
-  deleteClassButtonText: {
-    fontSize: 16,
-  },
-  classInfo: {
-    marginBottom: 12,
-  },
-  studentCount: {
-    fontSize: 14,
-    fontFamily: fontFamilies.regular,
-    color: '#495057',
-    marginBottom: 4,
-  },
-  classDate: {
-    fontSize: 12,
-    fontFamily: fontFamilies.regular,
-    color: '#6c757d',
-  },
-  classActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    direction: 'rtl',
-  },
-  actionButton: {
-    flex: 1,
-    backgroundColor: '#6c757d',
-    paddingVertical: 10,
-    borderRadius: 6,
-    marginHorizontal: 4,
-    alignItems: 'center',
-  },
-  attendanceButton: {
-    backgroundColor: '#007bff',
-  },
-  actionButtonText: {
-    color: 'white',
-    fontFamily: fontFamilies.semibold,
-    fontSize: 14,
-  },
-  attendanceButtonText: {
-    color: 'white',
-  },
-  historyButton: {
-    backgroundColor: '#17a2b8',
-    paddingVertical: 10,
-    borderRadius: 6,
-    marginTop: 8,
-    alignItems: 'center',
-  },
-  historyButtonText: {
-    color: 'white',
-    fontFamily: fontFamilies.semibold,
-    fontSize: 14,
+    paddingBottom: spacing.xl,
   },
   emptyState: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 40,
+    paddingHorizontal: spacing['4xl'],
+  },
+  emptyIcon: {
+    fontSize: 64,
+    marginBottom: spacing.lg,
   },
   emptyStateTitle: {
     fontSize: 24,
     fontFamily: fontFamilies.bold,
-    color: '#6c757d',
-    marginBottom: 12,
+    color: colors.text.secondary,
+    marginBottom: spacing.md,
     textAlign: 'center',
   },
   emptyStateSubtitle: {
     fontSize: 16,
     fontFamily: fontFamilies.regular,
-    color: '#6c757d',
+    color: colors.text.tertiary,
     textAlign: 'center',
     lineHeight: 24,
-    marginBottom: 30,
+    marginBottom: spacing['3xl'],
   },
   addFirstClassButton: {
-    backgroundColor: '#28a745',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing['2xl'],
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.lg,
+    ...shadows.md,
   },
   addFirstClassButtonText: {
-    color: 'white',
+    color: colors.text.light,
     fontSize: 16,
     fontFamily: fontFamilies.semibold,
   },

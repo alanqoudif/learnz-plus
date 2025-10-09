@@ -1,41 +1,75 @@
-// ألوان التطبيق
+// ألوان التطبيق - نظام حديث ومحسّن
 export const colors = {
-  // الألوان الأساسية
-  primary: '#007bff',
-  secondary: '#6c757d',
-  success: '#28a745',
-  danger: '#dc3545',
-  warning: '#ffc107',
-  info: '#17a2b8',
+  // الألوان الأساسية - Modern & Professional
+  primary: '#6366f1', // Indigo - أكثر حداثة
+  primaryLight: '#818cf8',
+  primaryDark: '#4f46e5',
   
-  // ألوان النص
+  secondary: '#64748b', // Slate - أنعم من الرمادي القديم
+  secondaryLight: '#94a3b8',
+  secondaryDark: '#475569',
+  
+  success: '#10b981', // Emerald - أكثر حيوية
+  successLight: '#34d399',
+  successDark: '#059669',
+  
+  danger: '#ef4444', // Red - أكثر نعومة
+  dangerLight: '#f87171',
+  dangerDark: '#dc2626',
+  
+  warning: '#f59e0b', // Amber - أفضل من الأصفر الفاقع
+  warningLight: '#fbbf24',
+  warningDark: '#d97706',
+  
+  info: '#06b6d4', // Cyan - أكثر إشراقاً
+  infoLight: '#22d3ee',
+  infoDark: '#0891b2',
+  
+  // ألوان النص - محسّنة للوضوح
   text: {
-    primary: '#2c3e50',
-    secondary: '#6c757d',
+    primary: '#1e293b', // Slate 800 - تباين ممتاز
+    secondary: '#64748b', // Slate 500
+    tertiary: '#94a3b8', // Slate 400
     light: '#ffffff',
-    dark: '#212529',
+    dark: '#0f172a', // Slate 900
+    muted: '#cbd5e1', // Slate 300
   },
   
-  // ألوان الخلفية
+  // ألوان الخلفية - تدرجات ناعمة
   background: {
     primary: '#ffffff',
-    secondary: '#f8f9fa',
+    secondary: '#f8fafc', // Slate 50 - أنعم من القديم
+    tertiary: '#f1f5f9', // Slate 100
     light: '#ffffff',
-    dark: '#343a40',
+    dark: '#0f172a', // Slate 900
+    card: '#ffffff',
+    overlay: 'rgba(15, 23, 42, 0.5)',
   },
   
-  // ألوان الحدود
+  // ألوان الحدود - تدرجات متناسقة
   border: {
-    light: '#e9ecef',
-    medium: '#dee2e6',
-    dark: '#adb5bd',
+    light: '#f1f5f9', // Slate 100
+    medium: '#e2e8f0', // Slate 200
+    dark: '#cbd5e1', // Slate 300
+    focus: '#6366f1', // Primary للتركيز
   },
   
-  // ألوان الحالة
+  // ألوان الحالة - واضحة وجذابة
   status: {
-    present: '#28a745',
-    absent: '#dc3545',
-    pending: '#ffc107',
+    present: '#10b981', // Green
+    presentBg: '#d1fae5', // Green 100
+    absent: '#ef4444', // Red
+    absentBg: '#fee2e2', // Red 100
+    pending: '#f59e0b', // Amber
+    pendingBg: '#fef3c7', // Amber 100
+  },
+  
+  // ألوان Accent للتفاصيل
+  accent: {
+    purple: '#a855f7',
+    pink: '#ec4899',
+    orange: '#f97316',
+    teal: '#14b8a6',
   },
 };
 

@@ -9,6 +9,7 @@ import {
   query, 
   where, 
   orderBy, 
+  limit,
   onSnapshot,
   serverTimestamp,
   Timestamp
@@ -561,29 +562,44 @@ export const attendanceService = {
     return result;
   },
 
-  // جلب جلسات الحضور لفصل معين
-  async getAttendanceSessionsByClass(classId: string): Promise<AttendanceSession[]> {
-    const q = query(
+  // جلب جلسات الحضور لفصل معين مع تحسين الأداء
+  async getAttendanceSessionsByClass(classId: string, maxResults: number = 10): Promise<AttendanceSession[]> {
+    console.log(`🚀 تحميل جلسات الحضور للفصل: ${classId} (limit: ${maxResults})`);
+    
+    // جلب الجلسات مع ترتيب وتحديد العدد
+    const sessionsQuery = query(
       collection(firestore, COLLECTIONS.ATTENDANCE_SESSIONS),
-      where('classId', '==', classId)
+      where('classId', '==', classId),
+      orderBy('createdAt', 'desc'),
+      limit(maxResults)
     );
 
-    const querySnapshot = await getDocs(q);
+    const sessionsSnapshot = await getDocs(sessionsQuery);
     const sessions: AttendanceSession[] = [];
 
-    for (const sessionDoc of querySnapshot.docs) {
-      const sessionData = sessionDoc.data();
+    // جلب جميع السجلات للجلسات في استعلام واحد
+    if (sessionsSnapshot.docs.length > 0) {
+      const sessionIds = sessionsSnapshot.docs.map(doc => doc.id);
       
-      // جلب سجلات الحضور لهذه الجلسة
+      // استعلام واحد لجميع السجلات
       const recordsQuery = query(
         collection(firestore, COLLECTIONS.ATTENDANCE_RECORDS),
-        where('sessionId', '==', sessionDoc.id)
+        where('sessionId', 'in', sessionIds)
       );
       
       const recordsSnapshot = await getDocs(recordsQuery);
-      const records: AttendanceRecord[] = recordsSnapshot.docs.map(recordDoc => {
+      
+      // تجميع السجلات حسب sessionId
+      const recordsBySession: { [sessionId: string]: AttendanceRecord[] } = {};
+      recordsSnapshot.docs.forEach(recordDoc => {
         const recordData = recordDoc.data();
-        return {
+        const sessionId = recordData.sessionId;
+        
+        if (!recordsBySession[sessionId]) {
+          recordsBySession[sessionId] = [];
+        }
+        
+        recordsBySession[sessionId].push({
           id: recordDoc.id,
           studentId: recordData.studentId,
           classId: recordData.classId,
@@ -591,21 +607,25 @@ export const attendanceService = {
           status: recordData.status,
           attendanceTime: timestampToDate(recordData.attendanceTime),
           createdAt: timestampToDate(recordData.createdAt)
-        };
+        });
       });
 
-      sessions.push({
-        id: sessionDoc.id,
-        classId: sessionData.classId,
-        date: timestampToDate(sessionData.date),
-        records: records.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()), // ترتيب السجلات محلياً
-        createdAt: timestampToDate(sessionData.createdAt)
+      // بناء الجلسات مع سجلاتها
+      sessionsSnapshot.docs.forEach(sessionDoc => {
+        const sessionData = sessionDoc.data();
+        const sessionId = sessionDoc.id;
+        
+        sessions.push({
+          id: sessionId,
+          classId: sessionData.classId,
+          date: timestampToDate(sessionData.date),
+          createdAt: timestampToDate(sessionData.createdAt),
+          records: (recordsBySession[sessionId] || []).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+        });
       });
     }
 
-    // ترتيب الجلسات محلياً بدلاً من قاعدة البيانات
-    sessions.sort((a, b) => b.date.getTime() - a.date.getTime());
-
+    console.log(`✅ تم تحميل ${sessions.length} جلسة`);
     return sessions;
   },
 

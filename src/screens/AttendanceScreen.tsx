@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,8 +11,9 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useApp } from '../context/AppContext';
 import { AttendanceRecord, AttendanceSession } from '../types';
 import { showErrorAlert, showAttendanceCompleteAlert } from '../utils/notifications';
-import { fontFamilies } from '../utils/theme';
-import { RealtimeService } from '../services/realtimeService';
+import { colors, fontFamilies, shadows, borderRadius, spacing } from '../utils/theme';
+import { fadeIn, fadeOut, scaleButton } from '../utils/animations';
+import { lightHaptic, successHaptic, errorHaptic } from '../utils/haptics';
 import { FirebaseRealtimeService } from '../services/firebaseRealtimeService';
 import RealtimeNotification from '../components/RealtimeNotification';
 import { useRealtimeNotifications } from '../hooks/useRealtimeNotifications';
@@ -34,6 +35,7 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
   const [isSessionStarted, setIsSessionStarted] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
+  const [isSessionCompleted, setIsSessionCompleted] = useState(false);
   const { notifications, addNotification, removeNotification } = useRealtimeNotifications();
 
   // Animation values
@@ -58,31 +60,19 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
     console.log(`━━━━━━━━━━━━━━━━━━━━━`);
   }, [currentStudentIndex, currentStudent]);
 
-  // Real-time listener for attendance changes in this class
-  useEffect(() => {
-    console.log('Setting up realtime listener for class:', classId);
-    
-    const attendanceSubscription = RealtimeService.subscribeToClassAttendance(
-      classId,
-      async (payload) => {
-        console.log('📅 Attendance change detected for class:', classId, payload.eventType);
-        
-        // تجاهل التحديثات الآنية تماماً أثناء جلسة الحضور النشطة
-        console.log('⏸️ تجاهل التحديث الآني أثناء الجلسة النشطة');
-        // لا نفعل شيء - سيتم تحديث البيانات فقط عند إعادة فتح الشاشة
-      }
-    );
-
-    return () => {
-      console.log('Cleaning up attendance realtime listener for class:', classId);
-      attendanceSubscription.unsubscribe();
-    };
-  }, [classId]);
+  // Real-time updates are handled by Firebase through AppContext
+  // No need for additional listeners here during active attendance session
 
   // تحميل الجلسة الموجودة عند التركيز على الشاشة
   useFocusEffect(
     React.useCallback(() => {
       console.log('🔄 الشاشة أصبحت نشطة - إعادة تحميل البيانات...');
+      
+      // إذا كانت الجلسة مكتملة، لا نعيد تعيين أي شيء
+      if (isSessionCompleted) {
+        console.log('✅ الجلسة مكتملة - لا حاجة لإعادة التعيين');
+        return;
+      }
       
       // إعادة تعيين الـ state إلى القيم الافتراضية أولاً
       setCurrentStudentIndex(0);
@@ -128,7 +118,7 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
       return () => {
         console.log('🧹 تنظيف عند مغادرة الشاشة...');
       };
-    }, [classId, state.attendanceSessions, students.length])
+    }, [classId, state.attendanceSessions, students.length, isSessionCompleted])
   );
 
   const startAttendanceSession = async () => {
@@ -166,9 +156,10 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
     }
   };
 
-  const markAttendance = async (status: 'present' | 'absent') => {
+  const markAttendance = useCallback(async (status: 'present' | 'absent') => {
     if (!currentStudent || !sessionId) {
       console.log('❌ لا يمكن تسجيل الحضور - بيانات غير مكتملة');
+      errorHaptic();
       return;
     }
 
@@ -189,23 +180,15 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
     console.log(`📍 العدد الكلي: ${students.length}`);
     console.log(`📍 الفهرس التالي: ${nextIndex} ${isLastStudent ? '(آخر طالب)' : ''}`);
     
+    // Haptic feedback للتسجيل
+    lightHaptic();
+    
     // قفل التسجيل لمنع الضغط المتكرر
     setIsRecording(true);
 
     try {
-      // تأثير بصري بسيط للضغط
-      Animated.sequence([
-        Animated.timing(scaleAnim, {
-          toValue: 0.95,
-          duration: 100,
-          useNativeDriver: true,
-        }),
-        Animated.timing(scaleAnim, {
-          toValue: 1,
-          duration: 100,
-          useNativeDriver: true,
-        }),
-      ]).start();
+      // تأثير بصري محسّن
+      scaleButton(scaleAnim);
 
       // حفظ سجل الحضور في قاعدة البيانات
       await recordAttendance({
@@ -241,25 +224,29 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
         console.warn('⚠️ فشل في إرسال تحديث تسجيل الحضور:', error);
       }
 
+      // Success haptic عند تسجيل ناجح
+      if (status === 'present') {
+        successHaptic();
+      }
+
       // إذا كان آخر طالب
       if (isLastStudent) {
         console.log(`🏁 هذا آخر طالب - جاري إنهاء الجلسة`);
+        successHaptic(); // Haptic للإنجاز
         setTimeout(() => {
           setIsRecording(false);
           finishAttendanceSessionWithRecords(updatedRecords);
         }, 300);
       } else {
-        // الانتقال للطالب التالي - طريقة مبسطة
+        // الانتقال للطالب التالي - طريقة محسنة
         console.log(`➡️ جاري الانتقال من "${studentToRecord.name}" إلى "${students[nextIndex].name}"`);
         
-        // تحديث الفهرس مباشرة بدون animations معقدة
+        // تحديث الفهرس مباشرة
         setCurrentStudentIndex(nextIndex);
         
-        // انتظار قصير ثم فك القفل
-        setTimeout(() => {
-          console.log(`✅ اكتمل الانتقال - الطالب الحالي: ${students[nextIndex]?.name}`);
-          setIsRecording(false);
-        }, 200);
+        // فك القفل فوراً
+        setIsRecording(false);
+        console.log(`✅ اكتمل الانتقال - الطالب الحالي: ${students[nextIndex]?.name}`);
       }
       
       console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
@@ -271,7 +258,7 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
       fadeAnim.setValue(1);
       scaleAnim.setValue(1);
     }
-  };
+  }, [currentStudent, sessionId, isRecording, currentStudentIndex, students.length, classId, recordAttendance, state.currentTeacher?.id]);
 
   const finishAttendanceSessionWithRecords = (records: { [key: string]: 'present' | 'absent' }) => {
     if (!sessionId) return;
@@ -317,7 +304,10 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
           'تحذير',
           `لم يتم تسجيل حضور جميع الطلاب.\nتم تسجيل ${totalRecorded} من أصل ${totalStudents} طالب.\n\nالطلاب غير المسجلين: ${missingStudents.map(s => s.name).join(', ')}`,
           [
-            { text: 'متابعة', onPress: () => showAttendanceCompleteAlert(actualPresentCount, actualAbsentCount, () => navigation.goBack()) },
+            { text: 'متابعة', onPress: () => {
+              setIsSessionCompleted(true);
+              showAttendanceCompleteAlert(actualPresentCount, actualAbsentCount, () => navigation.goBack());
+            }},
             { text: 'إلغاء', style: 'cancel' }
           ]
         );
@@ -349,6 +339,8 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
           console.warn('⚠️ فشل في إرسال تحديث انتهاء الجلسة:', error);
         }
         
+        // تحديد أن الجلسة مكتملة قبل إظهار النتائج
+        setIsSessionCompleted(true);
         showAttendanceCompleteAlert(finalPresentCount, finalAbsentCount, () => navigation.goBack());
       }
   };
@@ -427,7 +419,33 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
       </View>
 
       <View style={styles.content}>
-        {!isSessionStarted ? (
+        {isSessionCompleted ? (
+          <View style={styles.completedContainer}>
+            <Text style={styles.completedTitle}>✅ تم إكمال الجلسة</Text>
+            <Text style={styles.completedSubtitle}>
+              تم تسجيل حضور جميع الطلاب بنجاح
+            </Text>
+            <TouchableOpacity
+              style={styles.newSessionButton}
+              onPress={() => {
+                setIsSessionCompleted(false);
+                setCurrentStudentIndex(0);
+                setAttendanceRecords({});
+                setIsSessionStarted(false);
+                setSessionId(null);
+                setIsRecording(false);
+              }}
+            >
+              <Text style={styles.newSessionButtonText}>جلسة جديدة</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.backToClassesButton}
+              onPress={() => navigation.goBack()}
+            >
+              <Text style={styles.backToClassesButtonText}>العودة للفصول</Text>
+            </TouchableOpacity>
+          </View>
+        ) : !isSessionStarted ? (
           <View style={styles.startContainer}>
             <Text style={styles.startTitle}>بدء تسجيل الحضور</Text>
             <Text style={styles.startSubtitle}>
@@ -617,25 +635,31 @@ const styles = StyleSheet.create({
     paddingTop: 20,
   },
   progressContainer: {
-    marginBottom: 30,
+    marginBottom: spacing['3xl'],
+    paddingHorizontal: spacing.lg,
   },
   progressText: {
-    fontSize: 16,
-    fontFamily: fontFamilies.regular,
-    color: '#6c757d',
+    fontSize: 18,
+    fontFamily: fontFamilies.semibold,
+    color: colors.text.primary,
     textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: spacing.md,
   },
   progressBar: {
-    height: 8,
-    backgroundColor: '#e9ecef',
-    borderRadius: 4,
+    height: 12,
+    backgroundColor: colors.border.light,
+    borderRadius: borderRadius.full,
     overflow: 'hidden',
+    ...shadows.sm,
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#007bff',
-    borderRadius: 4,
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.full,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 4,
   },
   cardContainer: {
     flex: 1,
@@ -705,10 +729,12 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   absentButton: {
-    backgroundColor: '#dc3545',
+    backgroundColor: colors.danger,
+    ...shadows.md,
   },
   presentButton: {
-    backgroundColor: '#28a745',
+    backgroundColor: colors.success,
+    ...shadows.md,
   },
   manualButtonText: {
     color: 'white',
@@ -744,5 +770,54 @@ const styles = StyleSheet.create({
     color: '#dc3545',
     textAlign: 'center',
     marginTop: 50,
+  },
+  completedContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
+  completedTitle: {
+    fontSize: 24,
+    fontFamily: fontFamilies.bold,
+    color: colors.success,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  completedSubtitle: {
+    fontSize: 18,
+    fontFamily: fontFamilies.regular,
+    color: colors.text.secondary,
+    textAlign: 'center',
+    marginBottom: 40,
+    lineHeight: 28,
+  },
+  newSessionButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    borderRadius: borderRadius.large,
+    marginBottom: 16,
+    ...shadows.medium,
+  },
+  newSessionButtonText: {
+    color: colors.white,
+    fontSize: 18,
+    fontFamily: fontFamilies.bold,
+    textAlign: 'center',
+  },
+  backToClassesButton: {
+    backgroundColor: colors.background.secondary,
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    borderRadius: borderRadius.large,
+    borderWidth: 2,
+    borderColor: colors.primary,
+  },
+  backToClassesButtonText: {
+    color: colors.primary,
+    fontSize: 18,
+    fontFamily: fontFamilies.bold,
+    textAlign: 'center',
   },
 });

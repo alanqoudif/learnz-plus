@@ -140,7 +140,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
 interface AppContextType {
   state: AppState;
   dispatch: React.Dispatch<AppAction>;
-  // دوال Supabase
+  // دوال Firebase
   createTeacher: (teacher: Omit<Teacher, 'id' | 'createdAt'>) => Promise<Teacher>;
   createClass: (classData: Omit<Class, 'id' | 'createdAt' | 'students'>) => Promise<Class>;
   updateClass: (id: string, updates: Partial<Omit<Class, 'id' | 'createdAt' | 'students' | 'teacherId'>>) => Promise<Class>;
@@ -151,6 +151,7 @@ interface AppContextType {
   createAttendanceSession: (session: Omit<AttendanceSession, 'id' | 'createdAt' | 'records'>) => Promise<AttendanceSession>;
   recordAttendance: (record: Omit<AttendanceRecord, 'id' | 'createdAt'>) => Promise<AttendanceRecord>;
   refreshData: () => Promise<void>;
+  loadAttendanceSessions: (classId: string, limit?: number) => Promise<AttendanceSession[]>;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -158,7 +159,7 @@ const AppContext = createContext<AppContextType | null>(null);
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, initialState);
 
-  // Load data from Supabase Auth on app start
+  // Load data from Firebase Auth on app start
   useEffect(() => {
     loadData();
   }, []);
@@ -205,20 +206,33 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     console.log('Setting up realtime subscriptions for teacher:', state.currentTeacher.id);
 
-    // Listen for attendance updates
+    // Listen for attendance updates with optimized realtime updates
     const attendanceSubscription = FirebaseRealtimeService.subscribeToAttendanceUpdates(
       state.currentTeacher.id,
       async (data) => {
         try {
-          // Reload attendance sessions for all classes
-          const allSessions: AttendanceSession[] = [];
-          for (const classItem of state.classes) {
-            const sessions = await attendanceService.getAttendanceSessionsByClass(classItem.id);
-            allSessions.push(...sessions);
+          console.log('🔄 تحديث realtime للحضور:', data);
+          
+          if (data.type === 'session_completed' || data.type === 'attendance_recorded') {
+            // تحديث فوري للجلسة المحددة فقط بدلاً من إعادة تحميل جميع الجلسات
+            if (data.classId) {
+              const updatedSessions = await attendanceService.getAttendanceSessionsByClass(data.classId, 10);
+              const filteredSessions = state.attendanceSessions.filter(s => s.classId !== data.classId);
+              const allSessions = [...filteredSessions, ...updatedSessions];
+              dispatch({ type: 'SET_ATTENDANCE_SESSIONS', payload: allSessions });
+              console.log(`✅ تم تحديث جلسات الفصل ${data.classId} فوراً`);
+            }
+          } else {
+            // للأنواع الأخرى، إعادة تحميل جميع الجلسات
+            const allSessions: AttendanceSession[] = [];
+            for (const classItem of state.classes) {
+              const sessions = await attendanceService.getAttendanceSessionsByClass(classItem.id, 10);
+              allSessions.push(...sessions);
+            }
+            dispatch({ type: 'SET_ATTENDANCE_SESSIONS', payload: allSessions });
           }
-          dispatch({ type: 'SET_ATTENDANCE_SESSIONS', payload: allSessions });
         } catch (error) {
-          console.error('Error reloading attendance sessions:', error);
+          console.error('Error in realtime attendance update:', error);
         }
       }
     );
@@ -264,41 +278,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         createdAt: new Date(user.metadata.creationTime || Date.now()),
       };
 
-      // تحميل الفصول أولاً وإظهارها فوراً
+      // تحميل الفصول فقط - بدون جلسات الحضور
+      // سيتم تحميل الجلسات lazy عند فتح شاشة التاريخ
       const classes = await classService.getClassesByTeacher(teacher.id);
       
-      // إظهار الفصول فوراً للمستخدم
+      console.log('✅ تحميل سريع - الفصول فقط:', {
+        teacherId: teacher.id,
+        classesCount: classes.length,
+        message: 'الجلسات سيتم تحميلها عند الحاجة'
+      });
+      
+      // إظهار الفصول فوراً للمستخدم - بدون جلسات
       dispatch({
         type: 'LOAD_DATA',
         payload: { teacher, classes, sessions: [] },
       });
-
-      // تحميل جلسات الحضور في الخلفية
-      if (classes.length > 0) {
-        console.log('🔄 تحميل جلسات الحضور للفصول:', classes.map(c => ({ id: c.id, name: c.name })));
-        
-        const sessionPromises = classes.map(classItem => 
-          attendanceService.getAttendanceSessionsByClass(classItem.id)
-        );
-        
-        const allSessionsArrays = await Promise.all(sessionPromises);
-        const allSessions: AttendanceSession[] = allSessionsArrays.flat();
-
-        console.log('📅 جلسات الحضور المحملة:', {
-          totalSessions: allSessions.length,
-          sessionsByClass: classes.map(c => ({
-            classId: c.id,
-            className: c.name,
-            sessionsCount: allSessions.filter(s => s.classId === c.id).length
-          }))
-        });
-
-        // تحديث البيانات مع جلسات الحضور
-        dispatch({
-          type: 'LOAD_DATA',
-          payload: { teacher, classes, sessions: allSessions },
-        });
-      }
     } catch (error) {
       console.error('Error loading data:', error);
       dispatch({ type: 'SET_LOADING', payload: false });
@@ -422,6 +416,47 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     await loadData();
   };
 
+  // تحميل جلسات الحضور بشكل lazy لفصل محدد مع cache-first strategy
+  const loadAttendanceSessions = async (classId: string, maxResults: number = 10): Promise<AttendanceSession[]> => {
+    try {
+      console.log(`📥 تحميل جلسات الحضور للفصل: ${classId} (limit: ${maxResults})`);
+      
+      // إرجاع البيانات المحفوظة فوراً (cache-first)
+      const cachedSessions = state.attendanceSessions.filter(s => s.classId === classId);
+      console.log(`💾 عرض ${cachedSessions.length} جلسة من الكاش فوراً`);
+      
+      // تحديث في الخلفية بدون انتظار
+      const updateInBackground = async () => {
+        try {
+          const sessions = await attendanceService.getAttendanceSessionsByClass(classId, maxResults);
+          console.log(`🔄 تحديث في الخلفية: ${sessions.length} جلسة`);
+          
+          // تحديث الـ state فقط إذا كانت هناك تغييرات
+          const hasChanges = JSON.stringify(sessions) !== JSON.stringify(cachedSessions);
+          if (hasChanges) {
+            const updatedSessions = [
+              ...state.attendanceSessions.filter(s => s.classId !== classId),
+              ...sessions
+            ];
+            dispatch({ type: 'SET_ATTENDANCE_SESSIONS', payload: updatedSessions });
+            console.log(`✅ تم تحديث الجلسات في الخلفية`);
+          }
+        } catch (error) {
+          console.error('❌ خطأ في التحديث في الخلفية:', error);
+        }
+      };
+      
+      // تشغيل التحديث في الخلفية
+      updateInBackground();
+      
+      // إرجاع البيانات المحفوظة فوراً
+      return cachedSessions;
+    } catch (error) {
+      console.error('❌ خطأ في تحميل جلسات الحضور:', error);
+      return [];
+    }
+  };
+
   return (
     <AppContext.Provider value={{ 
       state, 
@@ -435,7 +470,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       deleteStudent,
       createAttendanceSession,
       recordAttendance,
-      refreshData
+      refreshData,
+      loadAttendanceSessions
     }}>
       {children}
     </AppContext.Provider>

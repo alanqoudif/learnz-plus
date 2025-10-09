@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,11 +6,12 @@ import {
   StyleSheet,
   FlatList,
   Alert,
+  RefreshControl,
 } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { AttendanceSession } from '../types';
-import { fontFamilies } from '../utils/theme';
-import { RealtimeService } from '../services/realtimeService';
+import { colors, fontFamilies, shadows, borderRadius, spacing } from '../utils/theme';
+// Real-time updates are handled by Firebase through AppContext
 
 interface AttendanceHistoryScreenProps {
   navigation: any;
@@ -23,8 +24,9 @@ interface AttendanceHistoryScreenProps {
 
 export default function AttendanceHistoryScreen({ navigation, route }: AttendanceHistoryScreenProps) {
   const { classId } = route.params;
-  const { state, refreshData } = useApp();
+  const { state, loadAttendanceSessions } = useApp();
   const [selectedSession, setSelectedSession] = useState<AttendanceSession | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const currentClass = state.classes.find(cls => cls.id === classId);
   const classSessions = state.attendanceSessions
@@ -38,6 +40,15 @@ export default function AttendanceHistoryScreen({ navigation, route }: Attendanc
       }
       return dateComparison;
     });
+
+  // تحميل الجلسات عند فتح الشاشة - عرض البيانات المحفوظة فوراً
+  useEffect(() => {
+    const loadSessions = async () => {
+      // عرض البيانات المحفوظة فوراً، ثم تحديث في الخلفية
+      await loadAttendanceSessions(classId); // تحميل آخر 10 جلسات (default)
+    };
+    loadSessions();
+  }, [classId]);
 
   // تشخيص تحميل البيانات
   console.log('📊 تشخيص بيانات تاريخ الحضور:', {
@@ -61,29 +72,15 @@ export default function AttendanceHistoryScreen({ navigation, route }: Attendanc
     }))
   });
 
-  // Real-time listener for attendance changes in this class
-  useEffect(() => {
-    console.log('Setting up realtime listener for attendance history, class:', classId);
-    
-    const attendanceSubscription = RealtimeService.subscribeToClassAttendance(
-      classId,
-      async (payload) => {
-        console.log('📅 Attendance change detected in history:', payload.eventType);
-        // تحديث البيانات من قاعدة البيانات فوراً
-        try {
-          await refreshData();
-          console.log('🔄 تم تحديث تاريخ الحضور تلقائياً - سيظهر الجلسة الجديدة فوراً');
-        } catch (error) {
-          console.error('❌ فشل في تحديث البيانات:', error);
-        }
-      }
-    );
+  // Pull to refresh handler
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await loadAttendanceSessions(classId);
+    setIsRefreshing(false);
+  };
 
-    return () => {
-      console.log('Cleaning up attendance history realtime listener for class:', classId);
-      attendanceSubscription.unsubscribe();
-    };
-  }, [classId, refreshData]);
+  // Real-time updates are handled by Firebase through AppContext
+  // Data will be refreshed when screen comes into focus
 
   const getAttendanceStats = (session: AttendanceSession) => {
     const presentCount = session.records.filter(r => r.status === 'present').length;
@@ -255,9 +252,23 @@ export default function AttendanceHistoryScreen({ navigation, route }: Attendanc
           <FlatList
             data={classSessions}
             renderItem={renderSessionItem}
-            keyExtractor={(item, index) => `${item.id}-${index}`}
+            keyExtractor={(item, index) => `session-${item.id}-${index}`}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.sessionsList}
+            refreshControl={
+              <RefreshControl
+                refreshing={isRefreshing}
+                onRefresh={handleRefresh}
+                colors={[colors.primary]}
+                tintColor={colors.primary}
+              />
+            }
+            // Performance optimizations
+            windowSize={5}
+            maxToRenderPerBatch={5}
+            removeClippedSubviews={true}
+            initialNumToRender={10}
+            updateCellsBatchingPeriod={50}
           />
         )}
       </View>

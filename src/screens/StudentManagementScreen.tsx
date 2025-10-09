@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,12 +11,15 @@ import {
   ActivityIndicator,
   ScrollView,
   Image,
+  RefreshControl,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useApp } from '../context/AppContext';
 import { Student } from '../types';
-import { fontFamilies } from '../utils/theme';
-import { supabase } from '../config/supabase';
+import { colors, fontFamilies, shadows, borderRadius, spacing } from '../utils/theme';
+import StudentItem from '../components/StudentItem';
+import { StudentListSkeleton } from '../components/SkeletonLoader';
+import { lightHaptic, mediumHaptic, successHaptic } from '../utils/haptics';
 
 interface StudentManagementScreenProps {
   navigation: any;
@@ -29,41 +32,29 @@ interface StudentManagementScreenProps {
 
 export default function StudentManagementScreen({ navigation, route }: StudentManagementScreenProps) {
   const { classId } = route.params;
-  const { state, dispatch, createStudent, deleteStudent } = useApp();
+  const { state, dispatch, createStudent, deleteStudent, refreshData } = useApp();
   const [showAddModal, setShowAddModal] = useState(false);
   const [newStudentName, setNewStudentName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [showImageModal, setShowImageModal] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [extractedStudents, setExtractedStudents] = useState<Array<{ number: string; name: string }>>([]);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // Real-time listener for students in this class
-  useEffect(() => {
-    const studentsSubscription = supabase
-      .channel(`students_class_${classId}`)
-      .on('postgres_changes', 
-        { 
-          event: '*', 
-          schema: 'public', 
-          table: 'students',
-          filter: `class_id=eq.${classId}`
-        }, 
-        (payload) => {
-          console.log('Students change detected for class:', classId, payload);
-          // The AppContext will handle updating the classes with new students
-        }
-      )
-      .subscribe();
-
-    return () => {
-      studentsSubscription.unsubscribe();
-    };
-  }, [classId]);
+  // Real-time updates are handled by Firebase through AppContext
+  // No need for additional listeners here
 
   const currentClass = state.classes.find(cls => cls.id === classId);
 
-  const handleAddStudent = async () => {
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    lightHaptic();
+    await refreshData();
+    setIsRefreshing(false);
+  }, [refreshData]);
+
+  const handleAddStudent = useCallback(async () => {
     if (!newStudentName.trim()) {
       Alert.alert('خطأ', 'يرجى إدخال اسم الطالب');
       return;
@@ -92,6 +83,7 @@ export default function StudentManagementScreen({ navigation, route }: StudentMa
         classId: classId,
       });
       
+      successHaptic();
       setNewStudentName('');
       setShowAddModal(false);
       Alert.alert('تم بنجاح', 'تم إضافة الطالب بنجاح');
@@ -101,9 +93,10 @@ export default function StudentManagementScreen({ navigation, route }: StudentMa
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [newStudentName, currentClass, createStudent, classId]);
 
-  const handleDeleteStudent = (studentId: string, studentName: string) => {
+  const handleDeleteStudent = useCallback((studentId: string, studentName: string) => {
+    mediumHaptic();
     Alert.alert(
       'تأكيد الحذف',
       `هل أنت متأكد من حذف الطالب "${studentName}"؟`,
@@ -115,6 +108,7 @@ export default function StudentManagementScreen({ navigation, route }: StudentMa
           onPress: async () => {
             try {
               await deleteStudent(studentId);
+              successHaptic();
               Alert.alert('تم بنجاح', 'تم حذف الطالب بنجاح');
             } catch (error) {
               console.error('Error deleting student:', error);
@@ -124,7 +118,7 @@ export default function StudentManagementScreen({ navigation, route }: StudentMa
         },
       ]
     );
-  };
+  }, [deleteStudent]);
 
   const pickImage = async () => {
     try {
@@ -384,20 +378,15 @@ export default function StudentManagementScreen({ navigation, route }: StudentMa
     setExtractedStudents(prev => prev.filter((_, i) => i !== index));
   };
 
-  const renderStudentItem = ({ item, index }: { item: Student; index: number }) => (
-    <View style={styles.studentCard}>
-      <View style={styles.studentInfo}>
-        <Text style={styles.studentNumber}>{index + 1}</Text>
-        <Text style={styles.studentName}>{item.name}</Text>
-      </View>
-      <TouchableOpacity
-        style={styles.deleteButton}
-        onPress={() => handleDeleteStudent(item.id, item.name)}
-      >
-        <Text style={styles.deleteButtonText}>حذف</Text>
-      </TouchableOpacity>
-    </View>
-  );
+  const renderStudentItem = useCallback(({ item, index }: { item: Student; index: number }) => (
+    <StudentItem
+      student={item}
+      index={index}
+      onDelete={handleDeleteStudent}
+    />
+  ), [handleDeleteStudent]);
+
+  const keyExtractor = useCallback((item: Student, index: number) => `student-${item.id}-${index}`, []);
 
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
@@ -457,15 +446,31 @@ export default function StudentManagementScreen({ navigation, route }: StudentMa
           </View>
         </View>
 
-        {currentClass.students.length === 0 ? (
+        {state.isLoading ? (
+          <StudentListSkeleton />
+        ) : currentClass.students.length === 0 ? (
           renderEmptyState()
         ) : (
           <FlatList
             data={currentClass.students}
             renderItem={renderStudentItem}
-            keyExtractor={(item, index) => `${item.id}-${index}`}
+            keyExtractor={keyExtractor}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.studentsList}
+            refreshControl={
+              <RefreshControl
+                refreshing={isRefreshing}
+                onRefresh={handleRefresh}
+                colors={[colors.primary]}
+                tintColor={colors.primary}
+              />
+            }
+            // Performance optimizations
+            windowSize={5}
+            maxToRenderPerBatch={10}
+            removeClippedSubviews={true}
+            initialNumToRender={15}
+            updateCellsBatchingPeriod={50}
           />
         )}
       </View>

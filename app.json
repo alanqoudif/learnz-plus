@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "تطبيق الحضور والغياب",
-    "slug": "maanstuden",
+    "slug": "just-a-app",
     "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -11,7 +11,8 @@
     "updates": {
       "enabled": true,
       "checkAutomatically": "ON_LOAD",
-      "fallbackToCacheTimeout": 0
+      "fallbackToCacheTimeout": 0,
+      "url": "https://u.expo.dev/4a98ba10-3b11-4a92-b6d3-61f32b90a031"
     },
     "splash": {
       "image": "./assets/splash-icon.png",
@@ -20,7 +21,6 @@
     },
     "ios": {
       "supportsTablet": true,
-      "supportsRtl": true,
       "bundleIdentifier": "com.maanstuden.app",
       "buildNumber": "1"
     },
@@ -31,19 +31,17 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "supportsRtl": true,
       "package": "com.maanstuden.app",
       "versionCode": 1
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "fonts": [
-      "./assets/fonts/TheYearofHandicrafts-Regular.otf",
-      "./assets/fonts/TheYearofHandicrafts-Medium.otf",
-      "./assets/fonts/TheYearofHandicrafts-SemiBold.otf",
-      "./assets/fonts/TheYearofHandicrafts-Bold.otf",
-      "./assets/fonts/TheYearofHandicrafts-Black.otf"
-    ]
+    "extra": {
+      "eas": {
+        "projectId": "4a98ba10-3b11-4a92-b6d3-61f32b90a031"
+      }
+    },
+    "owner": "faisal619"
   }
 }

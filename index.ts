@@ -7,6 +7,10 @@ import { registerRootComponent } from 'expo';
 // Make Buffer globally available
 global.Buffer = Buffer;
 
+// Polyfill for stream module
+import { Readable, Writable, Duplex, Transform } from 'readable-stream';
+global.stream = { Readable, Writable, Duplex, Transform };
+
 import App from './App';
 
 // registerRootComponent calls AppRegistry.registerComponent('main', () => App);

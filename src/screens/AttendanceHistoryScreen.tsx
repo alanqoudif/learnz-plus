@@ -69,10 +69,10 @@ export default function AttendanceHistoryScreen({ navigation, route }: Attendanc
       classId,
       async (payload) => {
         console.log('📅 Attendance change detected in history:', payload.eventType);
-        // تحديث البيانات من قاعدة البيانات
+        // تحديث البيانات من قاعدة البيانات فوراً
         try {
           await refreshData();
-          console.log('🔄 تم تحديث تاريخ الحضور تلقائياً');
+          console.log('🔄 تم تحديث تاريخ الحضور تلقائياً - سيظهر الجلسة الجديدة فوراً');
         } catch (error) {
           console.error('❌ فشل في تحديث البيانات:', error);
         }
@@ -83,7 +83,7 @@ export default function AttendanceHistoryScreen({ navigation, route }: Attendanc
       console.log('Cleaning up attendance history realtime listener for class:', classId);
       attendanceSubscription.unsubscribe();
     };
-  }, [classId]);
+  }, [classId, refreshData]);
 
   const getAttendanceStats = (session: AttendanceSession) => {
     const presentCount = session.records.filter(r => r.status === 'present').length;
@@ -134,9 +134,6 @@ export default function AttendanceHistoryScreen({ navigation, route }: Attendanc
               })}
             </Text>
           </View>
-          <Text style={styles.sessionId}>
-            جلسة #{item.id.slice(-6)}
-          </Text>
         </View>
         
         <View style={styles.sessionStats}>
@@ -387,15 +384,6 @@ const styles = StyleSheet.create({
     fontFamily: fontFamilies.regular,
     color: '#6c757d',
     marginTop: 2,
-  },
-  sessionId: {
-    fontSize: 12,
-    fontFamily: fontFamilies.regular,
-    color: '#007bff',
-    backgroundColor: '#e3f2fd',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
   },
   sessionStats: {
     flexDirection: 'row',

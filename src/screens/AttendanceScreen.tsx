@@ -7,6 +7,7 @@ import {
   Animated,
   Alert,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { useApp } from '../context/AppContext';
 import { AttendanceRecord, AttendanceSession } from '../types';
 import { showErrorAlert, showAttendanceCompleteAlert } from '../utils/notifications';
@@ -78,39 +79,57 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
     };
   }, [classId]);
 
-  // تحميل الجلسة الموجودة عند فتح الشاشة فقط - مرة واحدة
-  useEffect(() => {
-    console.log('🔍 فحص وجود جلسة سابقة...');
-    const today = new Date().toDateString();
-    const existingSession = state.attendanceSessions.find(
-      session => session.classId === classId && new Date(session.date).toDateString() === today
-    );
+  // تحميل الجلسة الموجودة عند التركيز على الشاشة
+  useFocusEffect(
+    React.useCallback(() => {
+      console.log('🔄 الشاشة أصبحت نشطة - إعادة تحميل البيانات...');
+      
+      // إعادة تعيين الـ state إلى القيم الافتراضية أولاً
+      setCurrentStudentIndex(0);
+      setAttendanceRecords({});
+      setIsSessionStarted(false);
+      setSessionId(null);
+      setIsRecording(false);
+      
+      console.log('🔍 فحص وجود جلسة سابقة...');
+      const today = new Date().toDateString();
+      const existingSession = state.attendanceSessions.find(
+        session => session.classId === classId && new Date(session.date).toDateString() === today
+      );
 
-    if (existingSession) {
-      console.log('📂 تم العثور على جلسة موجودة:', existingSession.id);
-      setIsSessionStarted(true);
-      setSessionId(existingSession.id);
-      
-      // تحميل سجلات الحضور الموجودة
-      const records: { [key: string]: 'present' | 'absent' } = {};
-      existingSession.records.forEach(record => {
-        records[record.studentId] = record.status;
-      });
-      setAttendanceRecords(records);
-      
-      // حساب عدد الطلاب المسجلين وتحديد الفهرس التالي
-      const recordedStudentsCount = existingSession.records.length;
-      console.log(`📊 عدد الطلاب المسجلين: ${recordedStudentsCount} من أصل ${students.length}`);
-      
-      if (recordedStudentsCount > 0 && recordedStudentsCount < students.length) {
-        setCurrentStudentIndex(recordedStudentsCount);
-        console.log(`📍 الانتقال للطالب رقم ${recordedStudentsCount + 1} لاستكمال التسجيل`);
+      if (existingSession) {
+        console.log('📂 تم العثور على جلسة موجودة:', existingSession.id);
+        setIsSessionStarted(true);
+        setSessionId(existingSession.id);
+        
+        // تحميل سجلات الحضور الموجودة
+        const records: { [key: string]: 'present' | 'absent' } = {};
+        existingSession.records.forEach(record => {
+          records[record.studentId] = record.status;
+        });
+        setAttendanceRecords(records);
+        
+        // حساب عدد الطلاب المسجلين وتحديد الفهرس التالي
+        const recordedStudentsCount = existingSession.records.length;
+        console.log(`📊 عدد الطلاب المسجلين: ${recordedStudentsCount} من أصل ${students.length}`);
+        
+        if (recordedStudentsCount > 0 && recordedStudentsCount < students.length) {
+          setCurrentStudentIndex(recordedStudentsCount);
+          console.log(`📍 الانتقال للطالب رقم ${recordedStudentsCount + 1} لاستكمال التسجيل`);
+        } else if (recordedStudentsCount >= students.length) {
+          // الجلسة مكتملة - نبدأ من الأول للمراجعة
+          setCurrentStudentIndex(0);
+          console.log(`✅ الجلسة مكتملة - عرض الطالب الأول للمراجعة`);
+        }
+      } else {
+        console.log('✨ لا توجد جلسة سابقة - جاهز لبدء جلسة جديدة');
       }
-    } else {
-      console.log('✨ لا توجد جلسة سابقة - جاهز لبدء جلسة جديدة');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // فقط عند تحميل الشاشة - مرة واحدة
+      
+      return () => {
+        console.log('🧹 تنظيف عند مغادرة الشاشة...');
+      };
+    }, [classId, state.attendanceSessions, students.length])
+  );
 
   const startAttendanceSession = async () => {
     if (students.length === 0) {
@@ -128,6 +147,19 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
       setIsSessionStarted(true);
       setCurrentStudentIndex(0);
       setAttendanceRecords({});
+      
+      // إرسال تحديث في الوقت الفعلي لبدء الجلسة
+      try {
+        FirebaseRealtimeService.sendAttendanceUpdate(state.currentTeacher?.id || '', {
+          type: 'session_started',
+          sessionId: newSession.id,
+          classId: classId,
+          timestamp: Date.now()
+        });
+        console.log('📡 تم إرسال تحديث بدء الجلسة للشاشات الأخرى');
+      } catch (error) {
+        console.warn('⚠️ فشل في إرسال تحديث بدء الجلسة:', error);
+      }
     } catch (error) {
       console.error('Error starting attendance session:', error);
       showErrorAlert('حدث خطأ أثناء بدء جلسة الحضور');
@@ -193,6 +225,21 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
       };
       setAttendanceRecords(updatedRecords);
       console.log(`📝 تم تحديث السجلات المحلية`);
+      
+      // إرسال تحديث في الوقت الفعلي لتسجيل حضور الطالب
+      try {
+        FirebaseRealtimeService.sendAttendanceUpdate(state.currentTeacher?.id || '', {
+          type: 'attendance_recorded',
+          sessionId: sessionId,
+          classId: classId,
+          studentId: studentToRecord.id,
+          status: status,
+          timestamp: Date.now()
+        });
+        console.log('📡 تم إرسال تحديث تسجيل حضور الطالب للشاشات الأخرى');
+      } catch (error) {
+        console.warn('⚠️ فشل في إرسال تحديث تسجيل الحضور:', error);
+      }
 
       // إذا كان آخر طالب
       if (isLastStudent) {
@@ -297,6 +344,7 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
             totalStudents: totalStudents,
             timestamp: Date.now()
           });
+          console.log('📡 تم إرسال تحديث انتهاء الجلسة للشاشات الأخرى');
         } catch (error) {
           console.warn('⚠️ فشل في إرسال تحديث انتهاء الجلسة:', error);
         }

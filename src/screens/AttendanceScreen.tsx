@@ -219,9 +219,8 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
       return;
     }
 
-    // فحص إضافي: إذا كانت الجلسة مكتملة، لا نسمح بتسجيل جديد
     if (isSessionCompleted) {
-      console.log('❌ الجلسة مكتملة - لا يمكن تسجيل حضور جديد');
+      console.log('✅ الجلسة مكتملة - لا يمكن تسجيل حضور إضافي');
       return;
     }
 
@@ -231,15 +230,12 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
     const nextIndex = currentIndex + 1;
     const isLastStudent = nextIndex >= students.length;
     
-    // فحص إضافي: التأكد من أن هذا هو آخر طالب فعلياً
-    const isActuallyLastStudent = currentIndex === students.length - 1;
     
     console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
     console.log(`🎯 تسجيل ${status} للطالب: ${studentToRecord.name}`);
     console.log(`📍 الفهرس الحالي: ${currentIndex}`);
     console.log(`📍 العدد الكلي: ${students.length}`);
     console.log(`📍 الفهرس التالي: ${nextIndex} ${isLastStudent ? '(آخر طالب)' : ''}`);
-    console.log(`🔍 فحص إضافي - آخر طالب فعلي: ${isActuallyLastStudent}`);
     
     // Haptic feedback للتسجيل
     lightHaptic();
@@ -290,8 +286,8 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
         successHaptic();
       }
 
-      // إذا كان آخر طالب (استخدام الفحص الإضافي للتأكد)
-      if (isLastStudent && isActuallyLastStudent) {
+      // إذا كان آخر طالب
+      if (isLastStudent) {
         console.log(`🏁 هذا آخر طالب - جاري إنهاء الجلسة`);
         console.log(`🔍 تفاصيل آخر طالب:`, {
           studentName: studentToRecord.name,
@@ -299,7 +295,6 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
           nextIndex: nextIndex,
           studentsLength: students.length,
           isLastStudent: isLastStudent,
-          isActuallyLastStudent: isActuallyLastStudent,
           sessionId: sessionId
         });
         successHaptic(); // Haptic للإنجاز
@@ -611,7 +606,7 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
                      });
                    }
                  }}
-                 disabled={isRecording || !currentStudent}
+                 disabled={isRecording || !currentStudent || isSessionCompleted}
                >
                  <Text style={styles.manualButtonText}>غائب</Text>
                </TouchableOpacity>
@@ -636,7 +631,7 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
                      });
                    }
                  }}
-                 disabled={isRecording || !currentStudent}
+                 disabled={isRecording || !currentStudent || isSessionCompleted}
                >
                  <Text style={styles.manualButtonText}>حاضر</Text>
                </TouchableOpacity>

@@ -92,90 +92,25 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
       }
       
       
-      // تحقق من وجود جلسة مكتملة اليوم في قاعدة البيانات
-      const today = new Date().toDateString();
-      const completedSessionToday = state.attendanceSessions.find(
-        session => session.classId === classId && 
-        new Date(session.date).toDateString() === today &&
-        session.records.length >= students.length
-      );
       
-      if (completedSessionToday) {
-        console.log('✅ تم العثور على جلسة مكتملة اليوم - تحديد حالة الإكمال');
-        console.log('🔍 تفاصيل الجلسة المكتملة:', {
-          sessionId: completedSessionToday.id,
-          recordsCount: completedSessionToday.records.length,
-          studentsCount: students.length
-        });
-        setIsSessionCompleted(true);
-        setIsSessionStarted(true);
-        setSessionId(completedSessionToday.id);
-        
-        // تحميل سجلات الحضور الموجودة
-        const records: { [key: string]: 'present' | 'absent' } = {};
-        completedSessionToday.records.forEach(record => {
-          records[record.studentId] = record.status;
-        });
-        setAttendanceRecords(records);
-        
-        // لا نعيد تعيين الفهرس - نتركه كما هو
-        console.log('🚫 لا نعيد تعيين الفهرس للجلسة المكتملة');
-        console.log('🔍 حالة الجلسة المكتملة:', {
-          sessionId: completedSessionToday.id,
-          recordsCount: completedSessionToday.records.length,
-          studentsCount: students.length
-        });
-        return;
-      }
+      // إعادة تعيين جميع الحالات
+      setAttendanceRecords({});
+      setIsSessionStarted(false);
+      setSessionId(null);
+      setIsSessionCompleted(false);
+      setIsSubmitting(false);
+      isFinishingRef.current = false;
       
-      console.log('🔍 فحص وجود جلسة سابقة...');
-      const existingSession = state.attendanceSessions.find(
-        session => session.classId === classId && new Date(session.date).toDateString() === today
-      );
-      
-      if (existingSession) {
-        console.log('📂 تم العثور على جلسة موجودة:', existingSession.id);
-        setIsSessionStarted(true);
-        setSessionId(existingSession.id);
-        
-        // تحميل سجلات الحضور الموجودة
-        const records: { [key: string]: 'present' | 'absent' } = {};
-        existingSession.records.forEach(record => {
-          records[record.studentId] = record.status;
-        });
-        setAttendanceRecords(records);
-        
-        const recordedStudentsCount = existingSession.records.length;
-        console.log(`📊 عدد الطلاب المسجلين: ${recordedStudentsCount} من أصل ${students.length}`);
-        
-        if (recordedStudentsCount >= students.length) {
-          // الجلسة مكتملة - تحديد أن الجلسة مكتملة
-          setIsSessionCompleted(true);
-          console.log(`✅ الجلسة مكتملة - تم تحديد حالة الإكمال`);
-        }
-      } else {
-        console.log('✨ لا توجد جلسة سابقة - جاهز لبدء جلسة جديدة');
-        // إعادة تعيين الـ state إلى القيم الافتراضية فقط عند عدم وجود جلسة سابقة
-        // ولكن فقط إذا لم تكن الجلسة مكتملة
-        if (!isSessionCompleted) {
-          console.log('🔄 إعادة تعيين الـ state للجلسة الجديدة');
-          setAttendanceRecords({});
-          setIsSessionStarted(false);
-          setSessionId(null);
-          isFinishingRef.current = false; // إعادة تعيين حالة الإنهاء
-        } else {
-          console.log('🚫 الجلسة مكتملة - لا نعيد تعيين أي شيء');
-          console.log('🔍 حالة الجلسة المكتملة:', {
-            isSessionCompleted,
-            studentsLength: students.length
-          });
-        }
-      }
+      // بدء جلسة جديدة تلقائياً
+      setTimeout(() => {
+        console.log('🚀 بدء جلسة جديدة تلقائياً...');
+        startAttendanceSession();
+      }, 100);
       
       return () => {
         console.log('🧹 تنظيف عند مغادرة الشاشة...');
       };
-    }, [classId, state.attendanceSessions, students.length, isSessionCompleted, totalRecorded])
+    }, [classId])
   );
 
   const startAttendanceSession = async () => {
@@ -309,6 +244,9 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
       return;
     }
     
+    // تحديد أن الجلسة في حالة إنهاء
+    isFinishingRef.current = true;
+    
     console.log('🎯 بدء إنهاء الجلسة مع السجلات:', {
       sessionId,
       recordsCount: Object.keys(attendanceRecords).length,
@@ -337,11 +275,10 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
     setIsSessionCompleted(true);
     setIsSubmitting(false);
     
-    // عرض التنبيه
-    showAttendanceCompleteAlert(actualPresentCount, actualAbsentCount, () => {
-      console.log('🚪 العودة للشاشة السابقة بعد إكمال الجلسة');
-      navigation.goBack();
-    });
+    // العودة مباشرة للشاشة السابقة
+    console.log('🚪 العودة للشاشة السابقة بعد إكمال الجلسة');
+    isFinishingRef.current = false; // إعادة تعيين بعد العودة
+    navigation.goBack();
   }, [sessionId, attendanceRecords, students, classId, state.currentTeacher?.id, isSessionCompleted, navigation]);
 
 
@@ -457,37 +394,7 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
       </View>
 
       <View style={styles.content}>
-        {isSessionCompleted ? (
-          <View style={styles.completedContainer}>
-            <Text style={styles.completedTitle}>✅ تم إكمال الجلسة</Text>
-            <Text style={styles.completedSubtitle}>
-              تم تسجيل حضور جميع الطلاب بنجاح
-            </Text>
-            <TouchableOpacity
-              style={styles.newSessionButton}
-              onPress={() => {
-                setIsSessionCompleted(false);
-                setAttendanceRecords({});
-                setIsSessionStarted(false);
-                setSessionId(null);
-                isFinishingRef.current = false; // إعادة تعيين حالة الإنهاء
-                
-                // بدء جلسة جديدة فوراً
-                setTimeout(() => {
-                  startAttendanceSession();
-                }, 100);
-              }}
-            >
-              <Text style={styles.newSessionButtonText}>جلسة جديدة</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.backToClassesButton}
-              onPress={() => navigation.goBack()}
-            >
-              <Text style={styles.backToClassesButtonText}>العودة للفصول</Text>
-            </TouchableOpacity>
-          </View>
-        ) : !isSessionStarted ? (
+        {!isSessionStarted ? (
           <View style={styles.startContainer}>
             <Text style={styles.startTitle}>بدء تسجيل الحضور</Text>
             <Text style={styles.startSubtitle}>
@@ -806,54 +713,5 @@ const styles = StyleSheet.create({
     color: '#dc3545',
     textAlign: 'center',
     marginTop: 50,
-  },
-  completedContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 40,
-  },
-  completedTitle: {
-    fontSize: 24,
-    fontFamily: fontFamilies.bold,
-    color: colors.success,
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  completedSubtitle: {
-    fontSize: 18,
-    fontFamily: fontFamilies.regular,
-    color: colors.text.secondary,
-    textAlign: 'center',
-    marginBottom: 40,
-    lineHeight: 28,
-  },
-  newSessionButton: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: 32,
-    paddingVertical: 16,
-    borderRadius: borderRadius.xl,
-    marginBottom: 16,
-    ...shadows.md,
-  },
-  newSessionButtonText: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontFamily: fontFamilies.bold,
-    textAlign: 'center',
-  },
-  backToClassesButton: {
-    backgroundColor: colors.background.secondary,
-    paddingHorizontal: 32,
-    paddingVertical: 16,
-    borderRadius: borderRadius.xl,
-    borderWidth: 2,
-    borderColor: colors.primary,
-  },
-  backToClassesButtonText: {
-    color: colors.primary,
-    fontSize: 18,
-    fontFamily: fontFamilies.bold,
-    textAlign: 'center',
   },
 });

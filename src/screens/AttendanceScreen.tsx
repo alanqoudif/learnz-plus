@@ -6,6 +6,8 @@ import {
   StyleSheet,
   Animated,
   Alert,
+  ScrollView,
+  FlatList,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useApp } from '../context/AppContext';
@@ -14,7 +16,6 @@ import { showErrorAlert, showAttendanceCompleteAlert } from '../utils/notificati
 import { colors, fontFamilies, shadows, borderRadius, spacing } from '../utils/theme';
 import { fadeIn, fadeOut, scaleButton } from '../utils/animations';
 import { lightHaptic, successHaptic, errorHaptic } from '../utils/haptics';
-import { FirebaseRealtimeService } from '../services/firebaseRealtimeService';
 // RealtimeNotification component removed - using simple notifications instead
 
 interface AttendanceScreenProps {
@@ -29,12 +30,11 @@ interface AttendanceScreenProps {
 export default function AttendanceScreen({ navigation, route }: AttendanceScreenProps) {
   const { classId } = route.params;
   const { state, dispatch, createAttendanceSession, recordAttendance, refreshData } = useApp();
-  const [currentStudentIndex, setCurrentStudentIndex] = useState(0);
   const [attendanceRecords, setAttendanceRecords] = useState<{ [key: string]: 'present' | 'absent' }>({});
   const [isSessionStarted, setIsSessionStarted] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [isRecording, setIsRecording] = useState(false);
   const [isSessionCompleted, setIsSessionCompleted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const isFinishingRef = useRef(false); // لتجنب تنفيذ finishAttendanceSessionWithRecords مرتين
   // Realtime notifications removed - using simple alerts instead
 
@@ -45,20 +45,11 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
   const currentClass = state.classes.find(cls => cls.id === classId);
   const students = currentClass?.students || [];
   
-  // استخدام useMemo لضمان تحديث currentStudent بشكل صحيح
-  const currentStudent = useMemo(() => {
-    const student = students[currentStudentIndex];
-    console.log(`🔍 useMemo: حساب الطالب الحالي - الفهرس: ${currentStudentIndex}, الطالب: ${student?.name || 'غير موجود'}`);
-    return student;
-  }, [students, currentStudentIndex]);
-
-  // إعادة تعيين الـ animations عند تغيير الطالب
-  useEffect(() => {
-    console.log(`━━━ تحديث الطالب ━━━`);
-    console.log(`📍 الفهرس: ${currentStudentIndex}`);
-    console.log(`👤 الطالب: ${currentStudent?.name || 'غير موجود'}`);
-    console.log(`━━━━━━━━━━━━━━━━━━━━━`);
-  }, [currentStudentIndex, currentStudent]);
+  // حساب الإحصائيات
+  const presentCount = Object.values(attendanceRecords).filter(status => status === 'present').length;
+  const absentCount = Object.values(attendanceRecords).filter(status => status === 'absent').length;
+  const totalRecorded = presentCount + absentCount;
+  const isAllStudentsRecorded = totalRecorded === students.length;
 
   // Real-time updates are handled by Firebase through AppContext
   // No need for additional listeners here during active attendance session
@@ -69,107 +60,57 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
       console.log('🔄 الشاشة أصبحت نشطة - إعادة تحميل البيانات...');
       console.log('🔍 حالة الجلسة الحالية:', {
         isSessionCompleted,
-        currentStudentIndex,
         studentsLength: students.length,
         sessionId,
-        isFinishing: isFinishingRef.current
+        isFinishing: isFinishingRef.current,
+        totalRecorded
       });
       
       // إذا كانت الجلسة مكتملة محلياً أو في حالة إنهاء، لا نعيد تعيين أي شيء
       if (isSessionCompleted || isFinishingRef.current) {
         console.log('✅ الجلسة مكتملة أو في حالة إنهاء - لا حاجة لإعادة التعيين');
+        console.log('🔍 حالة الجلسة الحالية:', {
+          isSessionCompleted,
+          isFinishing: isFinishingRef.current,
+          studentsLength: students.length,
+          totalRecorded
+        });
         return;
       }
       
-      // تحقق إضافي: إذا كان الفهرس يساوي أو أكبر من عدد الطلاب، الجلسة مكتملة
-      if (currentStudentIndex >= students.length && students.length > 0) {
-        console.log('✅ الفهرس يشير إلى اكتمال الجلسة - تحديد حالة الإكمال');
-        setIsSessionCompleted(true);
+      // إذا كانت الجلسة نشطة ولا تزال في التقدم، لا نعيد تعيين أي شيء
+      if (isSessionStarted && sessionId && !isSessionCompleted) {
+        console.log('🔄 الجلسة نشطة - لا حاجة لإعادة التعيين');
+        console.log('🔍 حالة الجلسة النشطة:', {
+          isSessionStarted,
+          sessionId,
+          isSessionCompleted,
+          studentsLength: students.length,
+          totalRecorded
+        });
         return;
       }
       
-      // تحقق من وجود جلسة مكتملة اليوم في قاعدة البيانات
-      const today = new Date().toDateString();
-      const completedSessionToday = state.attendanceSessions.find(
-        session => session.classId === classId && 
-        new Date(session.date).toDateString() === today &&
-        session.records.length >= students.length
-      );
       
-      if (completedSessionToday) {
-        console.log('✅ تم العثور على جلسة مكتملة اليوم - تحديد حالة الإكمال');
-        console.log('🔍 تفاصيل الجلسة المكتملة:', {
-          sessionId: completedSessionToday.id,
-          recordsCount: completedSessionToday.records.length,
-          studentsCount: students.length
-        });
-        setIsSessionCompleted(true);
-        setIsSessionStarted(true);
-        setSessionId(completedSessionToday.id);
-        
-        // تحميل سجلات الحضور الموجودة
-        const records: { [key: string]: 'present' | 'absent' } = {};
-        completedSessionToday.records.forEach(record => {
-          records[record.studentId] = record.status;
-        });
-        setAttendanceRecords(records);
-        
-        // لا نعيد تعيين الفهرس - نتركه كما هو
-        console.log('🚫 لا نعيد تعيين الفهرس للجلسة المكتملة');
-        return;
-      }
       
-      console.log('🔍 فحص وجود جلسة سابقة...');
-      const existingSession = state.attendanceSessions.find(
-        session => session.classId === classId && new Date(session.date).toDateString() === today
-      );
+      // إعادة تعيين جميع الحالات
+      setAttendanceRecords({});
+      setIsSessionStarted(false);
+      setSessionId(null);
+      setIsSessionCompleted(false);
+      setIsSubmitting(false);
+      isFinishingRef.current = false;
       
-      if (existingSession) {
-        console.log('📂 تم العثور على جلسة موجودة:', existingSession.id);
-        setIsSessionStarted(true);
-        setSessionId(existingSession.id);
-        
-        // تحميل سجلات الحضور الموجودة
-        const records: { [key: string]: 'present' | 'absent' } = {};
-        existingSession.records.forEach(record => {
-          records[record.studentId] = record.status;
-        });
-        setAttendanceRecords(records);
-        
-        // حساب عدد الطلاب المسجلين وتحديد الفهرس التالي
-        const recordedStudentsCount = existingSession.records.length;
-        console.log(`📊 عدد الطلاب المسجلين: ${recordedStudentsCount} من أصل ${students.length}`);
-        
-        if (recordedStudentsCount > 0 && recordedStudentsCount < students.length) {
-          setCurrentStudentIndex(recordedStudentsCount);
-          console.log(`📍 الانتقال للطالب رقم ${recordedStudentsCount + 1} لاستكمال التسجيل`);
-        } else if (recordedStudentsCount >= students.length) {
-          // الجلسة مكتملة - تحديد أن الجلسة مكتملة
-          setIsSessionCompleted(true);
-          console.log(`✅ الجلسة مكتملة - تم تحديد حالة الإكمال`);
-          // لا نعيد تعيين الفهرس للجلسة المكتملة
-          console.log('🚫 لا نعيد تعيين الفهرس للجلسة المكتملة الموجودة');
-        }
-      } else {
-        console.log('✨ لا توجد جلسة سابقة - جاهز لبدء جلسة جديدة');
-        // إعادة تعيين الـ state إلى القيم الافتراضية فقط عند عدم وجود جلسة سابقة
-        // ولكن فقط إذا لم تكن الجلسة مكتملة
-        if (!isSessionCompleted) {
-          setCurrentStudentIndex(0);
-          setAttendanceRecords({});
-          setIsSessionStarted(false);
-          setSessionId(null);
-          setIsRecording(false);
-          isFinishingRef.current = false; // إعادة تعيين حالة الإنهاء
-        } else {
-          console.log('🚫 الجلسة مكتملة - لا نعيد تعيين أي شيء');
-        }
-      }
+      // بدء جلسة جديدة تلقائياً
+      setTimeout(() => {
+        console.log('🚀 بدء جلسة جديدة تلقائياً...');
+        startAttendanceSession();
+      }, 100);
       
       return () => {
         console.log('🧹 تنظيف عند مغادرة الشاشة...');
       };
-    }, [classId, state.attendanceSessions, students.length, isSessionCompleted, currentStudentIndex])
+    }, [classId])
   );
 
   const startAttendanceSession = async () => {
@@ -186,160 +127,115 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
 
       setSessionId(newSession.id);
       setIsSessionStarted(true);
-      setCurrentStudentIndex(0);
       setAttendanceRecords({});
       
-      // إرسال تحديث في الوقت الفعلي لبدء الجلسة
-      try {
-        FirebaseRealtimeService.sendAttendanceUpdate(state.currentTeacher?.id || '', {
-          type: 'session_started',
-          sessionId: newSession.id,
-          classId: classId,
-          timestamp: Date.now()
-        });
-        console.log('📡 تم إرسال تحديث بدء الجلسة للشاشات الأخرى');
-      } catch (error) {
-        console.warn('⚠️ فشل في إرسال تحديث بدء الجلسة:', error);
-      }
+      console.log('🎯 بدء جلسة جديدة:', {
+        sessionId: newSession.id,
+        studentsCount: students.length
+      });
+      
     } catch (error) {
       console.error('Error starting attendance session:', error);
       showErrorAlert('حدث خطأ أثناء بدء جلسة الحضور');
     }
   };
 
-  const markAttendance = useCallback(async (status: 'present' | 'absent') => {
-    if (!currentStudent || !sessionId) {
-      console.log('❌ لا يمكن تسجيل الحضور - بيانات غير مكتملة');
+  const markStudentAttendance = useCallback((studentId: string, status: 'present' | 'absent') => {
+    console.log('🔘 تسجيل حضور محلي للطالب:', studentId, status);
+
+    if (!sessionId) {
+      console.log('❌ لا يمكن تسجيل الحضور - لا يوجد sessionId');
       errorHaptic();
       return;
     }
 
-    if (isRecording) {
-      console.log('⏸️ تسجيل جاري، يرجى الانتظار');
-      return;
-    }
-
-    // فحص إضافي: إذا كانت الجلسة مكتملة، لا نسمح بتسجيل جديد
     if (isSessionCompleted) {
-      console.log('❌ الجلسة مكتملة - لا يمكن تسجيل حضور جديد');
+      console.log('✅ الجلسة مكتملة - لا يمكن تسجيل حضور إضافي');
       return;
     }
 
-    // حفظ البيانات المطلوبة في متغيرات محلية قبل أي تحديث
-    const studentToRecord = { ...currentStudent };
-    const currentIndex = currentStudentIndex;
-    const nextIndex = currentIndex + 1;
-    const isLastStudent = nextIndex >= students.length;
-    
-    // فحص إضافي: التأكد من أن هذا هو آخر طالب فعلياً
-    const isActuallyLastStudent = currentIndex === students.length - 1;
-    
-    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-    console.log(`🎯 تسجيل ${status} للطالب: ${studentToRecord.name}`);
-    console.log(`📍 الفهرس الحالي: ${currentIndex}`);
-    console.log(`📍 العدد الكلي: ${students.length}`);
-    console.log(`📍 الفهرس التالي: ${nextIndex} ${isLastStudent ? '(آخر طالب)' : ''}`);
-    console.log(`🔍 فحص إضافي - آخر طالب فعلي: ${isActuallyLastStudent}`);
-    
-    // Haptic feedback للتسجيل
-    lightHaptic();
-    
-    // قفل التسجيل لمنع الضغط المتكرر
-    setIsRecording(true);
+    // تحديث السجلات المحلية فقط
+    const updatedRecords = {
+      ...attendanceRecords,
+      [studentId]: status,
+    };
+    setAttendanceRecords(updatedRecords);
+    console.log(`📝 تم تحديث السجلات المحلية للطالب: ${studentId}`);
+
+    // Success haptic عند تسجيل ناجح
+    if (status === 'present') {
+      successHaptic();
+    }
+  }, [sessionId, isSessionCompleted, attendanceRecords]);
+
+  const saveAllAttendanceRecords = useCallback(async () => {
+    if (!sessionId) return;
 
     try {
-      // تأثير بصري محسّن
-      scaleButton(scaleAnim);
-
-      // حفظ سجل الحضور في قاعدة البيانات
-      await recordAttendance({
-        studentId: studentToRecord.id,
-        classId: classId,
-        sessionId: sessionId,
-        status: status,
-        attendanceTime: new Date(),
-      });
-
-      console.log(`✅ تم حفظ السجل في قاعدة البيانات للطالب: ${studentToRecord.name}`);
-
-      // تحديث السجلات المحلية
-      const updatedRecords = {
-        ...attendanceRecords,
-        [studentToRecord.id]: status,
-      };
-      setAttendanceRecords(updatedRecords);
-      console.log(`📝 تم تحديث السجلات المحلية`);
-      
-      // إرسال تحديث في الوقت الفعلي لتسجيل حضور الطالب
-      try {
-        FirebaseRealtimeService.sendAttendanceUpdate(state.currentTeacher?.id || '', {
-          type: 'attendance_recorded',
-          sessionId: sessionId,
+      // حفظ جميع السجلات دفعة واحدة
+      const recordsToSave = students
+        .filter(student => attendanceRecords[student.id])
+        .map(student => ({
+          studentId: student.id,
           classId: classId,
-          studentId: studentToRecord.id,
-          status: status,
-          timestamp: Date.now()
-        });
-        console.log('📡 تم إرسال تحديث تسجيل حضور الطالب للشاشات الأخرى');
-      } catch (error) {
-        console.warn('⚠️ فشل في إرسال تحديث تسجيل الحضور:', error);
-      }
+          sessionId: sessionId,
+          status: attendanceRecords[student.id],
+          attendanceTime: new Date(),
+        }));
 
-      // Success haptic عند تسجيل ناجح
-      if (status === 'present') {
-        successHaptic();
-      }
+      console.log(`💾 بدء حفظ ${recordsToSave.length} سجل في قاعدة البيانات...`);
 
-      // إذا كان آخر طالب (استخدام الفحص الإضافي للتأكد)
-      if (isLastStudent && isActuallyLastStudent) {
-        console.log(`🏁 هذا آخر طالب - جاري إنهاء الجلسة`);
-        console.log(`🔍 تفاصيل آخر طالب:`, {
-          studentName: studentToRecord.name,
-          currentIndex: currentIndex,
-          nextIndex: nextIndex,
-          studentsLength: students.length,
-          isLastStudent: isLastStudent,
-          isActuallyLastStudent: isActuallyLastStudent,
-          sessionId: sessionId
-        });
-        successHaptic(); // Haptic للإنجاز
-        
-        // تحديد أن الجلسة مكتملة فوراً لمنع أي تداخل
-        setIsSessionCompleted(true);
-        isFinishingRef.current = true; // منع التنفيذ المتعدد
-        console.log(`✅ تم تحديد الجلسة كمكتملة`);
-        
-        // فك القفل فوراً
-        setIsRecording(false);
-        
-        // تأخير قصير لضمان اكتمال تحديث الـ state قبل إنهاء الجلسة
-        setTimeout(() => {
-          finishAttendanceSessionWithRecords(updatedRecords);
-        }, 50);
-      } else {
-        // الانتقال للطالب التالي - طريقة محسنة
-        console.log(`➡️ جاري الانتقال من "${studentToRecord.name}" إلى "${students[nextIndex].name}"`);
-        
-        // تحديث الفهرس مباشرة
-        setCurrentStudentIndex(nextIndex);
-        
-        // فك القفل فوراً
-        setIsRecording(false);
-        console.log(`✅ اكتمل الانتقال - الطالب الحالي: ${students[nextIndex]?.name}`);
-      }
-      
-      console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-      
+      // حفظ السجلات بالتوازي
+      await Promise.all(
+        recordsToSave.map(record => recordAttendance(record))
+      );
+
+      console.log(`✅ تم حفظ جميع السجلات بنجاح`);
+      await finishAttendanceSession();
     } catch (error) {
-      console.error('❌ خطأ في تسجيل الحضور:', error);
-      showErrorAlert('حدث خطأ أثناء تسجيل الحضور');
-      setIsRecording(false);
-      fadeAnim.setValue(1);
-      scaleAnim.setValue(1);
+      console.error('❌ خطأ في حفظ السجلات:', error);
+      showErrorAlert('حدث خطأ أثناء حفظ السجلات');
+      setIsSubmitting(false);
     }
-  }, [currentStudent, sessionId, isRecording, currentStudentIndex, students.length, classId, recordAttendance, state.currentTeacher?.id]);
+  }, [sessionId, students, attendanceRecords, classId, recordAttendance]);
 
-  const finishAttendanceSessionWithRecords = (records: { [key: string]: 'present' | 'absent' }) => {
+  const submitAttendance = useCallback(async () => {
+    if (!sessionId) {
+      showErrorAlert('لا توجد جلسة نشطة');
+      return;
+    }
+
+    if (isSubmitting) {
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      // التحقق من تسجيل جميع الطلاب
+      const missingStudents = students.filter(student => !attendanceRecords[student.id]);
+      
+      if (missingStudents.length > 0) {
+        Alert.alert(
+          'تحذير',
+          `لم يتم تسجيل حضور جميع الطلاب.\n\nالطلاب غير المسجلين: ${missingStudents.map(s => s.name).join(', ')}\n\nهل تريد المتابعة؟`,
+          [
+            { text: 'إلغاء', style: 'cancel', onPress: () => setIsSubmitting(false) },
+            { text: 'متابعة', onPress: () => saveAllAttendanceRecords() }
+          ]
+        );
+        return;
+      }
+
+      await saveAllAttendanceRecords();
+    } catch (error) {
+      console.error('❌ خطأ في تسليم الحضور:', error);
+      showErrorAlert('حدث خطأ أثناء تسليم الحضور');
+      setIsSubmitting(false);
+    }
+  }, [sessionId, isSubmitting, students, attendanceRecords, saveAllAttendanceRecords]);
+
+  const finishAttendanceSession = useCallback(async () => {
     if (!sessionId) return;
     
     // فحص إضافي لمنع التنفيذ المتعدد
@@ -348,133 +244,105 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
       return;
     }
     
+    // تحديد أن الجلسة في حالة إنهاء
+    isFinishingRef.current = true;
+    
     console.log('🎯 بدء إنهاء الجلسة مع السجلات:', {
       sessionId,
-      recordsCount: Object.keys(records).length,
+      recordsCount: Object.keys(attendanceRecords).length,
       studentsCount: students.length,
       isSessionCompleted,
       isFinishing: isFinishingRef.current
     });
-      // حساب الإحصائيات بدقة - فقط للطلاب المسجلين فعلياً
-      const actualPresentCount = students.filter(s => records[s.id] === 'present').length;
-      const actualAbsentCount = students.filter(s => records[s.id] === 'absent').length;
-      const totalStudents = students.length;
-      const totalRecorded = actualPresentCount + actualAbsentCount;
-      
-      // تشخيص مفصل للإحصائيات
-      console.log('🔍 تشخيص إحصائيات الحضور النهائية:', {
-        totalStudents,
-        totalRecorded,
-        actualPresentCount,
-        actualAbsentCount,
-        attendanceRecords: records,
-        sessionId: sessionId,
-        verification: {
-          presentStudents: students.filter(s => records[s.id] === 'present').map(s => s.name),
-          absentStudents: students.filter(s => records[s.id] === 'absent').map(s => s.name),
-          unrecordedStudents: students.filter(s => !records[s.id]).map(s => s.name)
-        }
-      });
 
-      // التحقق من أن جميع الطلاب تم تسجيل حضورهم
-      const missingStudents = students.filter(student => !records[student.id]);
-      
-      // التحقق من دقة الإحصائيات
-      const verificationPresent = Object.values(records).filter(status => status === 'present').length;
-      const verificationAbsent = Object.values(records).filter(status => status === 'absent').length;
-      
-      console.log('✅ التحقق النهائي من الإحصائيات:', {
-        actualPresent: actualPresentCount,
-        verificationPresent: verificationPresent,
-        actualAbsent: actualAbsentCount,
-        verificationAbsent: verificationAbsent,
-        isAccurate: actualPresentCount === verificationPresent && actualAbsentCount === verificationAbsent
-      });
+    // حساب الإحصائيات بدقة
+    const actualPresentCount = students.filter(s => attendanceRecords[s.id] === 'present').length;
+    const actualAbsentCount = students.filter(s => attendanceRecords[s.id] === 'absent').length;
+    const totalStudents = students.length;
+    const totalRecorded = actualPresentCount + actualAbsentCount;
+    
+    console.log('🔍 تشخيص إحصائيات الحضور النهائية:', {
+      totalStudents,
+      totalRecorded,
+      actualPresentCount,
+      actualAbsentCount,
+      attendanceRecords,
+      sessionId: sessionId
+    });
 
-      // إذا لم يتم تسجيل جميع الطلاب، إظهار تحذير
-      if (totalRecorded < totalStudents) {
-        Alert.alert(
-          'تحذير',
-          `لم يتم تسجيل حضور جميع الطلاب.\nتم تسجيل ${totalRecorded} من أصل ${totalStudents} طالب.\n\nالطلاب غير المسجلين: ${missingStudents.map(s => s.name).join(', ')}`,
-          [
-            { text: 'متابعة', onPress: () => {
-              setIsSessionCompleted(true);
-              showAttendanceCompleteAlert(actualPresentCount, actualAbsentCount, () => {
-                console.log('🚪 العودة للشاشة السابقة بعد إكمال الجلسة الجزئية');
-                // التأكد من أن الجلسة مكتملة قبل العودة
-                setIsSessionCompleted(true);
-                isFinishingRef.current = false; // إعادة تعيين حالة الإنهاء
-                navigation.goBack();
-              });
-            }},
-            { text: 'إلغاء', style: 'cancel' }
-          ]
-        );
-      } else {
-        // التأكد من دقة الإحصائيات قبل العرض
-        const finalPresentCount = Math.max(0, actualPresentCount);
-        const finalAbsentCount = Math.max(0, actualAbsentCount);
-        
-        console.log('🎯 الإحصائيات النهائية المقدمة للمستخدم:', {
-          present: finalPresentCount,
-          absent: finalAbsentCount,
-          total: totalStudents,
-          sessionId: sessionId
-        });
-        
-        // إرسال تحديث في الوقت الفعلي لإعلام الشاشات الأخرى
-        try {
-          FirebaseRealtimeService.sendAttendanceUpdate(state.currentTeacher?.id || '', {
-            type: 'session_completed',
-            sessionId: sessionId,
-            classId: classId,
-            presentCount: finalPresentCount,
-            absentCount: finalAbsentCount,
-            totalStudents: totalStudents,
-            timestamp: Date.now()
-          });
-          console.log('📡 تم إرسال تحديث انتهاء الجلسة للشاشات الأخرى');
-        } catch (error) {
-          console.warn('⚠️ فشل في إرسال تحديث انتهاء الجلسة:', error);
-        }
-        
-        // التأكد من أن الجلسة مكتملة (قد تكون محددة مسبقاً)
-        setIsSessionCompleted(true);
-        
-        // عرض التنبيه مباشرة بدون تأخير
-        showAttendanceCompleteAlert(finalPresentCount, finalAbsentCount, () => {
-          console.log('🚪 العودة للشاشة السابقة بعد إكمال الجلسة');
-          // التأكد من أن الجلسة مكتملة قبل العودة
-          setIsSessionCompleted(true);
-          isFinishingRef.current = false; // إعادة تعيين حالة الإنهاء
-          navigation.goBack();
-        });
-      }
-  };
+    
+    // التأكد من أن الجلسة مكتملة
+    setIsSessionCompleted(true);
+    setIsSubmitting(false);
+    
+    // العودة مباشرة للشاشة السابقة
+    console.log('🚪 العودة للشاشة السابقة بعد إكمال الجلسة');
+    isFinishingRef.current = false; // إعادة تعيين بعد العودة
+    navigation.goBack();
+  }, [sessionId, attendanceRecords, students, classId, state.currentTeacher?.id, isSessionCompleted, navigation]);
 
 
 
 
-  const renderStudentCard = () => {
-    if (!currentStudent) return null;
+
+  const renderStudentItem = ({ item: student, index }: { item: any, index: number }) => {
+    const studentStatus = attendanceRecords[student.id];
 
     return (
-      <Animated.View 
-        key={`student-${currentStudentIndex}-${currentStudent.id}`}
-        style={[
-          styles.studentCard, 
-          { 
-            transform: [{ scale: scaleAnim }] 
-          }
-        ]}
-      >
-        <View style={styles.studentNumber}>
-          <Text style={styles.studentNumberText}>{currentStudentIndex + 1}</Text>
-        </View>
+      <View style={styles.studentItem}>
         <View style={styles.studentInfo}>
-          <Text style={styles.studentName}>{currentStudent.name}</Text>
+          <View style={styles.studentNumber}>
+            <Text style={styles.studentNumberText}>{index + 1}</Text>
+          </View>
+          <Text style={styles.studentName}>{student.name}</Text>
         </View>
-      </Animated.View>
+        
+        <View style={styles.attendanceButtons}>
+          <TouchableOpacity
+            style={[
+              styles.statusButton,
+              styles.absentButton,
+              studentStatus === 'absent' && styles.selectedButton,
+              isSessionCompleted && styles.disabledButton
+            ]}
+            onPress={() => {
+              if (!isSessionCompleted) {
+                markStudentAttendance(student.id, 'absent');
+              }
+            }}
+            disabled={isSessionCompleted}
+          >
+            <Text style={[
+              styles.statusButtonText,
+              studentStatus === 'absent' && styles.selectedButtonText
+            ]}>
+              ✗
+            </Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[
+              styles.statusButton,
+              styles.presentButton,
+              studentStatus === 'present' && styles.selectedButton,
+              isSessionCompleted && styles.disabledButton
+            ]}
+            onPress={() => {
+              if (!isSessionCompleted) {
+                markStudentAttendance(student.id, 'present');
+              }
+            }}
+            disabled={isSessionCompleted}
+          >
+            <Text style={[
+              styles.statusButtonText,
+              studentStatus === 'present' && styles.selectedButtonText
+            ]}>
+              ✓
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
     );
   };
 
@@ -526,34 +394,7 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
       </View>
 
       <View style={styles.content}>
-        {isSessionCompleted ? (
-          <View style={styles.completedContainer}>
-            <Text style={styles.completedTitle}>✅ تم إكمال الجلسة</Text>
-            <Text style={styles.completedSubtitle}>
-              تم تسجيل حضور جميع الطلاب بنجاح
-            </Text>
-            <TouchableOpacity
-              style={styles.newSessionButton}
-              onPress={() => {
-                setIsSessionCompleted(false);
-                setCurrentStudentIndex(0);
-                setAttendanceRecords({});
-                setIsSessionStarted(false);
-                setSessionId(null);
-                setIsRecording(false);
-                isFinishingRef.current = false; // إعادة تعيين حالة الإنهاء
-              }}
-            >
-              <Text style={styles.newSessionButtonText}>جلسة جديدة</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.backToClassesButton}
-              onPress={() => navigation.goBack()}
-            >
-              <Text style={styles.backToClassesButtonText}>العودة للفصول</Text>
-            </TouchableOpacity>
-          </View>
-        ) : !isSessionStarted ? (
+        {!isSessionStarted ? (
           <View style={styles.startContainer}>
             <Text style={styles.startTitle}>بدء تسجيل الحضور</Text>
             <Text style={styles.startSubtitle}>
@@ -573,74 +414,47 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
           <View style={styles.attendanceContainer}>
             <View style={styles.progressContainer}>
               <Text style={styles.progressText}>
-                {currentStudentIndex + 1} من {students.length}
+                {totalRecorded} من {students.length} طالب
               </Text>
               <View style={styles.progressBar}>
                 <View 
                   style={[
                     styles.progressFill, 
-                    { width: `${((currentStudentIndex + 1) / students.length) * 100}%` }
+                    { width: `${(totalRecorded / students.length) * 100}%` }
                   ]} 
                 />
               </View>
+              <View style={styles.statsContainer}>
+                <Text style={styles.statsText}>
+                  حاضر: {presentCount} | غائب: {absentCount}
+                </Text>
+              </View>
             </View>
 
-            <View style={styles.cardContainer}>
-              {renderStudentCard()}
+            <View style={styles.studentsListContainer}>
+              <FlatList
+                data={students}
+                renderItem={renderStudentItem}
+                keyExtractor={(item) => item.id}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.studentsList}
+              />
             </View>
 
-             <View style={styles.manualButtons}>
-               <TouchableOpacity
-                 style={[
-                   styles.manualButton, 
-                   styles.absentButton,
-                   (isRecording || !currentStudent) && styles.disabledButton
-                 ]}
-                 onPress={() => {
-                   console.log('🔘 تم الضغط على زر غائب');
-                   console.log('   • الطالب الحالي:', currentStudent?.name || 'غير موجود');
-                   console.log('   • الفهرس:', currentStudentIndex);
-                   console.log('   • حالة التسجيل:', isRecording ? 'مقفل' : 'متاح');
-                   
-                   if (!isRecording && currentStudent) {
-                     markAttendance('absent');
-                   } else {
-                     console.log('   ⚠️ لا يمكن التسجيل:', {
-                       isRecording,
-                       hasCurrentStudent: !!currentStudent
-                     });
-                   }
-                 }}
-                 disabled={isRecording || !currentStudent}
-               >
-                 <Text style={styles.manualButtonText}>غائب</Text>
-               </TouchableOpacity>
-               <TouchableOpacity
-                 style={[
-                   styles.manualButton, 
-                   styles.presentButton,
-                   (isRecording || !currentStudent) && styles.disabledButton
-                 ]}
-                 onPress={() => {
-                   console.log('🔘 تم الضغط على زر حاضر');
-                   console.log('   • الطالب الحالي:', currentStudent?.name || 'غير موجود');
-                   console.log('   • الفهرس:', currentStudentIndex);
-                   console.log('   • حالة التسجيل:', isRecording ? 'مقفل' : 'متاح');
-                   
-                   if (!isRecording && currentStudent) {
-                     markAttendance('present');
-                   } else {
-                     console.log('   ⚠️ لا يمكن التسجيل:', {
-                       isRecording,
-                       hasCurrentStudent: !!currentStudent
-                     });
-                   }
-                 }}
-                 disabled={isRecording || !currentStudent}
-               >
-                 <Text style={styles.manualButtonText}>حاضر</Text>
-               </TouchableOpacity>
-             </View>
+            <View style={styles.submitContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.submitButton,
+                  (!isAllStudentsRecorded || isSubmitting || isSessionCompleted) && styles.disabledButton
+                ]}
+                onPress={submitAttendance}
+                disabled={!isAllStudentsRecorded || isSubmitting || isSessionCompleted}
+              >
+                <Text style={styles.submitButtonText}>
+                  {isSubmitting ? 'جاري التسليم...' : 'تسليم الحضور'}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
       </View>
@@ -760,82 +574,112 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.5,
     shadowRadius: 4,
   },
-  cardContainer: {
+  studentsListContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 0,
+    marginTop: 20,
   },
-  studentCard: {
+  studentsList: {
+    paddingBottom: 20,
+  },
+  studentItem: {
     backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 24,
-    width: '90%',
-    maxWidth: 300,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    marginHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: 4,
+      height: 2,
     },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  studentInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    direction: 'rtl',
+    flex: 1,
   },
   studentNumber: {
     backgroundColor: '#007bff',
-    borderRadius: 20,
-    width: 40,
-    height: 40,
+    borderRadius: 16,
+    width: 32,
+    height: 32,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
+    marginRight: 12,
   },
   studentNumberText: {
     color: 'white',
-    fontSize: 18,
+    fontSize: 14,
     fontFamily: fontFamilies.bold,
-  },
-  studentInfo: {
-    flex: 1,
-    justifyContent: 'center',
   },
   studentName: {
-    fontSize: 20,
-    fontFamily: fontFamilies.bold,
+    fontSize: 16,
+    fontFamily: fontFamilies.semibold,
     color: '#2c3e50',
-    textAlign: 'center',
-  },
-  manualButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    direction: 'rtl',
-    marginTop: 20,
-    paddingHorizontal: 20,
-  },
-  manualButton: {
     flex: 1,
-    paddingVertical: 18,
-    borderRadius: 12,
+  },
+  attendanceButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  statusButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
     alignItems: 'center',
-    marginHorizontal: 8,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    borderWidth: 2,
+    borderColor: 'transparent',
   },
   absentButton: {
-    backgroundColor: colors.danger,
-    ...shadows.md,
+    backgroundColor: '#f8f9fa',
+    borderColor: colors.danger,
   },
   presentButton: {
-    backgroundColor: colors.success,
+    backgroundColor: '#f8f9fa',
+    borderColor: colors.success,
+  },
+  selectedButton: {
+    backgroundColor: colors.primary,
+  },
+  statusButtonText: {
+    fontSize: 18,
+    fontFamily: fontFamilies.bold,
+    color: '#6c757d',
+  },
+  selectedButtonText: {
+    color: 'white',
+  },
+  statsContainer: {
+    marginTop: 8,
+    alignItems: 'center',
+  },
+  statsText: {
+    fontSize: 14,
+    fontFamily: fontFamilies.regular,
+    color: colors.text.secondary,
+  },
+  submitContainer: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: 'white',
+    borderTopWidth: 1,
+    borderTopColor: '#e9ecef',
+  },
+  submitButton: {
+    backgroundColor: colors.primary,
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
     ...shadows.md,
   },
-  manualButtonText: {
+  submitButtonText: {
     color: 'white',
     fontSize: 18,
     fontFamily: fontFamilies.bold,
@@ -869,54 +713,5 @@ const styles = StyleSheet.create({
     color: '#dc3545',
     textAlign: 'center',
     marginTop: 50,
-  },
-  completedContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 40,
-  },
-  completedTitle: {
-    fontSize: 24,
-    fontFamily: fontFamilies.bold,
-    color: colors.success,
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  completedSubtitle: {
-    fontSize: 18,
-    fontFamily: fontFamilies.regular,
-    color: colors.text.secondary,
-    textAlign: 'center',
-    marginBottom: 40,
-    lineHeight: 28,
-  },
-  newSessionButton: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: 32,
-    paddingVertical: 16,
-    borderRadius: borderRadius.xl,
-    marginBottom: 16,
-    ...shadows.md,
-  },
-  newSessionButtonText: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontFamily: fontFamilies.bold,
-    textAlign: 'center',
-  },
-  backToClassesButton: {
-    backgroundColor: colors.background.secondary,
-    paddingHorizontal: 32,
-    paddingVertical: 16,
-    borderRadius: borderRadius.xl,
-    borderWidth: 2,
-    borderColor: colors.primary,
-  },
-  backToClassesButtonText: {
-    color: colors.primary,
-    fontSize: 18,
-    fontFamily: fontFamilies.bold,
-    textAlign: 'center',
   },
 });

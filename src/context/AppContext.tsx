@@ -394,18 +394,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       
       dispatch({ type: 'SET_ATTENDANCE_SESSIONS', payload: updatedSessions });
       
-      // إرسال تحديث في الوقت الفعلي
-      try {
-        await FirebaseRealtimeService.sendAttendanceUpdate(state.currentTeacher?.id || '', {
-          type: 'attendance_recorded',
-          sessionId: record.sessionId,
-          studentId: record.studentId,
-          status: record.status,
-          timestamp: Date.now()
-        });
-      } catch (error) {
-        console.warn('⚠️ فشل في إرسال التحديث في الوقت الفعلي:', error);
-      }
     }
     
     return newRecord;

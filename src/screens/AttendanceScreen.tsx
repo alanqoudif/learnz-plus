@@ -49,6 +49,7 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
   const currentStudent = useMemo(() => {
     const student = students[currentStudentIndex];
     console.log(`🔍 useMemo: حساب الطالب الحالي - الفهرس: ${currentStudentIndex}, الطالب: ${student?.name || 'غير موجود'}`);
+    console.log(`🔍 useMemo: تفاصيل إضافية - students.length: ${students.length}, student.id: ${student?.id || 'غير موجود'}`);
     return student;
   }, [students, currentStudentIndex]);
 
@@ -57,8 +58,12 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
     console.log(`━━━ تحديث الطالب ━━━`);
     console.log(`📍 الفهرس: ${currentStudentIndex}`);
     console.log(`👤 الطالب: ${currentStudent?.name || 'غير موجود'}`);
+    console.log(`🆔 معرف الطالب: ${currentStudent?.id || 'غير موجود'}`);
+    console.log(`📊 إجمالي الطلاب: ${students.length}`);
+    console.log(`🔒 حالة التسجيل: ${isRecording ? 'مقفل' : 'متاح'}`);
+    console.log(`✅ حالة الجلسة: ${isSessionCompleted ? 'مكتملة' : 'جارية'}`);
     console.log(`━━━━━━━━━━━━━━━━━━━━━`);
-  }, [currentStudentIndex, currentStudent]);
+  }, [currentStudentIndex, currentStudent, isRecording, isSessionCompleted, students.length]);
 
   // Real-time updates are handled by Firebase through AppContext
   // No need for additional listeners here during active attendance session
@@ -81,12 +86,6 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
         return;
       }
       
-      // تحقق إضافي: إذا كان الفهرس يساوي أو أكبر من عدد الطلاب، الجلسة مكتملة
-      if (currentStudentIndex >= students.length && students.length > 0) {
-        console.log('✅ الفهرس يشير إلى اكتمال الجلسة - تحديد حالة الإكمال');
-        setIsSessionCompleted(true);
-        return;
-      }
       
       // تحقق من وجود جلسة مكتملة اليوم في قاعدة البيانات
       const today = new Date().toDateString();
@@ -208,8 +207,18 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
   };
 
   const markAttendance = useCallback(async (status: 'present' | 'absent') => {
+    console.log('🔘 بدء دالة markAttendance');
+    console.log('   • الطالب الحالي:', currentStudent?.name || 'غير موجود');
+    console.log('   • sessionId:', sessionId);
+    console.log('   • isRecording:', isRecording);
+    console.log('   • isSessionCompleted:', isSessionCompleted);
+    console.log('   • currentStudentIndex:', currentStudentIndex);
+    console.log('   • students.length:', students.length);
+
     if (!currentStudent || !sessionId) {
       console.log('❌ لا يمكن تسجيل الحضور - بيانات غير مكتملة');
+      console.log('   • currentStudent:', !!currentStudent);
+      console.log('   • sessionId:', !!sessionId);
       errorHaptic();
       return;
     }
@@ -236,11 +245,13 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
     console.log(`📍 الفهرس الحالي: ${currentIndex}`);
     console.log(`📍 العدد الكلي: ${students.length}`);
     console.log(`📍 الفهرس التالي: ${nextIndex} ${isLastStudent ? '(آخر طالب)' : ''}`);
+    console.log(`📍 الطالب التالي: ${!isLastStudent ? students[nextIndex]?.name : 'لا يوجد'}`);
     
     // Haptic feedback للتسجيل
     lightHaptic();
     
     // قفل التسجيل لمنع الضغط المتكرر
+    console.log('🔒 قفل التسجيل');
     setIsRecording(true);
 
     try {
@@ -248,6 +259,7 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
       scaleButton(scaleAnim);
 
       // حفظ سجل الحضور في قاعدة البيانات
+      console.log('💾 بدء حفظ السجل في قاعدة البيانات...');
       await recordAttendance({
         studentId: studentToRecord.id,
         classId: classId,
@@ -305,6 +317,7 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
         console.log(`✅ تم تحديد الجلسة كمكتملة`);
         
         // فك القفل فوراً
+        console.log('🔓 فك قفل التسجيل (آخر طالب)');
         setIsRecording(false);
         
         // تأخير قصير لضمان اكتمال تحديث الـ state قبل إنهاء الجلسة
@@ -314,12 +327,22 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
       } else {
         // الانتقال للطالب التالي - طريقة محسنة
         console.log(`➡️ جاري الانتقال من "${studentToRecord.name}" إلى "${students[nextIndex].name}"`);
+        console.log(`🔍 تفاصيل الانتقال:`, {
+          fromIndex: currentIndex,
+          toIndex: nextIndex,
+          fromStudent: studentToRecord.name,
+          toStudent: students[nextIndex]?.name,
+          totalStudents: students.length
+        });
+        
+        // فك القفل أولاً
+        console.log('🔓 فك قفل التسجيل (انتقال للطالب التالي)');
+        setIsRecording(false);
         
         // تحديث الفهرس مباشرة
+        console.log(`📍 تحديث الفهرس من ${currentIndex} إلى ${nextIndex}`);
         setCurrentStudentIndex(nextIndex);
         
-        // فك القفل فوراً
-        setIsRecording(false);
         console.log(`✅ اكتمل الانتقال - الطالب الحالي: ${students[nextIndex]?.name}`);
       }
       
@@ -328,11 +351,12 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
     } catch (error) {
       console.error('❌ خطأ في تسجيل الحضور:', error);
       showErrorAlert('حدث خطأ أثناء تسجيل الحضور');
+      console.log('🔓 فك قفل التسجيل (خطأ)');
       setIsRecording(false);
       fadeAnim.setValue(1);
       scaleAnim.setValue(1);
     }
-  }, [currentStudent, sessionId, isRecording, currentStudentIndex, students.length, classId, recordAttendance, state.currentTeacher?.id]);
+  }, [currentStudent, sessionId, isRecording, currentStudentIndex, students.length, classId, recordAttendance, state.currentTeacher?.id, attendanceRecords]);
 
   const finishAttendanceSessionWithRecords = (records: { [key: string]: 'present' | 'absent' }) => {
     if (!sessionId) return;
@@ -537,6 +561,11 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
                 setSessionId(null);
                 setIsRecording(false);
                 isFinishingRef.current = false; // إعادة تعيين حالة الإنهاء
+                
+                // بدء جلسة جديدة فوراً
+                setTimeout(() => {
+                  startAttendanceSession();
+                }, 100);
               }}
             >
               <Text style={styles.newSessionButtonText}>جلسة جديدة</Text>
@@ -596,13 +625,19 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
                    console.log('   • الطالب الحالي:', currentStudent?.name || 'غير موجود');
                    console.log('   • الفهرس:', currentStudentIndex);
                    console.log('   • حالة التسجيل:', isRecording ? 'مقفل' : 'متاح');
+                   console.log('   • sessionId:', sessionId);
+                   console.log('   • isSessionCompleted:', isSessionCompleted);
+                   console.log('   • students.length:', students.length);
                    
-                   if (!isRecording && currentStudent) {
+                   if (!isRecording && currentStudent && !isSessionCompleted) {
+                     console.log('✅ بدء تسجيل الغياب...');
                      markAttendance('absent');
                    } else {
                      console.log('   ⚠️ لا يمكن التسجيل:', {
                        isRecording,
-                       hasCurrentStudent: !!currentStudent
+                       hasCurrentStudent: !!currentStudent,
+                       isSessionCompleted,
+                       hasSessionId: !!sessionId
                      });
                    }
                  }}
@@ -621,13 +656,19 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
                    console.log('   • الطالب الحالي:', currentStudent?.name || 'غير موجود');
                    console.log('   • الفهرس:', currentStudentIndex);
                    console.log('   • حالة التسجيل:', isRecording ? 'مقفل' : 'متاح');
+                   console.log('   • sessionId:', sessionId);
+                   console.log('   • isSessionCompleted:', isSessionCompleted);
+                   console.log('   • students.length:', students.length);
                    
-                   if (!isRecording && currentStudent) {
+                   if (!isRecording && currentStudent && !isSessionCompleted) {
+                     console.log('✅ بدء تسجيل الحضور...');
                      markAttendance('present');
                    } else {
                      console.log('   ⚠️ لا يمكن التسجيل:', {
                        isRecording,
-                       hasCurrentStudent: !!currentStudent
+                       hasCurrentStudent: !!currentStudent,
+                       isSessionCompleted,
+                       hasSessionId: !!sessionId
                      });
                    }
                  }}

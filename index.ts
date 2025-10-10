@@ -7,9 +7,13 @@ import { registerRootComponent } from 'expo';
 // Make Buffer globally available
 global.Buffer = Buffer;
 
-// Polyfill for stream module
-import { Readable, Writable, Duplex, Transform } from 'readable-stream';
-global.stream = { Readable, Writable, Duplex, Transform };
+// Polyfill for stream module - only import what's needed
+try {
+  const { Readable, Writable, Duplex, Transform } = require('readable-stream');
+  global.stream = { Readable, Writable, Duplex, Transform };
+} catch (error) {
+  console.warn('Stream polyfill failed to load:', error);
+}
 
 import App from './App';
 

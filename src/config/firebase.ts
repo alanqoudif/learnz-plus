@@ -2,6 +2,7 @@ import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
+import { getFunctions } from "firebase/functions";
 import { getDatabase } from "firebase/database";
 
 const firebaseConfig = {
@@ -23,6 +24,7 @@ export const auth = getAuth(app);
 export const firestore = getFirestore(app);
 export const database = getDatabase(app);
 export const analytics = getAnalytics(app);
+export const cloudFunctions = getFunctions(app);
 
 export default app;
 
@@ -32,7 +34,9 @@ export const COLLECTIONS = {
   CLASSES: 'classes',
   STUDENTS: 'students',
   ATTENDANCE_SESSIONS: 'attendance_sessions',
-  ATTENDANCE_RECORDS: 'attendance_records'
+  ATTENDANCE_RECORDS: 'attendance_records',
+  USERS: 'users',
+  SCHOOLS: 'schools'
 } as const;
 
 // Realtime Database paths

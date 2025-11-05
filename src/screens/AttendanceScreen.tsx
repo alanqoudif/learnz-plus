@@ -10,12 +10,14 @@ import {
   FlatList,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { useApp } from '../context/AppContext';
+// useApp already imported above
 import { AttendanceRecord, AttendanceSession } from '../types';
 import { showErrorAlert, showAttendanceCompleteAlert } from '../utils/notifications';
 import { colors, fontFamilies, shadows, borderRadius, spacing } from '../utils/theme';
 import { fadeIn, fadeOut, scaleButton } from '../utils/animations';
 import { lightHaptic, successHaptic, errorHaptic } from '../utils/haptics';
+import { useApp } from '../context/AppContext';
+import { communityService } from '../services/communityService';
 // RealtimeNotification component removed - using simple notifications instead
 
 interface AttendanceScreenProps {
@@ -275,6 +277,19 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
     setIsSessionCompleted(true);
     setIsSubmitting(false);
     
+    // نشر منشور غياب إلى مجتمع المدرسة بعد التسليم
+    try {
+      const schoolId = (state as any).userProfile?.schoolId;
+      const authorId = state.currentTeacher?.id;
+      if (schoolId && authorId) {
+        const title = `تقرير غياب الفصل (${currentClass?.name || ''}${currentClass?.section ? ' - ' + currentClass.section : ''})`;
+        const body = `حاضر: ${actualPresentCount} | غائب: ${actualAbsentCount} من إجمالي ${totalStudents}`;
+        await communityService.createAbsencePost(schoolId, authorId, { title, body });
+      }
+    } catch (e) {
+      console.warn('فشل نشر منشور الغياب:', e);
+    }
+
     // العودة مباشرة للشاشة السابقة
     console.log('🚪 العودة للشاشة السابقة بعد إكمال الجلسة');
     isFinishingRef.current = false; // إعادة تعيين بعد العودة

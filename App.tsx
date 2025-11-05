@@ -1,6 +1,7 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StatusBar } from 'expo-status-bar';
 import { I18nManager } from 'react-native';
 import { AppProvider, useApp } from './src/context/AppContext';
@@ -10,9 +11,31 @@ import AddClassScreen from './src/screens/AddClassScreen';
 import StudentManagementScreen from './src/screens/StudentManagementScreen';
 import AttendanceScreen from './src/screens/AttendanceScreen';
 import AttendanceHistoryScreen from './src/screens/AttendanceHistoryScreen';
+import CommunityScreen from './src/screens/CommunityScreen';
+import JoinSchoolScreen from './src/screens/JoinSchoolScreen';
+import LeaderAdminScreen from './src/screens/LeaderAdminScreen';
 import { RootStackParamList } from './src/types';
 
 const Stack = createStackNavigator<RootStackParamList>();
+const Tab = createBottomTabNavigator();
+
+function MainTabs() {
+  const { state } = useApp();
+  const isLeader = (state as any)?.userProfile?.role === 'leader';
+  return (
+    <Tab.Navigator
+      screenOptions={{
+        headerShown: false,
+      }}
+    >
+      <Tab.Screen name="Dashboard" component={DashboardScreen} options={{ title: 'الرئيسية' }} />
+      <Tab.Screen name="Community" component={CommunityScreen} options={{ title: 'المجتمع' }} />
+      {isLeader && (
+        <Tab.Screen name="LeaderAdmin" component={LeaderAdminScreen} options={{ title: 'الإدارة' }} />
+      )}
+    </Tab.Navigator>
+  );
+}
 
 function AppNavigator() {
   const { state } = useApp();
@@ -29,7 +52,10 @@ function AppNavigator() {
         {state.currentTeacher ? (
           // المستخدم مسجل دخول
           <>
-            <Stack.Screen name="Dashboard" component={DashboardScreen} />
+            <Stack.Screen name="Dashboard" component={MainTabs} />
+            <Stack.Screen name="Community" component={CommunityScreen} />
+            <Stack.Screen name="JoinSchool" component={JoinSchoolScreen} />
+            <Stack.Screen name="LeaderAdmin" component={LeaderAdminScreen} />
             <Stack.Screen name="AddClass" component={AddClassScreen} />
             <Stack.Screen name="StudentManagement" component={StudentManagementScreen} />
             <Stack.Screen name="Attendance" component={AttendanceScreen} />

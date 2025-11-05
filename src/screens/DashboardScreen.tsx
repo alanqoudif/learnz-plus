@@ -22,7 +22,7 @@ interface DashboardScreenProps {
 
 export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   const { state, deleteClass, refreshData } = useApp();
-  const { currentTeacher, classes, isLoading } = state;
+  const { currentTeacher, classes, isLoading, userProfile } = state as any;
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const handleRefresh = useCallback(async () => {
@@ -159,7 +159,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
       <View style={styles.header}>
         <View>
           <Text style={styles.welcomeText}>مرحباً 👋</Text>
-          <Text style={styles.teacherName}>{currentTeacher?.name}</Text>
+          <Text style={styles.teacherName}>{userProfile?.name || currentTeacher?.name}</Text>
         </View>
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <Text style={styles.logoutButtonText}>خروج</Text>

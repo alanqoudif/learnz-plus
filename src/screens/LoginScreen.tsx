@@ -15,6 +15,8 @@ import { Teacher } from '../types';
 import { validateName, validatePhoneNumber, formatName } from '../utils/validation';
 import { fontFamilies } from '../utils/theme';
 import { smartAuthService as authService } from '../services/smartService';
+import { firestore, COLLECTIONS } from '../config/firebase';
+import { doc, setDoc } from 'firebase/firestore';
 
 interface LoginScreenProps {
   navigation: any;
@@ -76,7 +78,11 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
         const user = await authService.signInWithEmail(formattedEmail, password);
         
         console.log('✅ تم تسجيل الدخول بنجاح');
-        // لا نحتاج لإنشاء teacher هنا لأن AppContext سيتولى ذلك
+        // حفظ/تحديث بروفايل المستخدم في Firestore
+        await setDoc(doc(firestore, COLLECTIONS.USERS, user.uid), {
+          email: formattedEmail,
+          name: formattedName,
+        }, { merge: true });
         
       } catch (loginError: any) {
         console.log('🔄 فشل تسجيل الدخول، محاولة إنشاء حساب جديد...');
@@ -89,7 +95,13 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
           
           const user = await authService.createAccount(formattedEmail, password, formattedName);
           console.log('✅ تم إنشاء الحساب بنجاح');
-          // لا نحتاج لإنشاء teacher هنا لأن AppContext سيتولى ذلك
+          // حفظ بروفايل المستخدم لأول مرة
+          await setDoc(doc(firestore, COLLECTIONS.USERS, user.uid), {
+            email: formattedEmail,
+            name: formattedName,
+            schoolId: null,
+            role: 'member'
+          }, { merge: true });
           
         } else {
           throw loginError;

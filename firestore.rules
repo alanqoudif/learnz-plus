@@ -1,9 +1,38 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // قواعد مبسطة للاختبار - تسمح بالوصول للمستخدمين المسجلين
-    match /{document=**} {
-      allow read, write: if request.auth != null;
+    function isSignedIn() { return request.auth != null; }
+    function isSelf(userId) { return isSignedIn() && request.auth.uid == userId; }
+
+    // Users: each user can read/write own profile
+    match /users/{userId} {
+      allow read: if isSelf(userId);
+      allow write: if isSelf(userId);
     }
+
+    // Schools: readable to members; writable by leader
+    match /schools/{schoolId} {
+      allow read: if isSignedIn();
+      allow update: if isLeader(schoolId);
+      allow create: if isSignedIn();
+
+      // community posts under school
+      match /community/{postId} {
+        allow read: if isMember(schoolId);
+        allow create: if isMember(schoolId);
+        allow update, delete: if isLeader(schoolId);
+      }
+    }
+
+    // Helper: fetch leader from school doc and compare
+    function isLeader(schoolId) {
+      return isSignedIn() && get(/databases/$(database)/documents/schools/$(schoolId)).data.leaderUserId == request.auth.uid;
+    }
+
+    function isMember(schoolId) {
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.schoolId == schoolId;
+    }
+
+    // Remove permissive legacy rule to tighten security
   }
 }

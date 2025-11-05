@@ -1,10 +1,11 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Teacher, Class, Student, AttendanceRecord, AttendanceSession } from '../types';
+import { Teacher, Class, Student, AttendanceRecord, AttendanceSession, UserProfile } from '../types';
 import { smartClassService as classService, smartStudentService as studentService, smartAttendanceService as attendanceService, smartAuthService as authService } from '../services/smartService';
 import { teacherService } from '../services/firebaseService';
 import { FirebaseRealtimeService } from '../services/firebaseRealtimeService';
-import { auth } from '../config/firebase';
+import { auth, firestore, COLLECTIONS } from '../config/firebase';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
 
 interface AppState {
@@ -12,6 +13,7 @@ interface AppState {
   classes: Class[];
   attendanceSessions: AttendanceSession[];
   isLoading: boolean;
+  userProfile: UserProfile | null;
 }
 
 type AppAction =
@@ -27,13 +29,15 @@ type AppAction =
   | { type: 'SET_ATTENDANCE_SESSIONS'; payload: AttendanceSession[] }
   | { type: 'UPDATE_ATTENDANCE_SESSION'; payload: AttendanceSession }
   | { type: 'SET_LOADING'; payload: boolean }
-  | { type: 'LOAD_DATA'; payload: { teacher: Teacher | null; classes: Class[]; sessions: AttendanceSession[] } };
+  | { type: 'LOAD_DATA'; payload: { teacher: Teacher | null; classes: Class[]; sessions: AttendanceSession[] } }
+  | { type: 'SET_USER_PROFILE'; payload: UserProfile | null };
 
 const initialState: AppState = {
   currentTeacher: null,
   classes: [],
   attendanceSessions: [],
   isLoading: true,
+  userProfile: null,
 };
 
 function appReducer(state: AppState, action: AppAction): AppState {
@@ -123,6 +127,9 @@ function appReducer(state: AppState, action: AppAction): AppState {
     case 'SET_LOADING':
       return { ...state, isLoading: action.payload };
     
+    case 'SET_USER_PROFILE':
+      return { ...state, userProfile: action.payload };
+    
     case 'LOAD_DATA':
       return {
         ...state,
@@ -187,6 +194,35 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           dispatch({ type: 'SET_TEACHER', payload: teacher });
         }
         
+        // تحميل بروفايل المستخدم من users/{uid}
+        try {
+          const userRef = doc(firestore, COLLECTIONS.USERS, user.uid);
+          const snap = await getDoc(userRef);
+          if (snap.exists()) {
+            const data: any = snap.data();
+            dispatch({ type: 'SET_USER_PROFILE', payload: {
+              id: user.uid,
+              email: data.email || user.email || '',
+              name: data.name || user.displayName || 'معلم',
+              schoolId: data.schoolId ?? null,
+              role: data.role || 'member',
+              createdAt: data.createdAt ? new Date(data.createdAt.seconds ? data.createdAt.seconds * 1000 : data.createdAt) : undefined,
+            }});
+          } else {
+            const basic = {
+              email: user.email || '',
+              name: user.displayName || 'معلم',
+              schoolId: null,
+              role: 'member' as const,
+            };
+            await setDoc(userRef, basic, { merge: true });
+            dispatch({ type: 'SET_USER_PROFILE', payload: { id: user.uid, ...(basic as any) } });
+          }
+        } catch (e) {
+          console.warn('Failed to load user profile', e);
+          dispatch({ type: 'SET_USER_PROFILE', payload: null });
+        }
+
         loadData();
       } else {
         console.log('🔄 تغيير حالة المصادقة - تسجيل خروج');
@@ -194,6 +230,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         dispatch({ type: 'SET_TEACHER', payload: null });
         dispatch({ type: 'SET_CLASSES', payload: [] });
         dispatch({ type: 'SET_LOADING', payload: false });
+        dispatch({ type: 'SET_USER_PROFILE', payload: null });
       }
     });
 
@@ -400,8 +437,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const refreshData = async (): Promise<void> => {
-    dispatch({ type: 'SET_LOADING', payload: true });
-    await loadData();
+    try {
+      dispatch({ type: 'SET_LOADING', payload: true });
+      const user = auth.currentUser;
+      if (user) {
+        try {
+          const userRef = doc(firestore, COLLECTIONS.USERS, user.uid);
+          const snap = await getDoc(userRef);
+          if (snap.exists()) {
+            const data: any = snap.data();
+            dispatch({ type: 'SET_USER_PROFILE', payload: {
+              id: user.uid,
+              email: data.email || user.email || '',
+              name: data.name || user.displayName || 'معلم',
+              schoolId: data.schoolId ?? null,
+              role: data.role || 'member',
+              createdAt: data.createdAt ? new Date(data.createdAt.seconds ? data.createdAt.seconds * 1000 : data.createdAt) : undefined,
+            }});
+          }
+        } catch (e) {
+          console.warn('Failed to refresh user profile', e);
+        }
+      }
+      await loadData();
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: false });
+    }
   };
 
   // تحميل جلسات الحضور بشكل lazy لفصل محدد مع cache-first strategy

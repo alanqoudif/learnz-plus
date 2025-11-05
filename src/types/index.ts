@@ -39,6 +39,36 @@ export interface AttendanceSession {
   createdAt: Date;
 }
 
+// Community and user profile types
+export type UserRole = 'leader' | 'member';
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  name: string;
+  schoolId: string | null;
+  role: UserRole;
+  createdAt?: Date;
+}
+
+export interface School {
+  id: string;
+  name: string;
+  leaderUserId: string;
+  inviteCode?: string;
+  inviteExpiresAt?: Date | null;
+}
+
+export interface CommunityPost {
+  id: string;
+  schoolId: string;
+  type: 'attendance' | 'announcement';
+  title: string;
+  body: string;
+  authorId: string;
+  createdAt: Date;
+}
+
 export type RootStackParamList = {
   Login: undefined;
   Onboarding: undefined;
@@ -50,4 +80,7 @@ export type RootStackParamList = {
   AddStudent: { classId: string };
   Attendance: { classId: string };
   AttendanceHistory: { classId: string };
+  JoinSchool: undefined;
+  Community: undefined;
+  LeaderAdmin: undefined;
 };

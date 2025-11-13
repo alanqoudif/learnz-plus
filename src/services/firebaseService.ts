@@ -53,7 +53,7 @@ export const teacherService = {
   // إنشاء معلم جديد في كولكشن المعلمين
   async createTeacher(teacher: Omit<Teacher, 'id' | 'createdAt'>): Promise<Teacher> {
     try {
-      console.log('🔄 إنشاء معلم جديد في Firebase:', teacher.name);
+      console.log('إنشاء معلم جديد في Firebase:', teacher.name);
       
       const docRef = await addDoc(collection(firestore, COLLECTIONS.TEACHERS), {
         name: teacher.name,
@@ -76,10 +76,10 @@ export const teacherService = {
         createdAt: timestampToDate(data.createdAt)
       };
 
-      console.log('✅ تم إنشاء المعلم بنجاح:', newTeacher.id);
+      console.log('تم إنشاء المعلم بنجاح:', newTeacher.id);
       return newTeacher;
     } catch (error: any) {
-      console.error('❌ خطأ في إنشاء المعلم:', error);
+      console.error('خطأ في إنشاء المعلم:', error);
       throw error;
     }
   },
@@ -87,7 +87,7 @@ export const teacherService = {
   // إنشاء أو تحديث معلم من Firebase Auth
   async createOrUpdateTeacherFromAuth(user: any): Promise<Teacher> {
     try {
-      console.log('🔄 إنشاء/تحديث معلم من Firebase Auth:', user.uid);
+      console.log('إنشاء/تحديث معلم من Firebase Auth:', user.uid);
       
       const teacherData = {
         name: user.displayName || 'معلم',
@@ -138,7 +138,7 @@ export const teacherService = {
         };
       }
     } catch (error: any) {
-      console.error('❌ خطأ في إنشاء/تحديث المعلم:', error);
+      console.error('خطأ في إنشاء/تحديث المعلم:', error);
       throw error;
     }
   },
@@ -196,7 +196,7 @@ export const classService = {
   // إنشاء فصل جديد في كولكشن الفصول
   async createClass(classData: Omit<Class, 'id' | 'createdAt' | 'students'>): Promise<Class> {
     try {
-      console.log('🔄 إنشاء فصل جديد في Firebase:', classData.name);
+      console.log('إنشاء فصل جديد في Firebase:', classData.name);
       
       const docRef = await addDoc(collection(firestore, COLLECTIONS.CLASSES), {
         name: classData.name,
@@ -207,7 +207,7 @@ export const classService = {
         updatedAt: serverTimestamp()
       });
 
-      console.log('✅ تم إنشاء الفصل بنجاح في Firebase:', docRef.id);
+      console.log('تم إنشاء الفصل بنجاح في Firebase:', docRef.id);
       
       return {
         id: docRef.id,
@@ -218,13 +218,13 @@ export const classService = {
         createdAt: new Date()
       };
     } catch (error: any) {
-      console.error('❌ خطأ في إنشاء الفصل:', error.code, error.message);
+      console.error('خطأ في إنشاء الفصل:', error.code, error.message);
       
       // إذا كان الخطأ بسبب عدم تفعيل Firestore
       if (error.code === 'permission-denied' || 
           error.message.includes('PERMISSION_DENIED') ||
           error.message.includes('Missing or insufficient permissions')) {
-        console.log('🔄 Firestore غير مُفعل، يرجى تفعيله في Firebase Console');
+        console.log('Firestore غير مُفعل، يرجى تفعيله في Firebase Console');
         throw new Error('يرجى تفعيل Firestore Database في Firebase Console');
       }
       
@@ -235,7 +235,7 @@ export const classService = {
   // جلب جميع فصول المعلم
   async getClassesByTeacher(teacherId: string): Promise<Class[]> {
     try {
-      console.log('🔄 Getting classes from Firebase for teacher:', teacherId);
+      console.log('Getting classes from Firebase for teacher:', teacherId);
       
       const q = query(
         collection(firestore, COLLECTIONS.CLASSES),
@@ -278,23 +278,23 @@ export const classService = {
       // ترتيب الفصول محلياً بدلاً من قاعدة البيانات
       classes.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
-      console.log('✅ Found classes in Firebase:', classes.length);
+      console.log('Found classes in Firebase:', classes.length);
       return classes;
     } catch (error: any) {
-      console.error('❌ Firebase getClassesByTeacher error:', error.code, error.message);
+      console.error('Firebase getClassesByTeacher error:', error.code, error.message);
       
       // إذا كان الخطأ بسبب عدم تفعيل Firestore
       if (error.code === 'permission-denied' || 
           error.message.includes('PERMISSION_DENIED') ||
           error.message.includes('Missing or insufficient permissions')) {
-        console.log('🔄 Firestore not configured, throwing error for fallback');
+        console.log('Firestore not configured, throwing error for fallback');
         throw new Error('يرجى تفعيل Firestore Database في Firebase Console');
       }
       
       // إذا كان الخطأ بسبب الحاجة لفهرس
       if (error.code === 'failed-precondition' || 
           error.message.includes('requires an index')) {
-        console.log('🔄 Index required, trying simplified query');
+        console.log('Index required, trying simplified query');
         // محاولة استعلام أبسط بدون ترتيب
         try {
           const simpleQuery = query(
@@ -313,10 +313,10 @@ export const classService = {
               createdAt: timestampToDate(data.createdAt)
             };
           });
-          console.log('✅ Found classes with simplified query:', simpleClasses.length);
+          console.log('Found classes with simplified query:', simpleClasses.length);
           return simpleClasses;
         } catch (simpleError) {
-          console.error('❌ Simplified query also failed:', simpleError);
+          console.error('Simplified query also failed:', simpleError);
           throw error;
         }
       }
@@ -412,7 +412,7 @@ export const studentService = {
   // إضافة طالب جديد في كولكشن الطلاب
   async createStudent(student: Omit<Student, 'id' | 'createdAt'>): Promise<Student> {
     try {
-      console.log('🔄 إضافة طالب جديد في Firebase:', student.name);
+      console.log('إضافة طالب جديد في Firebase:', student.name);
       
       const docRef = await addDoc(collection(firestore, COLLECTIONS.STUDENTS), {
         name: student.name,
@@ -421,7 +421,7 @@ export const studentService = {
         updatedAt: serverTimestamp()
       });
 
-      console.log('✅ تم إضافة الطالب بنجاح في Firebase:', docRef.id);
+      console.log('تم إضافة الطالب بنجاح في Firebase:', docRef.id);
       
       return {
         id: docRef.id,
@@ -430,7 +430,7 @@ export const studentService = {
         createdAt: new Date()
       };
     } catch (error: any) {
-      console.error('❌ خطأ في إضافة الطالب:', error);
+      console.error('خطأ في إضافة الطالب:', error);
       throw error;
     }
   },
@@ -496,7 +496,7 @@ export const attendanceService = {
 
   // تسجيل حضور/غياب
   async recordAttendance(record: Omit<AttendanceRecord, 'id' | 'createdAt'>): Promise<AttendanceRecord> {
-    console.log('💾 حفظ سجل الحضور في قاعدة البيانات:', {
+    console.log('حفظ سجل الحضور في قاعدة البيانات:', {
       studentId: record.studentId,
       sessionId: record.sessionId,
       status: record.status,
@@ -551,7 +551,7 @@ export const attendanceService = {
       createdAt: timestampToDate(data.createdAt)
     };
 
-    console.log('✅ تم حفظ سجل الحضور بنجاح:', {
+    console.log('تم حفظ سجل الحضور بنجاح:', {
       id: result.id,
       studentId: result.studentId,
       status: result.status,
@@ -564,7 +564,7 @@ export const attendanceService = {
 
   // جلب جلسات الحضور لفصل معين مع تحسين الأداء
   async getAttendanceSessionsByClass(classId: string, maxResults: number = 10): Promise<AttendanceSession[]> {
-    console.log(`🚀 تحميل جلسات الحضور للفصل: ${classId} (limit: ${maxResults})`);
+    console.log(`تحميل جلسات الحضور للفصل: ${classId} (limit: ${maxResults})`);
     
     // جلب الجلسات بدون orderBy لتجنب مشكلة الـ index
     const sessionsQuery = query(
@@ -627,7 +627,7 @@ export const attendanceService = {
     // ترتيب الجلسات يدوياً حسب التاريخ (الأحدث أولاً)
     sessions.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
     
-    console.log(`✅ تم تحميل ${sessions.length} جلسة`);
+    console.log(`تم تحميل ${sessions.length} جلسة`);
     return sessions;
   },
 
@@ -664,15 +664,15 @@ export const authService = {
   // تسجيل الدخول بالبريد الإلكتروني
   async signInWithEmail(email: string, password: string): Promise<User> {
     try {
-      console.log('🔄 محاولة تسجيل الدخول بالبريد الإلكتروني:', email);
+      console.log('محاولة تسجيل الدخول بالبريد الإلكتروني:', email);
       
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      console.log('✅ تم تسجيل الدخول بنجاح:', userCredential.user.uid);
+      console.log('تم تسجيل الدخول بنجاح:', userCredential.user.uid);
       
       // إنشاء أو تحديث المعلم في كولكشن المعلمين
       try {
         await teacherService.createOrUpdateTeacherFromAuth(userCredential.user);
-        console.log('✅ تم إنشاء/تحديث المعلم في كولكشن المعلمين');
+        console.log('تم إنشاء/تحديث المعلم في كولكشن المعلمين');
       } catch (teacherError) {
         console.warn('تحذير: فشل في إنشاء/تحديث المعلم في كولكشن المعلمين:', teacherError);
         // لا نرمي خطأ هنا لأن تسجيل الدخول نجح
@@ -680,13 +680,13 @@ export const authService = {
       
       return userCredential.user;
     } catch (error: any) {
-      console.error('❌ خطأ في تسجيل الدخول:', error.code, error.message);
+      console.error('خطأ في تسجيل الدخول:', error.code, error.message);
       
       // إذا كان الخطأ بسبب عدم تفعيل Authentication
       if (error.code === 'auth/configuration-not-found' || 
           error.code === 'auth/operation-not-allowed' ||
           error.message.includes('PERMISSION_DENIED')) {
-        console.log('🔄 Firebase Auth غير مُفعل، يرجى تفعيله في Firebase Console');
+        console.log('Firebase Auth غير مُفعل، يرجى تفعيله في Firebase Console');
         throw new Error('يرجى تفعيل Authentication في Firebase Console');
       }
       
@@ -716,17 +716,17 @@ export const authService = {
   // تسجيل الدخول برقم الهاتف
   async signInWithPhone(phoneNumber: string, password: string): Promise<User> {
     try {
-      console.log('🔄 Attempting to sign in with phone:', phoneNumber);
+      console.log('Attempting to sign in with phone:', phoneNumber);
       
       // في Firebase، سنستخدم البريد الإلكتروني بدلاً من رقم الهاتف
       const email = `${phoneNumber}@teacher.app`;
-      console.log('📧 Using email:', email);
+      console.log('Using email:', email);
       
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      console.log('✅ Sign in successful:', userCredential.user.uid);
+      console.log('Sign in successful:', userCredential.user.uid);
       return userCredential.user;
     } catch (error: any) {
-      console.error('❌ Sign in error:', error.code, error.message);
+      console.error('Sign in error:', error.code, error.message);
       throw error;
     }
   },
@@ -734,17 +734,17 @@ export const authService = {
   // إنشاء حساب جديد
   async createAccount(email: string, password: string, name: string): Promise<User> {
     try {
-      console.log('🔄 إنشاء حساب جديد للبريد الإلكتروني:', email);
+      console.log('إنشاء حساب جديد للبريد الإلكتروني:', email);
       
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      console.log('✅ تم إنشاء الحساب بنجاح:', userCredential.user.uid);
+      console.log('تم إنشاء الحساب بنجاح:', userCredential.user.uid);
       
       // تحديث اسم المستخدم
       try {
         await updateProfile(userCredential.user, {
           displayName: name
         });
-        console.log('✅ تم تحديث ملف المستخدم بالاسم:', name);
+        console.log('تم تحديث ملف المستخدم بالاسم:', name);
       } catch (profileError) {
         console.warn('تحذير: لم يتم تحديث ملف المستخدم:', profileError);
         // لا نرمي خطأ هنا لأن الحساب تم إنشاؤه بنجاح
@@ -753,7 +753,7 @@ export const authService = {
       // إنشاء المعلم في كولكشن المعلمين
       try {
         await teacherService.createOrUpdateTeacherFromAuth(userCredential.user);
-        console.log('✅ تم إنشاء المعلم في كولكشن المعلمين');
+        console.log('تم إنشاء المعلم في كولكشن المعلمين');
       } catch (teacherError) {
         console.warn('تحذير: فشل في إنشاء المعلم في كولكشن المعلمين:', teacherError);
         // لا نرمي خطأ هنا لأن الحساب تم إنشاؤه بنجاح
@@ -761,13 +761,13 @@ export const authService = {
 
       return userCredential.user;
     } catch (error: any) {
-      console.error('❌ خطأ في إنشاء الحساب:', error.code, error.message);
+      console.error('خطأ في إنشاء الحساب:', error.code, error.message);
       
       // إذا كان الخطأ بسبب عدم تفعيل Authentication
       if (error.code === 'auth/configuration-not-found' || 
           error.code === 'auth/operation-not-allowed' ||
           error.message.includes('PERMISSION_DENIED')) {
-        console.log('🔄 Firebase Auth غير مُفعل، يرجى تفعيله في Firebase Console');
+        console.log('Firebase Auth غير مُفعل، يرجى تفعيله في Firebase Console');
         throw new Error('يرجى تفعيل Authentication في Firebase Console');
       }
       
@@ -794,11 +794,11 @@ export const authService = {
   // تسجيل الخروج
   async signOut(): Promise<void> {
     try {
-      console.log('🔄 Signing out...');
+      console.log('Signing out...');
       await signOut(auth);
-      console.log('✅ Sign out successful');
+      console.log('Sign out successful');
     } catch (error: any) {
-      console.error('❌ Sign out error:', error.code, error.message);
+      console.error('Sign out error:', error.code, error.message);
       throw error;
     }
   },
@@ -806,14 +806,14 @@ export const authService = {
   // الحصول على المستخدم الحالي
   getCurrentUser(): User | null {
     const user = auth.currentUser;
-    console.log('👤 Current user:', user ? user.uid : 'None');
+    console.log('Current user:', user ? user.uid : 'None');
     return user;
   },
 
   // التحقق من حالة المصادقة
   async checkAuthStatus(): Promise<{ isEnabled: boolean; error?: string }> {
     try {
-      console.log('🔄 Checking Firebase Auth status...');
+      console.log('Checking Firebase Auth status...');
       
       // محاولة الوصول إلى auth object
       if (!auth) {
@@ -822,11 +822,11 @@ export const authService = {
       
       // محاولة الحصول على المستخدم الحالي
       const currentUser = auth.currentUser;
-      console.log('✅ Auth service is working, current user:', currentUser ? 'Logged in' : 'Not logged in');
+      console.log('Auth service is working, current user:', currentUser ? 'Logged in' : 'Not logged in');
       
       return { isEnabled: true };
     } catch (error: any) {
-      console.error('❌ Auth status check failed:', error);
+      console.error('Auth status check failed:', error);
       return { isEnabled: false, error: error.message };
     }
   },

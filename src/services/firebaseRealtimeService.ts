@@ -38,7 +38,7 @@ export class FirebaseRealtimeService {
           onAttendanceChange(data);
         }
       }, (error) => {
-        console.error('❌ Firebase Realtime Database error:', error);
+        console.error('Firebase Realtime Database error:', error);
         // لا نرمي خطأ هنا، فقط نسجل الخطأ
       });
 
@@ -53,7 +53,7 @@ export class FirebaseRealtimeService {
       this.subscriptions.set(subscriptionKey, subscription);
       return subscription;
     } catch (error) {
-      console.error('❌ Error setting up attendance subscription:', error);
+      console.error('Error setting up attendance subscription:', error);
       
       // إرجاع subscription وهمي في حالة الخطأ
       const dummySubscription: RealtimeSubscription = {
@@ -84,11 +84,11 @@ export class FirebaseRealtimeService {
       const unsubscribe = onValue(notificationsRef, (snapshot) => {
         const data = snapshot.val();
         if (data) {
-          console.log('🔔 Notification received:', data);
+          console.log('Notification received:', data);
           onNotificationChange(data);
         }
       }, (error) => {
-        console.error('❌ Firebase Realtime Database error:', error);
+        console.error('Firebase Realtime Database error:', error);
         // لا نرمي خطأ هنا، فقط نسجل الخطأ
       });
 
@@ -103,7 +103,7 @@ export class FirebaseRealtimeService {
       this.subscriptions.set(subscriptionKey, subscription);
       return subscription;
     } catch (error) {
-      console.error('❌ Error setting up notifications subscription:', error);
+      console.error('Error setting up notifications subscription:', error);
       
       // إرجاع subscription وهمي في حالة الخطأ
       const dummySubscription: RealtimeSubscription = {

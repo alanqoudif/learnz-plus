@@ -29,8 +29,29 @@ function MainTabs() {
   const canAccessCommunity = userProfile?.tier === 'plus' || isAppAdmin;
   const isLeader = userProfile?.role === 'leader';
 
+  const tabScreens = React.useMemo(() => {
+    const screens: Array<{ name: string; component: React.ComponentType<any>; title: string }> = [
+      { name: 'Dashboard', component: DashboardScreen, title: 'الرئيسية' },
+    ];
+
+    if (canAccessCommunity) {
+      screens.push({ name: 'Community', component: CommunityScreen, title: 'المجتمع' });
+    }
+
+    if (isLeader) {
+      screens.push({ name: 'LeaderAdmin', component: LeaderAdminScreen, title: 'إدارة المدرسة' });
+    }
+
+    if (isAppAdmin) {
+      screens.push({ name: 'AppAdmin', component: AppAdminScreen, title: 'إدارة التطبيق' });
+    }
+
+    return screens;
+  }, [canAccessCommunity, isLeader, isAppAdmin]);
+
   return (
     <Tab.Navigator
+      key={`tabs-${tabScreens.map(screen => screen.name).join('-')}`}
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarActiveTintColor: colors.primary,
@@ -70,16 +91,14 @@ function MainTabs() {
         },
       })}
     >
-      <Tab.Screen name="Dashboard" component={DashboardScreen} options={{ title: 'الرئيسية' }} />
-      {canAccessCommunity && (
-        <Tab.Screen name="Community" component={CommunityScreen} options={{ title: 'المجتمع' }} />
-      )}
-      {isLeader && (
-        <Tab.Screen name="LeaderAdmin" component={LeaderAdminScreen} options={{ title: 'إدارة المدرسة' }} />
-      )}
-      {isAppAdmin && (
-        <Tab.Screen name="AppAdmin" component={AppAdminScreen} options={{ title: 'إدارة التطبيق' }} />
-      )}
+      {tabScreens.map(screen => (
+        <Tab.Screen
+          key={screen.name}
+          name={screen.name}
+          component={screen.component}
+          options={{ title: screen.title }}
+        />
+      ))}
     </Tab.Navigator>
   );
 }
@@ -90,6 +109,7 @@ function AppNavigator() {
   return (
     <NavigationContainer>
       <Stack.Navigator
+        initialRouteName={state.currentTeacher ? 'MainTabs' : 'Login'}
         screenOptions={{
           headerShown: false,
           gestureEnabled: true,
@@ -99,7 +119,7 @@ function AppNavigator() {
         {state.currentTeacher ? (
           // المستخدم مسجل دخول
           <>
-            <Stack.Screen name="Dashboard" component={MainTabs} />
+            <Stack.Screen name="MainTabs" component={MainTabs} />
             <Stack.Screen name="Community" component={CommunityScreen} />
             <Stack.Screen name="JoinSchool" component={JoinSchoolScreen} />
             <Stack.Screen name="LeaderAdmin" component={LeaderAdminScreen} />

@@ -103,7 +103,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
         );
       }
     } catch (error: any) {
-      console.error('❌ خطأ في المصادقة:', error);
+      console.error('خطأ في المصادقة:', error);
       const message = error?.message || 'حدث خطأ أثناء تنفيذ الطلب';
       Alert.alert('خطأ', message.includes('auth/user-not-found') ? 'لا يوجد حساب بهذا البريد. جرّب إنشاء حساب جديد.' : message);
     } finally {

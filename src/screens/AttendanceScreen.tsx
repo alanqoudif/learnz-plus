@@ -59,8 +59,8 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
   // تحميل الجلسة الموجودة عند التركيز على الشاشة
   useFocusEffect(
     React.useCallback(() => {
-      console.log('🔄 الشاشة أصبحت نشطة - إعادة تحميل البيانات...');
-      console.log('🔍 حالة الجلسة الحالية:', {
+      console.log('الشاشة أصبحت نشطة - إعادة تحميل البيانات...');
+      console.log('حالة الجلسة الحالية:', {
         isSessionCompleted,
         studentsLength: students.length,
         sessionId,
@@ -70,8 +70,8 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
       
       // إذا كانت الجلسة مكتملة محلياً أو في حالة إنهاء، لا نعيد تعيين أي شيء
       if (isSessionCompleted || isFinishingRef.current) {
-        console.log('✅ الجلسة مكتملة أو في حالة إنهاء - لا حاجة لإعادة التعيين');
-        console.log('🔍 حالة الجلسة الحالية:', {
+        console.log('الجلسة مكتملة أو في حالة إنهاء - لا حاجة لإعادة التعيين');
+        console.log('حالة الجلسة الحالية:', {
           isSessionCompleted,
           isFinishing: isFinishingRef.current,
           studentsLength: students.length,
@@ -82,8 +82,8 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
       
       // إذا كانت الجلسة نشطة ولا تزال في التقدم، لا نعيد تعيين أي شيء
       if (isSessionStarted && sessionId && !isSessionCompleted) {
-        console.log('🔄 الجلسة نشطة - لا حاجة لإعادة التعيين');
-        console.log('🔍 حالة الجلسة النشطة:', {
+        console.log('الجلسة نشطة - لا حاجة لإعادة التعيين');
+        console.log('حالة الجلسة النشطة:', {
           isSessionStarted,
           sessionId,
           isSessionCompleted,
@@ -105,12 +105,12 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
       
       // بدء جلسة جديدة تلقائياً
       setTimeout(() => {
-        console.log('🚀 بدء جلسة جديدة تلقائياً...');
+        console.log('بدء جلسة جديدة تلقائياً...');
         startAttendanceSession();
       }, 100);
       
       return () => {
-        console.log('🧹 تنظيف عند مغادرة الشاشة...');
+        console.log('تنظيف عند مغادرة الشاشة...');
       };
     }, [classId])
   );
@@ -131,7 +131,7 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
       setIsSessionStarted(true);
       setAttendanceRecords({});
       
-      console.log('🎯 بدء جلسة جديدة:', {
+      console.log('بدء جلسة جديدة:', {
         sessionId: newSession.id,
         studentsCount: students.length
       });
@@ -143,16 +143,16 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
   };
 
   const markStudentAttendance = useCallback((studentId: string, status: 'present' | 'absent') => {
-    console.log('🔘 تسجيل حضور محلي للطالب:', studentId, status);
+    console.log('تسجيل حضور محلي للطالب:', studentId, status);
 
     if (!sessionId) {
-      console.log('❌ لا يمكن تسجيل الحضور - لا يوجد sessionId');
+      console.log('لا يمكن تسجيل الحضور - لا يوجد sessionId');
       errorHaptic();
       return;
     }
 
     if (isSessionCompleted) {
-      console.log('✅ الجلسة مكتملة - لا يمكن تسجيل حضور إضافي');
+      console.log('الجلسة مكتملة - لا يمكن تسجيل حضور إضافي');
       return;
     }
 
@@ -162,7 +162,7 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
       [studentId]: status,
     };
     setAttendanceRecords(updatedRecords);
-    console.log(`📝 تم تحديث السجلات المحلية للطالب: ${studentId}`);
+    console.log(`تم تحديث السجلات المحلية للطالب: ${studentId}`);
 
     // Success haptic عند تسجيل ناجح
     if (status === 'present') {
@@ -185,17 +185,17 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
           attendanceTime: new Date(),
         }));
 
-      console.log(`💾 بدء حفظ ${recordsToSave.length} سجل في قاعدة البيانات...`);
+      console.log(`بدء حفظ ${recordsToSave.length} سجل في قاعدة البيانات...`);
 
       // حفظ السجلات بالتوازي
       await Promise.all(
         recordsToSave.map(record => recordAttendance(record))
       );
 
-      console.log(`✅ تم حفظ جميع السجلات بنجاح`);
+      console.log('تم حفظ جميع السجلات بنجاح');
       await finishAttendanceSession();
     } catch (error) {
-      console.error('❌ خطأ في حفظ السجلات:', error);
+      console.error('خطأ في حفظ السجلات:', error);
       showErrorAlert('حدث خطأ أثناء حفظ السجلات');
       setIsSubmitting(false);
     }
@@ -231,7 +231,7 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
 
       await saveAllAttendanceRecords();
     } catch (error) {
-      console.error('❌ خطأ في تسليم الحضور:', error);
+      console.error('خطأ في تسليم الحضور:', error);
       showErrorAlert('حدث خطأ أثناء تسليم الحضور');
       setIsSubmitting(false);
     }
@@ -242,14 +242,14 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
     
     // فحص إضافي لمنع التنفيذ المتعدد
     if (isFinishingRef.current && isSessionCompleted) {
-      console.log('🚫 الجلسة في حالة إنهاء بالفعل - تجاهل الطلب');
+      console.log('الجلسة في حالة إنهاء بالفعل - تجاهل الطلب');
       return;
     }
     
     // تحديد أن الجلسة في حالة إنهاء
     isFinishingRef.current = true;
     
-    console.log('🎯 بدء إنهاء الجلسة مع السجلات:', {
+    console.log('بدء إنهاء الجلسة مع السجلات:', {
       sessionId,
       recordsCount: Object.keys(attendanceRecords).length,
       studentsCount: students.length,
@@ -263,7 +263,7 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
     const totalStudents = students.length;
     const totalRecorded = actualPresentCount + actualAbsentCount;
     
-    console.log('🔍 تشخيص إحصائيات الحضور النهائية:', {
+    console.log('تشخيص إحصائيات الحضور النهائية:', {
       totalStudents,
       totalRecorded,
       actualPresentCount,
@@ -291,7 +291,7 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
     }
 
     // العودة مباشرة للشاشة السابقة
-    console.log('🚪 العودة للشاشة السابقة بعد إكمال الجلسة');
+    console.log('العودة للشاشة السابقة بعد إكمال الجلسة');
     isFinishingRef.current = false; // إعادة تعيين بعد العودة
     navigation.goBack();
   }, [sessionId, attendanceRecords, students, classId, state.currentTeacher?.id, isSessionCompleted, navigation]);

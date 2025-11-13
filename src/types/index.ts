@@ -74,7 +74,7 @@ export interface CommunityPost {
 export type RootStackParamList = {
   Login: undefined;
   Onboarding: undefined;
-  Dashboard: undefined;
+  MainTabs: undefined;
   ClassManagement: undefined;
   AddClass: undefined;
   EditClass: { classId: string };

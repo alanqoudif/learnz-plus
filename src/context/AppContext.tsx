@@ -231,15 +231,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user: User | null) => {
       if (user) {
-        console.log('🔄 تغيير حالة المصادقة - تسجيل دخول:', user.uid);
+        console.log('[Auth] Auth state changed - sign in:', user.uid);
         
         // إنشاء أو تحديث المعلم في كولكشن المعلمين
         let teacherRecord: Teacher;
         try {
           teacherRecord = await teacherService.createOrUpdateTeacherFromAuth(user);
-          console.log('✅ تم إنشاء/تحديث المعلم في كولكشن المعلمين:', teacherRecord.id);
+          console.log('[Teacher] Synced teacher record:', teacherRecord.id);
         } catch (error) {
-          console.warn('تحذير: فشل في إنشاء/تحديث المعلم في كولكشن المعلمين:', error);
+          console.warn('Warning: Failed to sync teacher record:', error);
           teacherRecord = {
             id: user.uid,
             name: user.displayName || 'معلم',
@@ -255,19 +255,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           const userRef = doc(firestore, COLLECTIONS.USERS, user.uid);
           const snap = await getDoc(userRef);
           const normalizedEmail = (user.email || '').toLowerCase();
-          const isAppAdmin = APP_ADMIN_EMAILS.includes(normalizedEmail);
+          const existingData = snap.exists() ? (snap.data() as any) : null;
+          const docIsAppAdmin = !!existingData?.isAppAdmin;
+          const isAppAdmin = docIsAppAdmin || APP_ADMIN_EMAILS.includes(normalizedEmail);
           if (snap.exists()) {
-            const data: any = snap.data();
-            const tier = data.tier || (isAppAdmin ? ADMIN_ACCOUNT_TIER : DEFAULT_ACCOUNT_TIER);
-            const role = data.role || (isAppAdmin ? 'leader' : 'member');
+            const data: any = existingData;
+            const defaultTier = isAppAdmin ? ADMIN_ACCOUNT_TIER : DEFAULT_ACCOUNT_TIER;
+            const resolvedTier = data.tier || defaultTier;
+            const resolvedRole = data.role || (isAppAdmin ? 'leader' : 'member');
             const profile: UserProfile = {
               id: user.uid,
               email: data.email || normalizedEmail,
               name: data.name || user.displayName || 'معلم',
               schoolId: data.schoolId ?? null,
-              role,
+              role: resolvedRole,
               createdAt: data.createdAt ? new Date(data.createdAt.seconds ? data.createdAt.seconds * 1000 : data.createdAt) : undefined,
-              tier,
+              tier: resolvedTier,
               isAppAdmin,
             };
             dispatch({ type: 'SET_USER_PROFILE', payload: profile });
@@ -299,7 +302,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
         loadData();
       } else {
-        console.log('🔄 تغيير حالة المصادقة - تسجيل خروج');
+        console.log('[Auth] Auth state changed - sign out');
         // تسجيل خروج
         dispatch({ type: 'SET_TEACHER', payload: null });
         dispatch({ type: 'SET_CLASSES', payload: [] });
@@ -322,7 +325,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       state.currentTeacher.id,
       async (data) => {
         try {
-          console.log('🔄 تحديث realtime للحضور:', data);
+          console.log('[Realtime] Attendance update received:', data);
           
           if (data.type === 'session_completed' || data.type === 'attendance_recorded') {
             // تحديث فوري للجلسة المحددة فقط بدلاً من إعادة تحميل جميع الجلسات
@@ -331,7 +334,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               const filteredSessions = state.attendanceSessions.filter(s => s.classId !== data.classId);
               const allSessions = [...filteredSessions, ...updatedSessions];
               dispatch({ type: 'SET_ATTENDANCE_SESSIONS', payload: allSessions });
-              console.log(`✅ تم تحديث جلسات الفصل ${data.classId} فوراً`);
+              console.log(`[Realtime] Updated sessions for class ${data.classId}`);
             }
           } else {
             // للأنواع الأخرى، إعادة تحميل جميع الجلسات
@@ -397,7 +400,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       const classes = await classService.getClassesByTeacher(teacher.id);
 
-      console.log('✅ تحميل سريع - الفصول فقط:', {
+      console.log('[Classes] Loaded classes without sessions:', {
         teacherId: teacher.id,
         classesCount: classes.length,
         message: 'الجلسات سيتم تحميلها عند الحاجة'
@@ -656,10 +659,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           const userRef = doc(firestore, COLLECTIONS.USERS, user.uid);
           const snap = await getDoc(userRef);
           const normalizedEmail = (user.email || '').toLowerCase();
-          const isAppAdmin = APP_ADMIN_EMAILS.includes(normalizedEmail);
+          const existingData = snap.exists() ? (snap.data() as any) : null;
+          const docIsAppAdmin = !!existingData?.isAppAdmin;
+          const isAppAdmin = docIsAppAdmin || APP_ADMIN_EMAILS.includes(normalizedEmail);
           if (snap.exists()) {
-            const data: any = snap.data();
-            const tier = data.tier || (isAppAdmin ? ADMIN_ACCOUNT_TIER : DEFAULT_ACCOUNT_TIER);
+            const data: any = existingData;
+            const defaultTier = isAppAdmin ? ADMIN_ACCOUNT_TIER : DEFAULT_ACCOUNT_TIER;
+            const tier = data.tier || defaultTier;
             const role = data.role || (isAppAdmin ? 'leader' : 'member');
             dispatch({ type: 'SET_USER_PROFILE', payload: {
               id: user.uid,
@@ -686,10 +692,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // تحميل جلسات الحضور بشكل lazy لفصل محدد مع cache-first strategy
   const loadAttendanceSessions = async (classId: string, maxResults: number = 10): Promise<AttendanceSession[]> => {
     try {
-      console.log(`📥 تحميل جلسات الحضور للفصل: ${classId} (limit: ${maxResults})`);
+      console.log(`[Attendance] Loading sessions for class ${classId} (limit: ${maxResults})`);
       
       const cachedSessions = state.attendanceSessions.filter(s => s.classId === classId);
-      console.log(`💾 عرض ${cachedSessions.length} جلسة من الكاش فوراً`);
+      console.log(`[Attendance] Showing ${cachedSessions.length} cached sessions immediately`);
       
       if (state.isOffline) {
         return cachedSessions;
@@ -698,7 +704,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const updateInBackground = async () => {
         try {
           const sessions = await attendanceService.getAttendanceSessionsByClass(classId, maxResults);
-          console.log(`🔄 تحديث في الخلفية: ${sessions.length} جلسة`);
+          console.log(`[Attendance] Background refresh returned ${sessions.length} sessions`);
           
           const hasChanges = JSON.stringify(sessions) !== JSON.stringify(cachedSessions);
           if (hasChanges) {
@@ -708,10 +714,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             ];
             dispatch({ type: 'SET_ATTENDANCE_SESSIONS', payload: updatedSessions });
             await offlineStorage.saveSessions(updatedSessions);
-            console.log(`✅ تم تحديث الجلسات في الخلفية`);
+            console.log('[Attendance] Background refresh applied');
           }
         } catch (error) {
-          console.error('❌ خطأ في التحديث في الخلفية:', error);
+          console.error('خطأ في التحديث في الخلفية:', error);
         }
       };
       
@@ -719,7 +725,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       
       return cachedSessions;
     } catch (error) {
-      console.error('❌ خطأ في تحميل جلسات الحضور:', error);
+      console.error('خطأ في تحميل جلسات الحضور:', error);
       return state.attendanceSessions.filter(s => s.classId === classId);
     }
   };

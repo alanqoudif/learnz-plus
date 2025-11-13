@@ -34,7 +34,7 @@ export class FirebaseRealtimeService {
       const unsubscribe = onValue(attendanceRef, (snapshot) => {
         const data = snapshot.val();
         if (data) {
-          console.log('📅 Attendance update detected:', data);
+        console.log('Attendance update detected:', data);
           onAttendanceChange(data);
         }
       }, (error) => {

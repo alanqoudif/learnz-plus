@@ -1,5 +1,6 @@
 import React, { useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Class } from '../types';
 import { colors, fontFamilies, shadows, borderRadius, spacing } from '../utils/theme';
 import { scaleButton } from '../utils/animations';
@@ -63,17 +64,17 @@ const ClassCard: React.FC<ClassCardProps> = React.memo(({
             onPress={handleDelete}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Text style={styles.deleteIcon}>🗑️</Text>
+            <Ionicons name="trash-outline" size={18} color={colors.danger} />
           </TouchableOpacity>
         </View>
 
         <View style={styles.info}>
           <View style={styles.infoRow}>
-            <Text style={styles.infoIcon}>👥</Text>
+            <Ionicons name="people-outline" size={16} color={colors.text.secondary} style={styles.infoIcon} />
             <Text style={styles.infoText}>عدد الطلاب: {item.students.length}</Text>
           </View>
           <View style={styles.infoRow}>
-            <Text style={styles.infoIcon}>📅</Text>
+            <Ionicons name="calendar-outline" size={16} color={colors.text.secondary} style={styles.infoIcon} />
             <Text style={styles.infoDate}>
               {new Date(item.createdAt).toLocaleDateString('ar-SA')}
             </Text>
@@ -104,7 +105,10 @@ const ClassCard: React.FC<ClassCardProps> = React.memo(({
           onPress={handleViewHistory}
           activeOpacity={0.8}
         >
-          <Text style={styles.historyButtonText}>📊 عرض تاريخ الحضور</Text>
+          <View style={styles.historyButtonContent}>
+            <Ionicons name="analytics-outline" size={16} color={colors.primary} style={styles.historyIcon} />
+            <Text style={styles.historyButtonText}>عرض تاريخ الحضور</Text>
+          </View>
         </TouchableOpacity>
       </TouchableOpacity>
     </Animated.View>
@@ -162,9 +166,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border.medium,
   },
-  deleteIcon: {
-    fontSize: 18,
-  },
   info: {
     marginBottom: spacing.md,
   },
@@ -175,7 +176,6 @@ const styles = StyleSheet.create({
     direction: 'rtl',
   },
   infoIcon: {
-    fontSize: 14,
     marginLeft: spacing.xs,
   },
   infoText: {
@@ -217,14 +217,24 @@ const styles = StyleSheet.create({
     color: colors.text.light,
   },
   historyButton: {
-    backgroundColor: colors.info,
+    backgroundColor: colors.background.secondary,
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.lg,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border.medium,
+  },
+  historyButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  historyIcon: {
+    marginLeft: spacing.xs,
   },
   historyButtonText: {
-    color: colors.text.light,
+    color: colors.primary,
     fontFamily: fontFamilies.semibold,
     fontSize: 14,
   },

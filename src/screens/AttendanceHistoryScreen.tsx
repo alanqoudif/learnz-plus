@@ -51,7 +51,7 @@ export default function AttendanceHistoryScreen({ navigation, route }: Attendanc
   }, [classId]);
 
   // تشخيص تحميل البيانات
-  console.log('📊 تشخيص بيانات تاريخ الحضور:', {
+  console.log('تشخيص بيانات تاريخ الحضور:', {
     classId,
     currentClass: currentClass ? { 
       id: currentClass.id, 
@@ -152,7 +152,7 @@ export default function AttendanceHistoryScreen({ navigation, route }: Attendanc
         {stats.presentCount + stats.absentCount < stats.totalCount && (
           <View style={styles.warningContainer}>
             <Text style={styles.warningText}>
-              ⚠️ لم يتم تسجيل {stats.totalCount - (stats.presentCount + stats.absentCount)} طالب
+              لم يتم تسجيل {stats.totalCount - (stats.presentCount + stats.absentCount)} طلاب في هذه الجلسة
             </Text>
           </View>
         )}
@@ -169,7 +169,7 @@ export default function AttendanceHistoryScreen({ navigation, route }: Attendanc
     const attendanceTime = new Date(rawTime);
     
     // إضافة تشخيص للوقت
-    console.log('🕐 تشخيص الوقت للطالب', student.name, ':', {
+    console.log('تشخيص الوقت للطالب', student.name, ':', {
       raw: rawTime,
       parsed: attendanceTime,
       localTime: attendanceTime.toLocaleString('ar-SA', {

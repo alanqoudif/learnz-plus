@@ -674,7 +674,7 @@ export const authService = {
         await teacherService.createOrUpdateTeacherFromAuth(userCredential.user);
         console.log('✅ تم إنشاء/تحديث المعلم في كولكشن المعلمين');
       } catch (teacherError) {
-        console.warn('⚠️ تحذير: فشل في إنشاء/تحديث المعلم في كولكشن المعلمين:', teacherError);
+        console.warn('تحذير: فشل في إنشاء/تحديث المعلم في كولكشن المعلمين:', teacherError);
         // لا نرمي خطأ هنا لأن تسجيل الدخول نجح
       }
       
@@ -746,7 +746,7 @@ export const authService = {
         });
         console.log('✅ تم تحديث ملف المستخدم بالاسم:', name);
       } catch (profileError) {
-        console.warn('⚠️ تحذير: لم يتم تحديث ملف المستخدم:', profileError);
+        console.warn('تحذير: لم يتم تحديث ملف المستخدم:', profileError);
         // لا نرمي خطأ هنا لأن الحساب تم إنشاؤه بنجاح
       }
 
@@ -755,7 +755,7 @@ export const authService = {
         await teacherService.createOrUpdateTeacherFromAuth(userCredential.user);
         console.log('✅ تم إنشاء المعلم في كولكشن المعلمين');
       } catch (teacherError) {
-        console.warn('⚠️ تحذير: فشل في إنشاء المعلم في كولكشن المعلمين:', teacherError);
+        console.warn('تحذير: فشل في إنشاء المعلم في كولكشن المعلمين:', teacherError);
         // لا نرمي خطأ هنا لأن الحساب تم إنشاؤه بنجاح
       }
 

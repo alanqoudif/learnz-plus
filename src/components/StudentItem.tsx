@@ -1,5 +1,6 @@
 import React, { useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Student } from '../types';
 import { colors, fontFamilies, borderRadius, spacing } from '../utils/theme';
 import { scaleButton } from '../utils/animations';
@@ -46,7 +47,7 @@ const StudentItem: React.FC<StudentItemProps> = React.memo(({
           onPress={handleDelete}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Text style={styles.deleteIcon}>🗑️</Text>
+          <Ionicons name="trash-outline" size={18} color={colors.danger} />
         </TouchableOpacity>
       </View>
     </Animated.View>
@@ -113,9 +114,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: colors.border.medium,
-  },
-  deleteIcon: {
-    fontSize: 16,
   },
 });
 

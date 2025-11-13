@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -10,138 +10,149 @@ import {
   Platform,
   ScrollView,
 } from 'react-native';
-import { useApp } from '../context/AppContext';
-import { Teacher } from '../types';
-import { validateName, validatePhoneNumber, formatName } from '../utils/validation';
+import { Ionicons } from '@expo/vector-icons';
+import { validateName, formatName } from '../utils/validation';
 import { fontFamilies } from '../utils/theme';
 import { smartAuthService as authService } from '../services/smartService';
 import { firestore, COLLECTIONS } from '../config/firebase';
 import { doc, setDoc } from 'firebase/firestore';
+import { APP_ADMIN_EMAILS, ADMIN_ACCOUNT_TIER, DEFAULT_ACCOUNT_TIER } from '../config/appConfig';
 
 interface LoginScreenProps {
   navigation: any;
 }
 
+type AuthMode = 'login' | 'register';
+
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export default function LoginScreen({ navigation }: LoginScreenProps) {
+  const [mode, setMode] = useState<AuthMode>('login');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const { dispatch } = useApp();
 
-  const handleLogin = async () => {
-    // التحقق من صحة البيانات
-    if (!name.trim()) {
-      Alert.alert('خطأ', 'يرجى إدخال الاسم');
-      return;
-    }
+  const normalizedEmail = email.trim().toLowerCase();
+  const isAdminEmail = useMemo(() => APP_ADMIN_EMAILS.includes(normalizedEmail), [normalizedEmail]);
 
+  const validateInputs = () => {
     if (!email.trim()) {
       Alert.alert('خطأ', 'يرجى إدخال البريد الإلكتروني');
-      return;
+      return false;
     }
 
-    if (!password.trim()) {
-      Alert.alert('خطأ', 'يرجى إدخال كلمة المرور');
-      return;
-    }
-
-    if (!validateName(name)) {
-      Alert.alert('خطأ', 'يرجى إدخال اسم صحيح (حروف فقط)');
-      return;
-    }
-
-    // التحقق من صحة البريد الإلكتروني
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    if (!emailRegex.test(normalizedEmail)) {
       Alert.alert('خطأ', 'يرجى إدخال بريد إلكتروني صحيح');
-      return;
+      return false;
     }
 
-    if (password.length < 6) {
+    if (!password.trim() || password.length < 6) {
       Alert.alert('خطأ', 'كلمة المرور يجب أن تكون 6 أحرف على الأقل');
-      return;
+      return false;
     }
+
+    if (mode === 'register') {
+      if (!name.trim()) {
+        Alert.alert('خطأ', 'يرجى إدخال الاسم الكامل');
+        return false;
+      }
+
+      if (!validateName(name)) {
+        Alert.alert('خطأ', 'يرجى إدخال اسم صحيح (حروف فقط)');
+        return false;
+      }
+    }
+
+    return true;
+  };
+
+  const handleSubmit = async () => {
+    if (!validateInputs()) return;
 
     setIsLoading(true);
 
     try {
-      const formattedName = formatName(name);
-      const formattedEmail = email.toLowerCase().trim();
+      const formattedName = mode === 'register' ? formatName(name) : undefined;
+      const tier = isAdminEmail ? ADMIN_ACCOUNT_TIER : DEFAULT_ACCOUNT_TIER;
+      const role = isAdminEmail ? 'leader' : 'member';
 
-      console.log('🔄 بدء عملية تسجيل الدخول للمعلم:', formattedName);
-
-      // استخدام Firebase Auth للتسجيل/تسجيل الدخول
-      try {
-        // محاولة تسجيل الدخول أولاً
-        console.log('🔄 محاولة تسجيل الدخول...');
-        const user = await authService.signInWithEmail(formattedEmail, password);
-        
-        console.log('✅ تم تسجيل الدخول بنجاح');
-        // حفظ/تحديث بروفايل المستخدم في Firestore
-        await setDoc(doc(firestore, COLLECTIONS.USERS, user.uid), {
-          email: formattedEmail,
-          name: formattedName,
-        }, { merge: true });
-        
-      } catch (loginError: any) {
-        console.log('🔄 فشل تسجيل الدخول، محاولة إنشاء حساب جديد...');
-        
-        // إذا فشل تسجيل الدخول، جرب التسجيل
-        if (loginError.message.includes('المستخدم غير موجود') || 
-            loginError.message.includes('كلمة المرور غير صحيحة') ||
-            loginError.code === 'auth/user-not-found' || 
-            loginError.code === 'auth/wrong-password') {
-          
-          const user = await authService.createAccount(formattedEmail, password, formattedName);
-          console.log('✅ تم إنشاء الحساب بنجاح');
-          // حفظ بروفايل المستخدم لأول مرة
-          await setDoc(doc(firestore, COLLECTIONS.USERS, user.uid), {
-            email: formattedEmail,
+      if (mode === 'login') {
+        const user = await authService.signInWithEmail(normalizedEmail, password);
+        await setDoc(
+          doc(firestore, COLLECTIONS.USERS, user.uid),
+          {
+            email: normalizedEmail,
+            ...(isAdminEmail ? { tier, isAppAdmin: true, role } : {}),
+          },
+          { merge: true }
+        );
+      } else {
+        const user = await authService.createAccount(normalizedEmail, password, formattedName || 'معلم');
+        await setDoc(
+          doc(firestore, COLLECTIONS.USERS, user.uid),
+          {
+            email: normalizedEmail,
             name: formattedName,
             schoolId: null,
-            role: 'member'
-          }, { merge: true });
-          
-        } else {
-          throw loginError;
-        }
+            role,
+            tier,
+            isAppAdmin: isAdminEmail,
+          },
+          { merge: true }
+        );
       }
-      
-    } catch (error) {
-      console.error('❌ خطأ في تسجيل الدخول:', error);
-      const errorMessage = error instanceof Error ? error.message : 'خطأ غير معروف';
-      Alert.alert('خطأ', errorMessage);
+    } catch (error: any) {
+      console.error('❌ خطأ في المصادقة:', error);
+      const message = error?.message || 'حدث خطأ أثناء تنفيذ الطلب';
+      Alert.alert('خطأ', message.includes('auth/user-not-found') ? 'لا يوجد حساب بهذا البريد. جرّب إنشاء حساب جديد.' : message);
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container} 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView contentContainerStyle={styles.scrollContainer}>
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
         <View style={styles.content}>
           <View style={styles.header}>
-            <Text style={styles.title}>تطبيق الحضور والغياب</Text>
-            <Text style={styles.subtitle}>للمعلمين</Text>
+            <Text style={styles.title}>لوحة التحكم للمعلمين</Text>
+            <Text style={styles.subtitle}>سجل حضور الطلاب بسهولة سواءً كنت متصلاً بالإنترنت أو لا</Text>
+          </View>
+
+          <View style={styles.modeSwitch}>
+            <TouchableOpacity
+              style={[styles.modeButton, mode === 'login' && styles.modeButtonActive]}
+              onPress={() => setMode('login')}
+              disabled={isLoading}
+            >
+              <Text style={[styles.modeButtonText, mode === 'login' && styles.modeButtonTextActive]}>تسجيل الدخول</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.modeButton, mode === 'register' && styles.modeButtonActive]}
+              onPress={() => setMode('register')}
+              disabled={isLoading}
+            >
+              <Text style={[styles.modeButtonText, mode === 'register' && styles.modeButtonTextActive]}>إنشاء حساب</Text>
+            </TouchableOpacity>
           </View>
 
           <View style={styles.form}>
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>الاسم</Text>
-              <TextInput
-                style={styles.input}
-                value={name}
-                onChangeText={setName}
-                placeholder="أدخل اسمك"
-                placeholderTextColor="#999"
-                textAlign="right"
-                autoCapitalize="words"
-              />
-            </View>
+            {mode === 'register' && (
+              <View style={styles.inputContainer}>
+                <Text style={styles.label}>الاسم الكامل</Text>
+                <TextInput
+                  style={styles.input}
+                  value={name}
+                  onChangeText={setName}
+                  placeholder="أدخل اسمك الكامل"
+                  placeholderTextColor="#999"
+                  textAlign="right"
+                  autoCapitalize="words"
+                  editable={!isLoading}
+                />
+              </View>
+            )}
 
             <View style={styles.inputContainer}>
               <Text style={styles.label}>البريد الإلكتروني</Text>
@@ -149,12 +160,13 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
                 style={styles.input}
                 value={email}
                 onChangeText={setEmail}
-                placeholder="أدخل بريدك الإلكتروني"
+                placeholder="example@school.edu"
                 placeholderTextColor="#999"
                 keyboardType="email-address"
                 textAlign="right"
                 autoCapitalize="none"
                 autoCorrect={false}
+                editable={!isLoading}
               />
             </View>
 
@@ -164,29 +176,37 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
                 style={styles.input}
                 value={password}
                 onChangeText={setPassword}
-                placeholder="أدخل كلمة المرور (6 أحرف على الأقل)"
+                placeholder="٦ أحرف على الأقل"
                 placeholderTextColor="#999"
                 textAlign="right"
-                secureTextEntry={true}
+                secureTextEntry
                 autoCapitalize="none"
                 autoCorrect={false}
+                editable={!isLoading}
               />
             </View>
 
+            {isAdminEmail && (
+              <View style={styles.adminHint}>
+                <Ionicons name="shield-checkmark-outline" size={20} color="#1f6feb" style={styles.adminHintIcon} />
+                <Text style={styles.adminHintText}>سيتم تسجيل الدخول كمدير التطبيق مع صلاحيات كاملة.</Text>
+              </View>
+            )}
+
             <TouchableOpacity
-              style={[styles.loginButton, isLoading && styles.loginButtonDisabled]}
-              onPress={handleLogin}
+              style={[styles.submitButton, isLoading && styles.submitButtonDisabled]}
+              onPress={handleSubmit}
               disabled={isLoading}
             >
-              <Text style={styles.loginButtonText}>
-                {isLoading ? 'جاري تسجيل الدخول...' : 'تسجيل الدخول'}
+              <Text style={styles.submitButtonText}>
+                {isLoading ? 'جاري المعالجة...' : mode === 'login' ? 'تسجيل الدخول' : 'إنشاء الحساب'}
               </Text>
             </TouchableOpacity>
           </View>
 
           <View style={styles.footer}>
             <Text style={styles.footerText}>
-              تطبيق بسيط وسهل لإدارة حضور وغياب الطلاب
+              التطبيق يدعم العمل دون اتصال. عند العودة للإنترنت يتم مزامنة الحضور تلقائياً.
             </Text>
           </View>
         </View>
@@ -198,93 +218,131 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
-    direction: 'rtl',
+    backgroundColor: '#f5f6fa',
   },
   scrollContainer: {
     flexGrow: 1,
+    paddingHorizontal: 24,
+    paddingVertical: 36,
   },
   content: {
     flex: 1,
-    paddingHorizontal: 20,
-    justifyContent: 'center',
+    maxWidth: 480,
+    width: '100%',
+    alignSelf: 'center',
   },
   header: {
-    alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: 32,
+    alignItems: 'flex-end',
   },
   title: {
     fontSize: 28,
-    fontFamily: fontFamilies.bold,
     color: '#2c3e50',
-    textAlign: 'center',
+    fontFamily: fontFamilies.bold,
     marginBottom: 8,
   },
   subtitle: {
-    fontSize: 18,
-    fontFamily: fontFamilies.regular,
+    fontSize: 16,
     color: '#7f8c8d',
-    textAlign: 'center',
+    fontFamily: fontFamilies.regular,
+    textAlign: 'right',
+    lineHeight: 24,
+  },
+  modeSwitch: {
+    flexDirection: 'row-reverse',
+    backgroundColor: '#ecf0f1',
+    borderRadius: 14,
+    padding: 4,
+    marginBottom: 24,
+  },
+  modeButton: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  modeButtonActive: {
+    backgroundColor: '#ffffff',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  modeButtonText: {
+    fontFamily: fontFamilies.semibold,
+    color: '#95a5a6',
+  },
+  modeButtonTextActive: {
+    color: '#2c3e50',
   },
   form: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 24,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 20,
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-    direction: 'rtl',
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 2,
   },
   inputContainer: {
-    marginBottom: 20,
+    marginBottom: 16,
   },
   label: {
-    fontSize: 16,
     fontFamily: fontFamilies.semibold,
     color: '#2c3e50',
-    marginBottom: 8,
+    fontSize: 14,
+    marginBottom: 6,
     textAlign: 'right',
   },
   input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    paddingHorizontal: 16,
+    backgroundColor: '#f5f6fa',
+    borderRadius: 12,
     paddingVertical: 12,
-    fontSize: 16,
+    paddingHorizontal: 16,
     fontFamily: fontFamilies.regular,
-    backgroundColor: '#f8f9fa',
     color: '#2c3e50',
   },
-  loginButton: {
-    backgroundColor: '#3498db',
-    borderRadius: 8,
-    paddingVertical: 16,
+  adminHint: {
+    backgroundColor: '#f1f8ff',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 10,
+    justifyContent: 'flex-end',
   },
-  loginButtonDisabled: {
-    backgroundColor: '#bdc3c7',
+  adminHintIcon: {
+    marginLeft: 8,
   },
-  loginButtonText: {
-    color: 'white',
-    fontSize: 18,
+  adminHintText: {
+    color: '#1f6feb',
     fontFamily: fontFamilies.semibold,
+    textAlign: 'right',
+  },
+  submitButton: {
+    backgroundColor: '#27ae60',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  submitButtonDisabled: {
+    opacity: 0.6,
+  },
+  submitButtonText: {
+    color: '#ffffff',
+    fontFamily: fontFamilies.bold,
+    fontSize: 16,
   },
   footer: {
+    marginTop: 32,
     alignItems: 'center',
-    marginTop: 30,
+    paddingHorizontal: 8,
   },
   footerText: {
-    fontSize: 14,
-    fontFamily: fontFamilies.regular,
-    color: '#7f8c8d',
     textAlign: 'center',
-    lineHeight: 20,
+    color: '#7f8c8d',
+    fontFamily: fontFamilies.regular,
+    lineHeight: 22,
   },
 });

@@ -13,6 +13,7 @@ import {
   Image,
   RefreshControl,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useApp } from '../context/AppContext';
 import { Student } from '../types';
@@ -429,13 +430,21 @@ export default function StudentManagementScreen({ navigation, route }: StudentMa
           </Text>
           <View style={styles.headerButtons}>
             <TouchableOpacity
-              style={styles.imageButton}
+              style={[styles.imageButton, isProcessing && styles.imageButtonDisabled]}
               onPress={pickImage}
               disabled={isProcessing}
             >
-              <Text style={styles.imageButtonText}>
-                {isProcessing ? '⏳ جاري المعالجة...' : '📷 رفع صورة'}
-              </Text>
+              <View style={styles.imageButtonContent}>
+                <Ionicons
+                  name={isProcessing ? 'time-outline' : 'image-outline'}
+                  size={18}
+                  color="#ffffff"
+                  style={styles.imageButtonIcon}
+                />
+                <Text style={styles.imageButtonText}>
+                  {isProcessing ? 'جاري المعالجة...' : 'رفع صورة'}
+                </Text>
+              </View>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.addButton}
@@ -671,6 +680,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 6,
+  },
+  imageButtonDisabled: {
+    opacity: 0.75,
+  },
+  imageButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  imageButtonIcon: {
+    marginRight: 6,
   },
   imageButtonText: {
     color: 'white',

@@ -8,6 +8,7 @@ import {
   Alert,
   RefreshControl,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useApp } from '../context/AppContext';
 import { Class } from '../types';
 import { colors, fontFamilies, shadows, borderRadius, spacing } from '../utils/theme';
@@ -22,8 +23,9 @@ interface DashboardScreenProps {
 
 export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   const { state, deleteClass, refreshData } = useApp();
-  const { currentTeacher, classes, isLoading, userProfile } = state as any;
+  const { currentTeacher, classes, isLoading, userProfile, isOffline, pendingActions } = state as any;
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const pendingCount = Array.isArray(pendingActions) ? pendingActions.length : 0;
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
@@ -47,7 +49,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
     mediumHaptic();
     Alert.alert(
       'تأكيد الحذف',
-      `هل أنت متأكد من حذف الشعبة "${className}"؟\n\n⚠️ تحذير: سيتم حذف:\n• جميع الطلاب في هذه الشعبة\n• جميع سجلات الحضور\n• تاريخ الحضور الكامل\n\nهذا الإجراء لا يمكن التراجع عنه!`,
+      `هل أنت متأكد من حذف الشعبة "${className}"؟\n\nتنبيه: سيتم حذف:\n• جميع الطلاب في هذه الشعبة\n• جميع سجلات الحضور\n• تاريخ الحضور الكامل\n\nهذا الإجراء لا يمكن التراجع عنه!`,
       [
         { text: 'إلغاء', style: 'cancel' },
         {
@@ -105,7 +107,9 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
 
   const renderEmptyState = useCallback(() => (
     <View style={styles.emptyState}>
-      <Text style={styles.emptyIcon}>📚</Text>
+      <View style={styles.emptyIconWrapper}>
+        <Ionicons name="library-outline" size={48} color={colors.primary} />
+      </View>
       <Text style={styles.emptyStateTitle}>لا توجد فصول دراسية</Text>
       <Text style={styles.emptyStateSubtitle}>
         ابدأ بإضافة فصل دراسي جديد لإدارة حضور وغياب الطلاب
@@ -158,13 +162,34 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
     <View style={styles.container}>
       <View style={styles.header}>
         <View>
-          <Text style={styles.welcomeText}>مرحباً 👋</Text>
+          <Text style={styles.welcomeText}>مرحباً بك</Text>
           <Text style={styles.teacherName}>{userProfile?.name || currentTeacher?.name}</Text>
         </View>
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <Text style={styles.logoutButtonText}>خروج</Text>
         </TouchableOpacity>
       </View>
+
+      {isOffline && (
+        <View style={[styles.syncNotice, styles.offlineNotice]}>
+          <View style={styles.noticeRow}>
+            <Ionicons name="cloud-offline-outline" size={18} color={colors.warningDark} style={styles.noticeIcon} />
+            <Text style={styles.syncNoticeText}>
+              التطبيق يعمل حالياً دون اتصال. سيتم حفظ كل شيء ومزامنته تلقائياً عند توفر الإنترنت.
+            </Text>
+          </View>
+        </View>
+      )}
+      {!isOffline && pendingCount > 0 && (
+        <View style={[styles.syncNotice, styles.pendingNotice]}>
+          <View style={styles.noticeRow}>
+            <Ionicons name="cloud-upload-outline" size={18} color={colors.infoDark} style={styles.noticeIcon} />
+            <Text style={styles.syncNoticeText}>
+              يتم إرسال {pendingCount} عملية معلّقة إلى السحابة...
+            </Text>
+          </View>
+        </View>
+      )}
 
       <View style={styles.content}>
         <View style={styles.sectionHeader}>
@@ -244,6 +269,37 @@ const styles = StyleSheet.create({
     fontFamily: fontFamilies.semibold,
     fontSize: 14,
   },
+  syncNotice: {
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+  },
+  noticeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  noticeIcon: {
+    marginLeft: spacing.sm,
+  },
+  syncNoticeText: {
+    fontFamily: fontFamilies.medium,
+    color: colors.text.primary,
+    textAlign: 'right',
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  offlineNotice: {
+    backgroundColor: '#fff6e5',
+    borderWidth: 1,
+    borderColor: colors.warningLight,
+  },
+  pendingNotice: {
+    backgroundColor: '#e8f1ff',
+    borderWidth: 1,
+    borderColor: colors.infoLight,
+  },
   content: {
     flex: 1,
     paddingHorizontal: spacing.xl,
@@ -282,8 +338,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: spacing['4xl'],
   },
-  emptyIcon: {
-    fontSize: 64,
+  emptyIconWrapper: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: colors.background.secondary,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: spacing.lg,
   },
   emptyStateTitle: {

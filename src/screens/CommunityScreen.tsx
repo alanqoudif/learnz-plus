@@ -8,11 +8,22 @@ import { communityService } from '../services/communityService';
 
 export default function CommunityScreen() {
   const { state } = useApp();
-  const schoolId = (state as any).userProfile?.schoolId || null;
+  const userProfile = (state as any).userProfile;
+  const hasCommunityAccess = userProfile?.tier === 'plus' || userProfile?.isAppAdmin;
+  const schoolId = userProfile?.schoolId || null;
   const userId = state.currentTeacher?.id || null;
   const [posts, setPosts] = useState<CommunityPost[]>([]);
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
+  if (!hasCommunityAccess) {
+    return (
+      <View style={styles.lockedContainer}>
+        <Text style={styles.lockedTitle}>ميزة المجتمع متاحة لمشتركي Plus فقط</Text>
+        <Text style={styles.lockedSubtitle}>اطلب من مدير التطبيق ترقية حسابك للاستفادة من التواصل بين المعلمين.</Text>
+      </View>
+    );
+  }
+
   const [sending, setSending] = useState(false);
   const listRef = useRef<FlatList<CommunityPost>>(null);
 
@@ -100,6 +111,9 @@ export default function CommunityScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8f9fa' },
   header: { fontSize: 22, fontFamily: fontFamilies.bold, padding: 16, color: '#2c3e50' },
+  lockedContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, backgroundColor: '#f8f9fa' },
+  lockedTitle: { fontSize: 18, fontFamily: fontFamilies.bold, color: '#2c3e50', textAlign: 'center', marginBottom: 12 },
+  lockedSubtitle: { fontSize: 14, fontFamily: fontFamilies.regular, color: '#7f8c8d', textAlign: 'center', lineHeight: 22 },
   card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#eee' },
   title: { fontSize: 16, fontFamily: fontFamilies.semibold, color: '#2c3e50', marginBottom: 6 },
   body: { fontSize: 14, fontFamily: fontFamilies.regular, color: '#6c757d' },

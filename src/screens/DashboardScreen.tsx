@@ -22,8 +22,9 @@ interface DashboardScreenProps {
 
 export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   const { state, deleteClass, refreshData } = useApp();
-  const { currentTeacher, classes, isLoading, userProfile } = state as any;
+  const { currentTeacher, classes, isLoading, userProfile, isOffline, pendingActions } = state as any;
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const pendingCount = Array.isArray(pendingActions) ? pendingActions.length : 0;
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
@@ -166,6 +167,17 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
         </TouchableOpacity>
       </View>
 
+      {isOffline && (
+        <View style={[styles.syncNotice, styles.offlineNotice]}>
+          <Text style={styles.syncNoticeText}>🛜 التطبيق يعمل حالياً دون اتصال. سيتم حفظ كل شيء ومزامنته تلقائياً عند توفر الإنترنت.</Text>
+        </View>
+      )}
+      {!isOffline && pendingCount > 0 && (
+        <View style={[styles.syncNotice, styles.pendingNotice]}>
+          <Text style={styles.syncNoticeText}>⏳ يتم إرسال {pendingCount} عملية معلّقة إلى السحابة...</Text>
+        </View>
+      )}
+
       <View style={styles.content}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>الفصول الدراسية</Text>
@@ -243,6 +255,24 @@ const styles = StyleSheet.create({
     color: colors.text.light,
     fontFamily: fontFamilies.semibold,
     fontSize: 14,
+  },
+  syncNotice: {
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.lg,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+  },
+  syncNoticeText: {
+    textAlign: 'center',
+    fontFamily: fontFamilies.semibold,
+    color: colors.text.primary,
+  },
+  offlineNotice: {
+    backgroundColor: '#fdebd0',
+  },
+  pendingNotice: {
+    backgroundColor: '#d6eaf8',
   },
   content: {
     flex: 1,

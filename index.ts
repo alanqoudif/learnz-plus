@@ -5,12 +5,12 @@ import { Buffer } from '@craftzdog/react-native-buffer';
 import { registerRootComponent } from 'expo';
 
 // Make Buffer globally available
-global.Buffer = Buffer;
+(global as any).Buffer = Buffer;
 
 // Polyfill for stream module - only import what's needed
 try {
   const { Readable, Writable, Duplex, Transform } = require('readable-stream');
-  global.stream = { Readable, Writable, Duplex, Transform };
+  (global as any).stream = { Readable, Writable, Duplex, Transform };
 } catch (error) {
   console.warn('Stream polyfill failed to load:', error);
 }

@@ -39,8 +39,8 @@ export interface AttendanceSession {
   createdAt: Date;
 }
 
-// Community and user profile types
 export type UserRole = 'leader' | 'member';
+export type AccountTier = 'free' | 'plus';
 
 export interface UserProfile {
   id: string;
@@ -49,6 +49,8 @@ export interface UserProfile {
   schoolId: string | null;
   role: UserRole;
   createdAt?: Date;
+  tier: AccountTier;
+  isAppAdmin?: boolean;
 }
 
 export interface School {
@@ -83,4 +85,5 @@ export type RootStackParamList = {
   JoinSchool: undefined;
   Community: undefined;
   LeaderAdmin: undefined;
+  AppAdmin: undefined;
 };

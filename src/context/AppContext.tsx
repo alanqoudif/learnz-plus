@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Teacher, Class, Student, AttendanceRecord, AttendanceSession, UserProfile } from '../types';
 import { smartClassService as classService, smartStudentService as studentService, smartAttendanceService as attendanceService, smartAuthService as authService } from '../services/smartService';
 import { teacherService } from '../services/firebaseService';
@@ -8,16 +7,24 @@ import { auth, firestore, COLLECTIONS } from '../config/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { onAuthStateChanged, User } from 'firebase/auth';
 
+import { offlineStorage, PendingAction } from '../services/offlineStorage';
+import { syncPendingAttendance } from '../services/syncService';
+import { networkService } from '../services/networkService';
+
+import { APP_ADMIN_EMAILS, DEFAULT_ACCOUNT_TIER, ADMIN_ACCOUNT_TIER } from '../config/appConfig';
+
 interface AppState {
   currentTeacher: Teacher | null;
   classes: Class[];
   attendanceSessions: AttendanceSession[];
   isLoading: boolean;
   userProfile: UserProfile | null;
+  isOffline: boolean;
+  pendingActions: PendingAction[];
 }
 
 type AppAction =
-  | { type: 'SET_TEACHER'; payload: Teacher }
+  | { type: 'SET_TEACHER'; payload: Teacher | null }
   | { type: 'SET_CLASSES'; payload: Class[] }
   | { type: 'ADD_CLASS'; payload: Class }
   | { type: 'UPDATE_CLASS'; payload: Class }
@@ -30,7 +37,9 @@ type AppAction =
   | { type: 'UPDATE_ATTENDANCE_SESSION'; payload: AttendanceSession }
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'LOAD_DATA'; payload: { teacher: Teacher | null; classes: Class[]; sessions: AttendanceSession[] } }
-  | { type: 'SET_USER_PROFILE'; payload: UserProfile | null };
+  | { type: 'SET_USER_PROFILE'; payload: UserProfile | null }
+  | { type: 'SET_OFFLINE'; payload: boolean }
+  | { type: 'SET_PENDING_ACTIONS'; payload: PendingAction[] };
 
 const initialState: AppState = {
   currentTeacher: null,
@@ -38,6 +47,8 @@ const initialState: AppState = {
   attendanceSessions: [],
   isLoading: true,
   userProfile: null,
+  isOffline: false,
+  pendingActions: [],
 };
 
 function appReducer(state: AppState, action: AppAction): AppState {
@@ -130,6 +141,12 @@ function appReducer(state: AppState, action: AppAction): AppState {
     case 'SET_USER_PROFILE':
       return { ...state, userProfile: action.payload };
     
+    case 'SET_OFFLINE':
+      return { ...state, isOffline: action.payload };
+    
+    case 'SET_PENDING_ACTIONS':
+      return { ...state, pendingActions: action.payload };
+    
     case 'LOAD_DATA':
       return {
         ...state,
@@ -166,9 +183,48 @@ const AppContext = createContext<AppContextType | null>(null);
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(appReducer, initialState);
 
+  useEffect(() => {
+    (async () => {
+      const cached = await offlineStorage.loadCachedState();
+      if (cached.classes.length || cached.sessions.length || cached.teacher) {
+        dispatch({
+          type: 'LOAD_DATA',
+          payload: {
+            teacher: cached.teacher,
+            classes: cached.classes,
+            sessions: cached.sessions,
+          },
+        });
+      } else {
+        dispatch({ type: 'SET_LOADING', payload: false });
+      }
+      dispatch({ type: 'SET_PENDING_ACTIONS', payload: cached.pendingActions });
+    })();
+  }, []);
+
   // Load data from Firebase Auth on app start
   useEffect(() => {
     loadData();
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = networkService.subscribe(async (isOnline) => {
+      dispatch({ type: 'SET_OFFLINE', payload: !isOnline });
+      if (isOnline) {
+        const result = await syncPendingAttendance();
+        if (result.processed > 0) {
+          const cached = await offlineStorage.loadCachedState();
+          dispatch({ type: 'SET_ATTENDANCE_SESSIONS', payload: cached.sessions });
+          dispatch({ type: 'SET_PENDING_ACTIONS', payload: cached.pendingActions });
+        } else {
+          const pending = await offlineStorage.getPendingActions();
+          dispatch({ type: 'SET_PENDING_ACTIONS', payload: pending });
+        }
+        await loadData();
+      }
+    });
+
+    return () => unsubscribe();
   }, []);
 
   // Listen for auth state changes
@@ -178,45 +234,63 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         console.log('🔄 تغيير حالة المصادقة - تسجيل دخول:', user.uid);
         
         // إنشاء أو تحديث المعلم في كولكشن المعلمين
+        let teacherRecord: Teacher;
         try {
-          const teacher = await teacherService.createOrUpdateTeacherFromAuth(user);
-          console.log('✅ تم إنشاء/تحديث المعلم في كولكشن المعلمين:', teacher.id);
-          dispatch({ type: 'SET_TEACHER', payload: teacher });
+          teacherRecord = await teacherService.createOrUpdateTeacherFromAuth(user);
+          console.log('✅ تم إنشاء/تحديث المعلم في كولكشن المعلمين:', teacherRecord.id);
         } catch (error) {
           console.warn('⚠️ تحذير: فشل في إنشاء/تحديث المعلم في كولكشن المعلمين:', error);
-          // استخدام بيانات المستخدم كبديل
-          const teacher: Teacher = {
+          teacherRecord = {
             id: user.uid,
             name: user.displayName || 'معلم',
             phoneNumber: user.email || '',
             createdAt: new Date(user.metadata.creationTime || Date.now()),
           };
-          dispatch({ type: 'SET_TEACHER', payload: teacher });
         }
+        dispatch({ type: 'SET_TEACHER', payload: teacherRecord });
+        await offlineStorage.saveTeacher(teacherRecord);
         
         // تحميل بروفايل المستخدم من users/{uid}
         try {
           const userRef = doc(firestore, COLLECTIONS.USERS, user.uid);
           const snap = await getDoc(userRef);
+          const normalizedEmail = (user.email || '').toLowerCase();
+          const isAppAdmin = APP_ADMIN_EMAILS.includes(normalizedEmail);
           if (snap.exists()) {
             const data: any = snap.data();
-            dispatch({ type: 'SET_USER_PROFILE', payload: {
+            const tier = data.tier || (isAppAdmin ? ADMIN_ACCOUNT_TIER : DEFAULT_ACCOUNT_TIER);
+            const role = data.role || (isAppAdmin ? 'leader' : 'member');
+            const profile: UserProfile = {
               id: user.uid,
-              email: data.email || user.email || '',
+              email: data.email || normalizedEmail,
               name: data.name || user.displayName || 'معلم',
               schoolId: data.schoolId ?? null,
-              role: data.role || 'member',
+              role,
               createdAt: data.createdAt ? new Date(data.createdAt.seconds ? data.createdAt.seconds * 1000 : data.createdAt) : undefined,
-            }});
+              tier,
+              isAppAdmin,
+            };
+            dispatch({ type: 'SET_USER_PROFILE', payload: profile });
+            await setDoc(userRef, {
+              email: profile.email,
+              name: profile.name,
+              role: profile.role,
+              tier: profile.tier,
+              isAppAdmin: profile.isAppAdmin,
+            }, { merge: true });
           } else {
+            const tier = isAppAdmin ? ADMIN_ACCOUNT_TIER : DEFAULT_ACCOUNT_TIER;
+            const role = isAppAdmin ? 'leader' : 'member';
             const basic = {
-              email: user.email || '',
+              email: normalizedEmail,
               name: user.displayName || 'معلم',
               schoolId: null,
-              role: 'member' as const,
+              role,
+              tier,
+              isAppAdmin,
             };
             await setDoc(userRef, basic, { merge: true });
-            dispatch({ type: 'SET_USER_PROFILE', payload: { id: user.uid, ...(basic as any) } });
+            dispatch({ type: 'SET_USER_PROFILE', payload: { id: user.uid, ...basic } as UserProfile });
           }
         } catch (e) {
           console.warn('Failed to load user profile', e);
@@ -290,58 +364,73 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
   }, [state.currentTeacher?.id]); // Only depend on teacher ID, not the entire classes array
 
-  // Save data to AsyncStorage whenever state changes
-  useEffect(() => {
-    if (!state.isLoading) {
-      saveData();
-    }
-  }, [state.currentTeacher, state.classes, state.attendanceSessions]);
-
   const loadData = async () => {
     try {
-      // التحقق من وجود جلسة نشطة في Firebase Auth
       const user = auth.currentUser;
-      
+
       if (!user) {
         dispatch({ type: 'SET_LOADING', payload: false });
         return;
       }
 
-      // إنشاء كائن المعلم من بيانات المستخدم
       const teacher: Teacher = {
         id: user.uid,
         name: user.displayName || 'معلم',
-        phoneNumber: user.email || '', // استخدام البريد الإلكتروني كمعرف
+        phoneNumber: user.email || '',
         createdAt: new Date(user.metadata.creationTime || Date.now()),
       };
 
-      // تحميل الفصول فقط - بدون جلسات الحضور
-      // سيتم تحميل الجلسات lazy عند فتح شاشة التاريخ
+      if (state.isOffline) {
+        await offlineStorage.saveTeacher(teacher);
+        dispatch({
+          type: 'LOAD_DATA',
+          payload: {
+            teacher,
+            classes: state.classes,
+            sessions: state.attendanceSessions,
+          },
+        });
+        const pending = await offlineStorage.getPendingActions();
+        dispatch({ type: 'SET_PENDING_ACTIONS', payload: pending });
+        return;
+      }
+
       const classes = await classService.getClassesByTeacher(teacher.id);
-      
+
       console.log('✅ تحميل سريع - الفصول فقط:', {
         teacherId: teacher.id,
         classesCount: classes.length,
         message: 'الجلسات سيتم تحميلها عند الحاجة'
       });
-      
-      // إظهار الفصول فوراً للمستخدم - بدون جلسات
+
+      await offlineStorage.saveTeacher(teacher);
+      await offlineStorage.saveClasses(classes);
+      if (state.attendanceSessions.length) {
+        await offlineStorage.saveSessions(state.attendanceSessions);
+      }
+
       dispatch({
         type: 'LOAD_DATA',
-        payload: { teacher, classes, sessions: [] },
+        payload: { teacher, classes, sessions: state.attendanceSessions },
       });
+      const pending = await offlineStorage.getPendingActions();
+      dispatch({ type: 'SET_PENDING_ACTIONS', payload: pending });
     } catch (error) {
       console.error('Error loading data:', error);
-      dispatch({ type: 'SET_LOADING', payload: false });
-    }
-  };
-
-  const saveData = async () => {
-    try {
-      // لا نحتاج لحفظ بيانات في AsyncStorage لأن Firebase Auth يتولى ذلك
-      // يمكن إضافة منطق إضافي هنا إذا لزم الأمر
-    } catch (error) {
-      console.error('Error saving data:', error);
+      const cached = await offlineStorage.loadCachedState();
+      if (cached.classes.length || cached.sessions.length || cached.teacher) {
+        dispatch({
+          type: 'LOAD_DATA',
+          payload: {
+            teacher: cached.teacher,
+            classes: cached.classes,
+            sessions: cached.sessions,
+          },
+        });
+        dispatch({ type: 'SET_PENDING_ACTIONS', payload: cached.pendingActions });
+      } else {
+        dispatch({ type: 'SET_LOADING', payload: false });
+      }
     }
   };
 
@@ -353,87 +442,209 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const createClass = async (classData: Omit<Class, 'id' | 'createdAt' | 'students'>): Promise<Class> => {
     const newClass = await classService.createClass(classData);
+    const updatedClasses = [...state.classes, newClass];
     dispatch({ type: 'ADD_CLASS', payload: newClass });
+    await offlineStorage.saveClasses(updatedClasses);
     return newClass;
   };
 
   const updateClass = async (id: string, updates: Partial<Omit<Class, 'id' | 'createdAt' | 'students' | 'teacherId'>>): Promise<Class> => {
     const updatedClass = await classService.updateClass(id, updates);
     dispatch({ type: 'UPDATE_CLASS', payload: updatedClass });
+    const updatedClasses = state.classes.map(cls => (cls.id === updatedClass.id ? updatedClass : cls));
+    await offlineStorage.saveClasses(updatedClasses);
     return updatedClass;
   };
 
   const deleteClass = async (id: string): Promise<void> => {
+    const remainingClasses = state.classes.filter(cls => cls.id !== id);
+    const remainingSessions = state.attendanceSessions.filter(session => session.classId !== id);
     await classService.deleteClass(id);
     dispatch({ type: 'DELETE_CLASS', payload: id });
+    await offlineStorage.saveClasses(remainingClasses);
+    await offlineStorage.saveSessions(remainingSessions);
   };
 
   const createStudent = async (student: Omit<Student, 'id' | 'createdAt'>): Promise<Student> => {
     const newStudent = await studentService.createStudent(student);
     dispatch({ type: 'ADD_STUDENT', payload: { classId: student.classId, student: newStudent } });
+    const updatedClasses = state.classes.map(cls =>
+      cls.id === student.classId
+        ? { ...cls, students: [...cls.students, newStudent] }
+        : cls
+    );
+    await offlineStorage.saveClasses(updatedClasses);
     return newStudent;
   };
 
   const updateStudent = async (id: string, updates: Partial<Omit<Student, 'id' | 'createdAt' | 'classId'>>): Promise<Student> => {
     const updatedStudent = await studentService.updateStudent(id, updates);
-    // العثور على classId للطالب المحدث
     const classItem = state.classes.find(cls => cls.students.some(s => s.id === id));
     if (classItem) {
       dispatch({ type: 'UPDATE_STUDENT', payload: { classId: classItem.id, student: updatedStudent } });
+      const updatedClasses = state.classes.map(cls =>
+        cls.id === classItem.id
+          ? {
+              ...cls,
+              students: cls.students.map(student =>
+                student.id === updatedStudent.id ? updatedStudent : student
+              ),
+            }
+          : cls
+      );
+      await offlineStorage.saveClasses(updatedClasses);
     }
     return updatedStudent;
   };
 
   const deleteStudent = async (id: string): Promise<void> => {
     await studentService.deleteStudent(id);
-    // العثور على classId للطالب المحذوف
     const classItem = state.classes.find(cls => cls.students.some(s => s.id === id));
     if (classItem) {
       dispatch({ type: 'DELETE_STUDENT', payload: { classId: classItem.id, studentId: id } });
+      const updatedClasses = state.classes.map(cls =>
+        cls.id === classItem.id
+          ? { ...cls, students: cls.students.filter(student => student.id !== id) }
+          : cls
+      );
+      await offlineStorage.saveClasses(updatedClasses);
     }
   };
 
   const createAttendanceSession = async (session: Omit<AttendanceSession, 'id' | 'createdAt' | 'records'>): Promise<AttendanceSession> => {
-    const newSession = await attendanceService.createAttendanceSession(session);
-    dispatch({ type: 'ADD_ATTENDANCE_SESSION', payload: newSession });
-    return newSession;
+    const createOfflineSession = async (error?: unknown) => {
+      if (error) {
+        console.warn('Falling back to offline attendance session', error);
+        dispatch({ type: 'SET_OFFLINE', payload: true });
+      }
+      const tempId = offlineStorage.generateTempId();
+      const createdAt = new Date();
+      const offlineSession: AttendanceSession = {
+        id: tempId,
+        classId: session.classId,
+        date: session.date,
+        createdAt,
+        records: [],
+      };
+      dispatch({ type: 'ADD_ATTENDANCE_SESSION', payload: offlineSession });
+      await offlineStorage.upsertSession(offlineSession);
+      await offlineStorage.addPendingAction({
+        id: offlineStorage.generateTempId(),
+        type: 'CREATE_SESSION',
+        payload: {
+          tempId,
+          session: { classId: session.classId, date: session.date, createdAt },
+        },
+        createdAt: Date.now(),
+      });
+      const pendingActions = await offlineStorage.getPendingActions();
+      dispatch({ type: 'SET_PENDING_ACTIONS', payload: pendingActions });
+      return offlineSession;
+    };
+
+    if (state.isOffline) {
+      return await createOfflineSession();
+    }
+
+    try {
+      const newSession = await attendanceService.createAttendanceSession(session);
+      dispatch({ type: 'ADD_ATTENDANCE_SESSION', payload: newSession });
+      await offlineStorage.upsertSession(newSession);
+      const pendingActions = await offlineStorage.getPendingActions();
+      dispatch({ type: 'SET_PENDING_ACTIONS', payload: pendingActions });
+      return newSession;
+    } catch (error) {
+      return await createOfflineSession(error);
+    }
   };
 
   const recordAttendance = async (record: Omit<AttendanceRecord, 'id' | 'createdAt'>): Promise<AttendanceRecord> => {
-    const newRecord = await attendanceService.recordAttendance(record);
-    
-    // تحديث الجلسة في state
-    const sessionIndex = state.attendanceSessions.findIndex(s => s.id === record.sessionId);
-    if (sessionIndex !== -1) {
+    const sessionId = record.sessionId;
+    if (!sessionId) {
+      throw new Error('sessionId is required to record attendance');
+    }
+
+    const updateStateWithRecord = async (nextRecord: AttendanceRecord) => {
+      const sessionIndex = state.attendanceSessions.findIndex(s => s.id === sessionId);
+      if (sessionIndex === -1) {
+        return;
+      }
       const existingSession = state.attendanceSessions[sessionIndex];
-      
-      // التحقق من وجود السجل مسبقاً لتجنب التكرار
-      const existingRecordIndex = existingSession.records.findIndex(r => r.studentId === record.studentId);
-      
+      const existingRecordIndex = existingSession.records.findIndex(r => r.studentId === nextRecord.studentId);
       let updatedRecords;
       if (existingRecordIndex !== -1) {
-        // تحديث السجل الموجود
         updatedRecords = [...existingSession.records];
-        updatedRecords[existingRecordIndex] = newRecord;
+        updatedRecords[existingRecordIndex] = nextRecord;
       } else {
-        // إضافة سجل جديد
-        updatedRecords = [...existingSession.records, newRecord];
+        updatedRecords = [...existingSession.records, nextRecord];
       }
-      
-      const updatedSession = {
+      const updatedSession: AttendanceSession = {
         ...existingSession,
-        records: updatedRecords
+        records: updatedRecords,
       };
-      
-      // تحديث الجلسة في القائمة
       const updatedSessions = [...state.attendanceSessions];
       updatedSessions[sessionIndex] = updatedSession;
-      
       dispatch({ type: 'SET_ATTENDANCE_SESSIONS', payload: updatedSessions });
-      
+      await offlineStorage.updateRecord(sessionId, nextRecord);
+    };
+
+    const enqueuePendingRecord = async (pendingRecord: AttendanceRecord) => {
+      await offlineStorage.addPendingAction({
+        id: offlineStorage.generateTempId(),
+        type: 'RECORD_ATTENDANCE',
+        payload: {
+          tempId: pendingRecord.id,
+          sessionId,
+          record: {
+            studentId: pendingRecord.studentId,
+            classId: pendingRecord.classId,
+            sessionId,
+            status: pendingRecord.status,
+            attendanceTime: pendingRecord.attendanceTime,
+            createdAt: pendingRecord.createdAt,
+          },
+        },
+        createdAt: Date.now(),
+      });
+      const pending = await offlineStorage.getPendingActions();
+      dispatch({ type: 'SET_PENDING_ACTIONS', payload: pending });
+    };
+
+    const buildOfflineRecord = () => {
+      const createdAt = new Date();
+      return {
+        id: offlineStorage.generateTempId(),
+        studentId: record.studentId,
+        classId: record.classId,
+        sessionId,
+        status: record.status,
+        attendanceTime: record.attendanceTime || createdAt,
+        createdAt,
+      } as AttendanceRecord;
+    };
+
+    if (state.isOffline) {
+      const offlineRecord = buildOfflineRecord();
+      await updateStateWithRecord(offlineRecord);
+      await enqueuePendingRecord(offlineRecord);
+      dispatch({ type: 'SET_OFFLINE', payload: true });
+      return offlineRecord;
     }
-    
-    return newRecord;
+
+    try {
+      const newRecord = await attendanceService.recordAttendance(record);
+      await updateStateWithRecord(newRecord);
+      const pending = await offlineStorage.getPendingActions();
+      dispatch({ type: 'SET_PENDING_ACTIONS', payload: pending });
+      return newRecord;
+    } catch (error) {
+      console.warn('Falling back to offline attendance record', error);
+      const offlineRecord = buildOfflineRecord();
+      await updateStateWithRecord(offlineRecord);
+      await enqueuePendingRecord(offlineRecord);
+      dispatch({ type: 'SET_OFFLINE', payload: true });
+      return offlineRecord;
+    }
   };
 
   const refreshData = async (): Promise<void> => {
@@ -444,16 +655,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         try {
           const userRef = doc(firestore, COLLECTIONS.USERS, user.uid);
           const snap = await getDoc(userRef);
+          const normalizedEmail = (user.email || '').toLowerCase();
+          const isAppAdmin = APP_ADMIN_EMAILS.includes(normalizedEmail);
           if (snap.exists()) {
             const data: any = snap.data();
+            const tier = data.tier || (isAppAdmin ? ADMIN_ACCOUNT_TIER : DEFAULT_ACCOUNT_TIER);
+            const role = data.role || (isAppAdmin ? 'leader' : 'member');
             dispatch({ type: 'SET_USER_PROFILE', payload: {
               id: user.uid,
-              email: data.email || user.email || '',
+              email: data.email || normalizedEmail,
               name: data.name || user.displayName || 'معلم',
               schoolId: data.schoolId ?? null,
-              role: data.role || 'member',
+              role,
               createdAt: data.createdAt ? new Date(data.createdAt.seconds ? data.createdAt.seconds * 1000 : data.createdAt) : undefined,
+              tier,
+              isAppAdmin,
             }});
+            await setDoc(userRef, { tier, isAppAdmin, role }, { merge: true });
           }
         } catch (e) {
           console.warn('Failed to refresh user profile', e);
@@ -470,17 +688,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       console.log(`📥 تحميل جلسات الحضور للفصل: ${classId} (limit: ${maxResults})`);
       
-      // إرجاع البيانات المحفوظة فوراً (cache-first)
       const cachedSessions = state.attendanceSessions.filter(s => s.classId === classId);
       console.log(`💾 عرض ${cachedSessions.length} جلسة من الكاش فوراً`);
       
-      // تحديث في الخلفية بدون انتظار
+      if (state.isOffline) {
+        return cachedSessions;
+      }
+      
       const updateInBackground = async () => {
         try {
           const sessions = await attendanceService.getAttendanceSessionsByClass(classId, maxResults);
           console.log(`🔄 تحديث في الخلفية: ${sessions.length} جلسة`);
           
-          // تحديث الـ state فقط إذا كانت هناك تغييرات
           const hasChanges = JSON.stringify(sessions) !== JSON.stringify(cachedSessions);
           if (hasChanges) {
             const updatedSessions = [
@@ -488,6 +707,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               ...sessions
             ];
             dispatch({ type: 'SET_ATTENDANCE_SESSIONS', payload: updatedSessions });
+            await offlineStorage.saveSessions(updatedSessions);
             console.log(`✅ تم تحديث الجلسات في الخلفية`);
           }
         } catch (error) {
@@ -495,14 +715,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
       };
       
-      // تشغيل التحديث في الخلفية
       updateInBackground();
       
-      // إرجاع البيانات المحفوظة فوراً
       return cachedSessions;
     } catch (error) {
       console.error('❌ خطأ في تحميل جلسات الحضور:', error);
-      return [];
+      return state.attendanceSessions.filter(s => s.classId === classId);
     }
   };
 

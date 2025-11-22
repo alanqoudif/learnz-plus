@@ -11,236 +11,275 @@ import {
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
 import { smartAuthService as authService } from '../services/smartService';
+import { firestore, COLLECTIONS } from '../config/firebase';
+import { doc, updateDoc } from 'firebase/firestore';
+import { updateProfile } from 'firebase/auth';
+import { auth } from '../config/firebase';
+import { fontFamilies, spacing, borderRadius, shadows } from '../utils/theme';
+import { mediumHaptic, lightHaptic } from '../utils/haptics';
+
+interface SettingsScreenProps {
+  navigation: any;
+}
+
+export default function SettingsScreen({ navigation }: SettingsScreenProps) {
+  const { state } = useApp();
+  const { mode, setMode, colors } = useTheme();
+  const { userProfile, currentTeacher } = state as any;
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [newName, setNewName] = useState(userProfile?.name || currentTeacher?.name || '');
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  // حالة الأقسام المفتوحة/المغلقة
+  const [expandedSection, setExpandedSection] = useState<string | null>(null);
+
+  const handleLogout = () => {
+    mediumHaptic();
+    Alert.alert(
+      'تسجيل الخروج',
+      'هل أنت متأكد من تسجيل الخروج؟',
+      [
+        { text: 'إلغاء', style: 'cancel' },
+        {
+          text: 'تسجيل الخروج',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await authService.signOut();
+            } catch (error) {
+              console.error('Error signing out:', error);
+              Alert.alert('خطأ', 'حدث خطأ أثناء تسجيل الخروج');
+            }
           },
         },
       ]
     );
   };
 
-const handleUpdateName = async () => {
-  if (!newName.trim()) {
-    Alert.alert('خطأ', 'يرجى إدخال اسم صحيح');
-    return;
-  }
-
-  setIsUpdating(true);
-  lightHaptic();
-
-  try {
-    const user = auth.currentUser;
-    if (!user) {
-      Alert.alert('خطأ', 'لم يتم العثور على المستخدم');
+  const handleUpdateName = async () => {
+    if (!newName.trim()) {
+      Alert.alert('خطأ', 'يرجى إدخال اسم صحيح');
       return;
     }
 
-    await updateProfile(user, {
-      displayName: newName.trim(),
-    });
+    setIsUpdating(true);
+    lightHaptic();
 
-    const userRef = doc(firestore, COLLECTIONS.USERS, user.uid);
-    await updateDoc(userRef, {
-      name: newName.trim(),
-    });
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        Alert.alert('خطأ', 'لم يتم العثور على المستخدم');
+        return;
+      }
 
-    setIsEditingName(false);
-    Alert.alert('تم بنجاح', 'تم تحديث الاسم بنجاح');
-  } catch (error: any) {
-    console.error('Error updating name:', error);
-    Alert.alert('خطأ', 'حدث خطأ أثناء تحديث الاسم');
-  } finally {
-    setIsUpdating(false);
-  }
-};
+      await updateProfile(user, {
+        displayName: newName.trim(),
+      });
 
-const handleThemeChange = async (newMode: 'light' | 'dark' | 'auto') => {
-  lightHaptic();
-  await setMode(newMode);
-};
+      const userRef = doc(firestore, COLLECTIONS.USERS, user.uid);
+      await updateDoc(userRef, {
+        name: newName.trim(),
+      });
 
-const toggleSection = (section: string) => {
-  lightHaptic();
-  setExpandedSection(expandedSection === section ? null : section);
-};
+      setIsEditingName(false);
+      Alert.alert('تم بنجاح', 'تم تحديث الاسم بنجاح');
+    } catch (error: any) {
+      console.error('Error updating name:', error);
+      Alert.alert('خطأ', 'حدث خطأ أثناء تحديث الاسم');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
-return (
-  <ScrollView style={[styles.container, { backgroundColor: colors.background.secondary }]}>
-    <View style={styles.content}>
-      {/* Header */}
-      <View style={[styles.header, { backgroundColor: colors.background.primary }]}>
-        <Text style={[styles.headerTitle, { color: colors.text.primary }]}>الإعدادات</Text>
-      </View>
+  const handleThemeChange = async (newMode: 'light' | 'dark' | 'auto') => {
+    lightHaptic();
+    await setMode(newMode);
+  };
 
-      {/* Account Section */}
-      <TouchableOpacity
-        style={[styles.sectionHeader, { backgroundColor: colors.background.primary, borderColor: colors.border.light }]}
-        onPress={() => toggleSection('account')}
-        activeOpacity={0.7}
-      >
-        <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>حسابي</Text>
-        <Text style={[styles.chevron, { color: colors.text.secondary }]}>
-          {expandedSection === 'account' ? '▼' : '◀'}
-        </Text>
-      </TouchableOpacity>
+  const toggleSection = (section: string) => {
+    lightHaptic();
+    setExpandedSection(expandedSection === section ? null : section);
+  };
 
-      {expandedSection === 'account' && (
-        <View style={[styles.sectionContent, { backgroundColor: colors.background.primary }]}>
-          <View style={styles.infoRow}>
-            <Text style={[styles.infoLabel, { color: colors.text.secondary }]}>البريد الإلكتروني</Text>
-            <Text style={[styles.infoValue, { color: colors.text.primary }]}>
-              {userProfile?.email || currentTeacher?.phoneNumber || 'غير متوفر'}
-            </Text>
-          </View>
-
-          <View style={styles.infoRow}>
-            <Text style={[styles.infoLabel, { color: colors.text.secondary }]}>الاسم</Text>
-            {isEditingName ? (
-              <View style={styles.editNameContainer}>
-                <TextInput
-                  style={[styles.nameInput, {
-                    backgroundColor: colors.background.secondary,
-                    color: colors.text.primary,
-                    borderColor: colors.border.medium
-                  }]}
-                  value={newName}
-                  onChangeText={setNewName}
-                  placeholder="أدخل الاسم الجديد"
-                  placeholderTextColor={colors.text.tertiary}
-                  autoFocus
-                />
-                <View style={styles.editButtons}>
-                  <TouchableOpacity
-                    style={[styles.cancelButton, { backgroundColor: colors.border.medium }]}
-                    onPress={() => {
-                      setNewName(userProfile?.name || currentTeacher?.name || '');
-                      setIsEditingName(false);
-                    }}
-                  >
-                    <Text style={[styles.buttonText, { color: colors.text.primary }]}>إلغاء</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.saveButton, { backgroundColor: colors.primary }]}
-                    onPress={handleUpdateName}
-                    disabled={isUpdating}
-                  >
-                    <Text style={[styles.buttonText, { color: colors.text.light }]}>
-                      {isUpdating ? 'جاري الحفظ...' : 'حفظ'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ) : (
-              <View style={styles.nameRow}>
-                <Text style={[styles.infoValue, { color: colors.text.primary }]}>
-                  {userProfile?.name || currentTeacher?.name || 'غير متوفر'}
-                </Text>
-                <TouchableOpacity
-                  style={[styles.editButton, { backgroundColor: colors.primary }]}
-                  onPress={() => {
-                    setIsEditingName(true);
-                    lightHaptic();
-                  }}
-                >
-                  <Text style={[styles.buttonText, { color: colors.text.light }]}>تعديل</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
+  return (
+    <ScrollView style={[styles.container, { backgroundColor: colors.background.secondary }]}>
+      <View style={styles.content}>
+        {/* Header */}
+        <View style={[styles.header, { backgroundColor: colors.background.primary }]}>
+          <Text style={[styles.headerTitle, { color: colors.text.primary }]}>الإعدادات</Text>
         </View>
-      )}
 
-      {/* Appearance Section */}
-      <TouchableOpacity
-        style={[styles.sectionHeader, { backgroundColor: colors.background.primary, borderColor: colors.border.light }]}
-        onPress={() => toggleSection('appearance')}
-        activeOpacity={0.7}
-      >
-        <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>المظهر</Text>
-        <Text style={[styles.chevron, { color: colors.text.secondary }]}>
-          {expandedSection === 'appearance' ? '▼' : '◀'}
-        </Text>
-      </TouchableOpacity>
-
-      {expandedSection === 'appearance' && (
-        <View style={[styles.sectionContent, { backgroundColor: colors.background.primary }]}>
-          <TouchableOpacity
-            style={[
-              styles.themeOption,
-              {
-                backgroundColor: mode === 'light' ? colors.primary : colors.background.secondary,
-                borderColor: colors.border.medium
-              }
-            ]}
-            onPress={() => handleThemeChange('light')}
-          >
-            <Text style={[
-              styles.themeOptionText,
-              { color: mode === 'light' ? colors.text.light : colors.text.primary }
-            ]}>
-              الوضع النهاري
-            </Text>
-            {mode === 'light' && (
-              <Text style={[styles.checkmark, { color: colors.text.light }]}>✓</Text>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.themeOption,
-              {
-                backgroundColor: mode === 'dark' ? colors.primary : colors.background.secondary,
-                borderColor: colors.border.medium
-              }
-            ]}
-            onPress={() => handleThemeChange('dark')}
-          >
-            <Text style={[
-              styles.themeOptionText,
-              { color: mode === 'dark' ? colors.text.light : colors.text.primary }
-            ]}>
-              الوضع الليلي
-            </Text>
-            {mode === 'dark' && (
-              <Text style={[styles.checkmark, { color: colors.text.light }]}>✓</Text>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.themeOption,
-              {
-                backgroundColor: mode === 'auto' ? colors.primary : colors.background.secondary,
-                borderColor: colors.border.medium
-              }
-            ]}
-            onPress={() => handleThemeChange('auto')}
-          >
-            <Text style={[
-              styles.themeOptionText,
-              { color: mode === 'auto' ? colors.text.light : colors.text.primary }
-            ]}>
-              تلقائي
-            </Text>
-            {mode === 'auto' && (
-              <Text style={[styles.checkmark, { color: colors.text.light }]}>✓</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* Logout Section */}
-      <View style={styles.logoutSection}>
+        {/* Account Section */}
         <TouchableOpacity
-          style={[styles.logoutButton, { backgroundColor: colors.danger }]}
-          onPress={handleLogout}
+          style={[styles.sectionHeader, { backgroundColor: colors.background.primary, borderColor: colors.border.light }]}
+          onPress={() => toggleSection('account')}
+          activeOpacity={0.7}
         >
-          <Text style={[styles.logoutButtonText, { color: colors.text.light }]}>
-            تسجيل الخروج
+          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>حسابي</Text>
+          <Text style={[styles.chevron, { color: colors.text.secondary }]}>
+            {expandedSection === 'account' ? '▼' : '◀'}
           </Text>
         </TouchableOpacity>
+
+        {expandedSection === 'account' && (
+          <View style={[styles.sectionContent, { backgroundColor: colors.background.primary }]}>
+            <View style={styles.infoRow}>
+              <Text style={[styles.infoLabel, { color: colors.text.secondary }]}>البريد الإلكتروني</Text>
+              <Text style={[styles.infoValue, { color: colors.text.primary }]}>
+                {userProfile?.email || currentTeacher?.phoneNumber || 'غير متوفر'}
+              </Text>
+            </View>
+
+            <View style={styles.infoRow}>
+              <Text style={[styles.infoLabel, { color: colors.text.secondary }]}>الاسم</Text>
+              {isEditingName ? (
+                <View style={styles.editNameContainer}>
+                  <TextInput
+                    style={[styles.nameInput, {
+                      backgroundColor: colors.background.secondary,
+                      color: colors.text.primary,
+                      borderColor: colors.border.medium
+                    }]}
+                    value={newName}
+                    onChangeText={setNewName}
+                    placeholder="أدخل الاسم الجديد"
+                    placeholderTextColor={colors.text.tertiary}
+                    autoFocus
+                  />
+                  <View style={styles.editButtons}>
+                    <TouchableOpacity
+                      style={[styles.cancelButton, { backgroundColor: colors.border.medium }]}
+                      onPress={() => {
+                        setNewName(userProfile?.name || currentTeacher?.name || '');
+                        setIsEditingName(false);
+                      }}
+                    >
+                      <Text style={[styles.buttonText, { color: colors.text.primary }]}>إلغاء</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.saveButton, { backgroundColor: colors.primary }]}
+                      onPress={handleUpdateName}
+                      disabled={isUpdating}
+                    >
+                      <Text style={[styles.buttonText, { color: colors.text.light }]}>
+                        {isUpdating ? 'جاري الحفظ...' : 'حفظ'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.nameRow}>
+                  <Text style={[styles.infoValue, { color: colors.text.primary }]}>
+                    {userProfile?.name || currentTeacher?.name || 'غير متوفر'}
+                  </Text>
+                  <TouchableOpacity
+                    style={[styles.editButton, { backgroundColor: colors.primary }]}
+                    onPress={() => {
+                      setIsEditingName(true);
+                      lightHaptic();
+                    }}
+                  >
+                    <Text style={[styles.buttonText, { color: colors.text.light }]}>تعديل</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          </View>
+        )}
+
+        {/* Appearance Section */}
+        <TouchableOpacity
+          style={[styles.sectionHeader, { backgroundColor: colors.background.primary, borderColor: colors.border.light }]}
+          onPress={() => toggleSection('appearance')}
+          activeOpacity={0.7}
+        >
+          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>المظهر</Text>
+          <Text style={[styles.chevron, { color: colors.text.secondary }]}>
+            {expandedSection === 'appearance' ? '▼' : '◀'}
+          </Text>
+        </TouchableOpacity>
+
+        {expandedSection === 'appearance' && (
+          <View style={[styles.sectionContent, { backgroundColor: colors.background.primary }]}>
+            <TouchableOpacity
+              style={[
+                styles.themeOption,
+                {
+                  backgroundColor: mode === 'light' ? colors.primary : colors.background.secondary,
+                  borderColor: colors.border.medium
+                }
+              ]}
+              onPress={() => handleThemeChange('light')}
+            >
+              <Text style={[
+                styles.themeOptionText,
+                { color: mode === 'light' ? colors.text.light : colors.text.primary }
+              ]}>
+                الوضع النهاري
+              </Text>
+              {mode === 'light' && (
+                <Text style={[styles.checkmark, { color: colors.text.light }]}>✓</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.themeOption,
+                {
+                  backgroundColor: mode === 'dark' ? colors.primary : colors.background.secondary,
+                  borderColor: colors.border.medium
+                }
+              ]}
+              onPress={() => handleThemeChange('dark')}
+            >
+              <Text style={[
+                styles.themeOptionText,
+                { color: mode === 'dark' ? colors.text.light : colors.text.primary }
+              ]}>
+                الوضع الليلي
+              </Text>
+              {mode === 'dark' && (
+                <Text style={[styles.checkmark, { color: colors.text.light }]}>✓</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.themeOption,
+                {
+                  backgroundColor: mode === 'auto' ? colors.primary : colors.background.secondary,
+                  borderColor: colors.border.medium
+                }
+              ]}
+              onPress={() => handleThemeChange('auto')}
+            >
+              <Text style={[
+                styles.themeOptionText,
+                { color: mode === 'auto' ? colors.text.light : colors.text.primary }
+              ]}>
+                تلقائي
+              </Text>
+              {mode === 'auto' && (
+                <Text style={[styles.checkmark, { color: colors.text.light }]}>✓</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Logout Section */}
+        <View style={styles.logoutSection}>
+          <TouchableOpacity
+            style={[styles.logoutButton, { backgroundColor: colors.danger }]}
+            onPress={handleLogout}
+          >
+            <Text style={[styles.logoutButtonText, { color: colors.text.light }]}>
+              تسجيل الخروج
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
-    </View>
-  </ScrollView>
-);
+    </ScrollView>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -249,7 +288,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: spacing.lg,
-    paddingTop: 60, // مسافة من الأعلى
+    paddingTop: 60,
   },
   header: {
     padding: spacing.xl,
@@ -264,7 +303,7 @@ const styles = StyleSheet.create({
     direction: 'rtl',
   },
   sectionHeader: {
-    flexDirection: 'row-reverse', // RTL
+    flexDirection: 'row-reverse',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: spacing.lg,
@@ -290,7 +329,7 @@ const styles = StyleSheet.create({
     ...shadows.sm,
   },
   infoRow: {
-    flexDirection: 'row-reverse', // RTL
+    flexDirection: 'row-reverse',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: spacing.md,
@@ -310,7 +349,7 @@ const styles = StyleSheet.create({
     direction: 'rtl',
   },
   nameRow: {
-    flexDirection: 'row-reverse', // RTL
+    flexDirection: 'row-reverse',
     alignItems: 'center',
     gap: spacing.md,
   },
@@ -334,7 +373,7 @@ const styles = StyleSheet.create({
     direction: 'rtl',
   },
   editButtons: {
-    flexDirection: 'row-reverse', // RTL
+    flexDirection: 'row-reverse',
     gap: spacing.md,
     justifyContent: 'flex-start',
   },
@@ -354,7 +393,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   themeOption: {
-    flexDirection: 'row-reverse', // RTL
+    flexDirection: 'row-reverse',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: spacing.lg,

@@ -55,28 +55,28 @@ function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
     case 'SET_TEACHER':
       return { ...state, currentTeacher: action.payload };
-    
+
     case 'SET_CLASSES':
       return { ...state, classes: action.payload };
-    
+
     case 'ADD_CLASS':
       return { ...state, classes: [...state.classes, action.payload] };
-    
+
     case 'UPDATE_CLASS':
       return {
         ...state,
-        classes: state.classes.map(cls => 
+        classes: state.classes.map(cls =>
           cls.id === action.payload.id ? action.payload : cls
         ),
       };
-    
+
     case 'DELETE_CLASS':
       return {
         ...state,
         classes: state.classes.filter(cls => cls.id !== action.payload),
         attendanceSessions: state.attendanceSessions.filter(session => session.classId !== action.payload),
       };
-    
+
     case 'ADD_STUDENT':
       return {
         ...state,
@@ -86,47 +86,47 @@ function appReducer(state: AppState, action: AppAction): AppState {
             : cls
         ),
       };
-    
+
     case 'UPDATE_STUDENT':
       return {
         ...state,
         classes: state.classes.map(cls =>
           cls.id === action.payload.classId
             ? {
-                ...cls,
-                students: cls.students.map(student =>
-                  student.id === action.payload.student.id ? action.payload.student : student
-                ),
-              }
+              ...cls,
+              students: cls.students.map(student =>
+                student.id === action.payload.student.id ? action.payload.student : student
+              ),
+            }
             : cls
         ),
       };
-    
+
     case 'DELETE_STUDENT':
       return {
         ...state,
         classes: state.classes.map(cls =>
           cls.id === action.payload.classId
             ? {
-                ...cls,
-                students: cls.students.filter(student => student.id !== action.payload.studentId),
-              }
+              ...cls,
+              students: cls.students.filter(student => student.id !== action.payload.studentId),
+            }
             : cls
         ),
       };
-    
+
     case 'ADD_ATTENDANCE_SESSION':
       return {
         ...state,
         attendanceSessions: [...state.attendanceSessions, action.payload],
       };
-    
+
     case 'SET_ATTENDANCE_SESSIONS':
       return {
         ...state,
         attendanceSessions: action.payload,
       };
-    
+
     case 'UPDATE_ATTENDANCE_SESSION':
       return {
         ...state,
@@ -134,19 +134,19 @@ function appReducer(state: AppState, action: AppAction): AppState {
           session.id === action.payload.id ? action.payload : session
         ),
       };
-    
+
     case 'SET_LOADING':
       return { ...state, isLoading: action.payload };
-    
+
     case 'SET_USER_PROFILE':
       return { ...state, userProfile: action.payload };
-    
+
     case 'SET_OFFLINE':
       return { ...state, isOffline: action.payload };
-    
+
     case 'SET_PENDING_ACTIONS':
       return { ...state, pendingActions: action.payload };
-    
+
     case 'LOAD_DATA':
       return {
         ...state,
@@ -155,7 +155,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
         attendanceSessions: action.payload.sessions,
         isLoading: false,
       };
-    
+
     default:
       return state;
   }
@@ -232,7 +232,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const unsubscribe = onAuthStateChanged(auth, async (user: User | null) => {
       if (user) {
         console.log('🔄 تغيير حالة المصادقة - تسجيل دخول:', user.uid);
-        
+
         // إنشاء أو تحديث المعلم في كولكشن المعلمين
         let teacherRecord: Teacher;
         try {
@@ -249,7 +249,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
         dispatch({ type: 'SET_TEACHER', payload: teacherRecord });
         await offlineStorage.saveTeacher(teacherRecord);
-        
+
         // تحميل بروفايل المستخدم من users/{uid}
         try {
           const userRef = doc(firestore, COLLECTIONS.USERS, user.uid);
@@ -300,11 +300,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         loadData();
       } else {
         console.log('🔄 تغيير حالة المصادقة - تسجيل خروج');
+        console.log('📤 Setting currentTeacher to null');
+        console.log('📤 Clearing classes and user profile');
         // تسجيل خروج
         dispatch({ type: 'SET_TEACHER', payload: null });
         dispatch({ type: 'SET_CLASSES', payload: [] });
         dispatch({ type: 'SET_LOADING', payload: false });
         dispatch({ type: 'SET_USER_PROFILE', payload: null });
+        console.log('✅ State cleared - user should see Login screen');
       }
     });
 
@@ -323,7 +326,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       async (data) => {
         try {
           console.log('🔄 تحديث realtime للحضور:', data);
-          
+
           if (data.type === 'session_completed' || data.type === 'attendance_recorded') {
             // تحديث فوري للجلسة المحددة فقط بدلاً من إعادة تحميل جميع الجلسات
             if (data.classId) {
@@ -485,11 +488,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const updatedClasses = state.classes.map(cls =>
         cls.id === classItem.id
           ? {
-              ...cls,
-              students: cls.students.map(student =>
-                student.id === updatedStudent.id ? updatedStudent : student
-              ),
-            }
+            ...cls,
+            students: cls.students.map(student =>
+              student.id === updatedStudent.id ? updatedStudent : student
+            ),
+          }
           : cls
       );
       await offlineStorage.saveClasses(updatedClasses);
@@ -661,16 +664,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             const data: any = snap.data();
             const tier = data.tier || (isAppAdmin ? ADMIN_ACCOUNT_TIER : DEFAULT_ACCOUNT_TIER);
             const role = data.role || (isAppAdmin ? 'leader' : 'member');
-            dispatch({ type: 'SET_USER_PROFILE', payload: {
-              id: user.uid,
-              email: data.email || normalizedEmail,
-              name: data.name || user.displayName || 'معلم',
-              schoolId: data.schoolId ?? null,
-              role,
-              createdAt: data.createdAt ? new Date(data.createdAt.seconds ? data.createdAt.seconds * 1000 : data.createdAt) : undefined,
-              tier,
-              isAppAdmin,
-            }});
+            dispatch({
+              type: 'SET_USER_PROFILE', payload: {
+                id: user.uid,
+                email: data.email || normalizedEmail,
+                name: data.name || user.displayName || 'معلم',
+                schoolId: data.schoolId ?? null,
+                role,
+                createdAt: data.createdAt ? new Date(data.createdAt.seconds ? data.createdAt.seconds * 1000 : data.createdAt) : undefined,
+                tier,
+                isAppAdmin,
+              }
+            });
             await setDoc(userRef, { tier, isAppAdmin, role }, { merge: true });
           }
         } catch (e) {
@@ -687,19 +692,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const loadAttendanceSessions = async (classId: string, maxResults: number = 10): Promise<AttendanceSession[]> => {
     try {
       console.log(`📥 تحميل جلسات الحضور للفصل: ${classId} (limit: ${maxResults})`);
-      
+
       const cachedSessions = state.attendanceSessions.filter(s => s.classId === classId);
       console.log(`💾 عرض ${cachedSessions.length} جلسة من الكاش فوراً`);
-      
+
       if (state.isOffline) {
         return cachedSessions;
       }
-      
+
       const updateInBackground = async () => {
         try {
           const sessions = await attendanceService.getAttendanceSessionsByClass(classId, maxResults);
           console.log(`🔄 تحديث في الخلفية: ${sessions.length} جلسة`);
-          
+
           const hasChanges = JSON.stringify(sessions) !== JSON.stringify(cachedSessions);
           if (hasChanges) {
             const updatedSessions = [
@@ -714,9 +719,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           console.error('❌ خطأ في التحديث في الخلفية:', error);
         }
       };
-      
+
       updateInBackground();
-      
+
       return cachedSessions;
     } catch (error) {
       console.error('❌ خطأ في تحميل جلسات الحضور:', error);
@@ -725,8 +730,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AppContext.Provider value={{ 
-      state, 
+    <AppContext.Provider value={{
+      state,
       dispatch,
       createTeacher,
       createClass,

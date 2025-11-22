@@ -6,14 +6,13 @@ import { getFunctions } from "firebase/functions";
 import { getDatabase } from "firebase/database";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDD_lR7JkQdhQHdtp5MV-0w1vYMSaXgZx8",
-  authDomain: "ttttt-13caf.firebaseapp.com",
-  projectId: "ttttt-13caf",
-  storageBucket: "ttttt-13caf.firebasestorage.app",
-  messagingSenderId: "631411675079",
-  appId: "1:631411675079:web:565983e33c61b69ecc53e2",
-  measurementId: "G-DMB83S5H0H",
-  databaseURL: "https://ttttt-13caf-default-rtdb.firebaseio.com"
+  apiKey: "AIzaSyAo41EStVdJUwca8arKh0AWJyFx2AcAmco",
+  authDomain: "learnzplus.firebaseapp.com",
+  projectId: "learnzplus",
+  storageBucket: "learnzplus.firebasestorage.app",
+  messagingSenderId: "435695202976",
+  appId: "1:435695202976:web:2e8a4bedfa5516f8860fc5",
+  measurementId: "G-F3JNG5XVE6"
 };
 
 // Initialize Firebase

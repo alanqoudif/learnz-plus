@@ -86,4 +86,5 @@ export type RootStackParamList = {
   Community: undefined;
   LeaderAdmin: undefined;
   AppAdmin: undefined;
+  Settings: undefined;
 };

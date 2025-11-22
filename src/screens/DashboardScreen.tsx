@@ -9,9 +9,9 @@ import {
   RefreshControl,
 } from 'react-native';
 import { useApp } from '../context/AppContext';
+import { useTheme } from '../context/ThemeContext';
 import { Class } from '../types';
-import { colors, fontFamilies, shadows, borderRadius, spacing } from '../utils/theme';
-import { smartAuthService as authService } from '../services/smartService';
+import { fontFamilies, shadows, borderRadius, spacing } from '../utils/theme';
 import ClassCard from '../components/ClassCard';
 import { ClassListSkeleton } from '../components/SkeletonLoader';
 import { lightHaptic, mediumHaptic } from '../utils/haptics';
@@ -22,6 +22,7 @@ interface DashboardScreenProps {
 
 export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   const { state, deleteClass, refreshData } = useApp();
+  const { colors } = useTheme();
   const { currentTeacher, classes, isLoading, userProfile, isOffline, pendingActions } = state as any;
   const [isRefreshing, setIsRefreshing] = useState(false);
   const pendingCount = Array.isArray(pendingActions) ? pendingActions.length : 0;
@@ -107,34 +108,21 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   const renderEmptyState = useCallback(() => (
     <View style={styles.emptyState}>
       <Text style={styles.emptyIcon}>📚</Text>
-      <Text style={styles.emptyStateTitle}>لا توجد فصول دراسية</Text>
-      <Text style={styles.emptyStateSubtitle}>
+      <Text style={[styles.emptyStateTitle, dynamicStyles.emptyStateTitle]}>
+        لا توجد فصول دراسية
+      </Text>
+      <Text style={[styles.emptyStateSubtitle, dynamicStyles.emptyStateSubtitle]}>
         ابدأ بإضافة فصل دراسي جديد لإدارة حضور وغياب الطلاب
       </Text>
-      <TouchableOpacity style={styles.addFirstClassButton} onPress={handleAddClass}>
+      <TouchableOpacity 
+        style={[styles.addFirstClassButton, dynamicStyles.addFirstClassButton]} 
+        onPress={handleAddClass}
+      >
         <Text style={styles.addFirstClassButtonText}>+ إضافة فصل دراسي</Text>
       </TouchableOpacity>
     </View>
-  ), [handleAddClass]);
+  ), [handleAddClass, dynamicStyles]);
 
-  const handleLogout = useCallback(() => {
-    mediumHaptic();
-    Alert.alert(
-      'تسجيل الخروج',
-      'هل أنت متأكد من تسجيل الخروج؟',
-      [
-        { text: 'إلغاء', style: 'cancel' },
-        {
-          text: 'تسجيل الخروج',
-          style: 'destructive',
-          onPress: async () => {
-            await authService.signOut();
-            // سيتم الانتقال تلقائياً عند تحديث state.currentTeacher
-          },
-        },
-      ]
-    );
-  }, []);
 
   if (isLoading) {
     return (
@@ -155,33 +143,54 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
     );
   }
 
+  const dynamicStyles = {
+    container: { backgroundColor: colors.background.secondary },
+    header: { backgroundColor: colors.background.primary },
+    welcomeText: { color: colors.text.secondary },
+    teacherName: { color: colors.text.primary },
+    offlineNotice: { backgroundColor: colors.warning + '20' },
+    pendingNotice: { backgroundColor: colors.info + '20' },
+    syncNoticeText: { color: colors.text.primary },
+    sectionTitle: { color: colors.text.primary },
+    addButton: { backgroundColor: colors.success },
+    emptyStateTitle: { color: colors.text.secondary },
+    emptyStateSubtitle: { color: colors.text.tertiary },
+    addFirstClassButton: { backgroundColor: colors.primary },
+  };
+
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
+    <View style={[styles.container, dynamicStyles.container]}>
+      <View style={[styles.header, dynamicStyles.header]}>
         <View>
-          <Text style={styles.welcomeText}>مرحباً 👋</Text>
-          <Text style={styles.teacherName}>{userProfile?.name || currentTeacher?.name}</Text>
+          <Text style={[styles.welcomeText, dynamicStyles.welcomeText]}>مرحباً 👋</Text>
+          <Text style={[styles.teacherName, dynamicStyles.teacherName]}>
+            {userProfile?.name || currentTeacher?.name}
+          </Text>
         </View>
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Text style={styles.logoutButtonText}>خروج</Text>
-        </TouchableOpacity>
       </View>
 
       {isOffline && (
-        <View style={[styles.syncNotice, styles.offlineNotice]}>
-          <Text style={styles.syncNoticeText}>🛜 التطبيق يعمل حالياً دون اتصال. سيتم حفظ كل شيء ومزامنته تلقائياً عند توفر الإنترنت.</Text>
+        <View style={[styles.syncNotice, dynamicStyles.offlineNotice]}>
+          <Text style={[styles.syncNoticeText, dynamicStyles.syncNoticeText]}>
+            🛜 التطبيق يعمل حالياً دون اتصال. سيتم حفظ كل شيء ومزامنته تلقائياً عند توفر الإنترنت.
+          </Text>
         </View>
       )}
       {!isOffline && pendingCount > 0 && (
-        <View style={[styles.syncNotice, styles.pendingNotice]}>
-          <Text style={styles.syncNoticeText}>⏳ يتم إرسال {pendingCount} عملية معلّقة إلى السحابة...</Text>
+        <View style={[styles.syncNotice, dynamicStyles.pendingNotice]}>
+          <Text style={[styles.syncNoticeText, dynamicStyles.syncNoticeText]}>
+            ⏳ يتم إرسال {pendingCount} عملية معلّقة إلى السحابة...
+          </Text>
         </View>
       )}
 
       <View style={styles.content}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>الفصول الدراسية</Text>
-          <TouchableOpacity style={styles.addButton} onPress={handleAddClass}>
+          <Text style={[styles.sectionTitle, dynamicStyles.sectionTitle]}>الفصول الدراسية</Text>
+          <TouchableOpacity 
+            style={[styles.addButton, dynamicStyles.addButton]} 
+            onPress={handleAddClass}
+          >
             <Text style={styles.addButtonText}>+ إضافة فصل</Text>
           </TouchableOpacity>
         </View>
@@ -220,7 +229,6 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background.secondary,
     direction: 'rtl',
   },
   header: {
@@ -230,31 +238,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingTop: 60,
     paddingBottom: spacing.xl,
-    backgroundColor: colors.background.primary,
     ...shadows.sm,
   },
   welcomeText: {
     fontSize: 16,
     fontFamily: fontFamilies.regular,
-    color: colors.text.secondary,
   },
   teacherName: {
     fontSize: 24,
     fontFamily: fontFamilies.bold,
-    color: colors.text.primary,
     marginTop: 4,
-  },
-  logoutButton: {
-    backgroundColor: colors.danger,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.lg,
-    ...shadows.sm,
-  },
-  logoutButtonText: {
-    color: colors.text.light,
-    fontFamily: fontFamilies.semibold,
-    fontSize: 14,
   },
   syncNotice: {
     marginHorizontal: spacing.md,
@@ -289,17 +282,15 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 22,
     fontFamily: fontFamilies.bold,
-    color: colors.text.primary,
   },
   addButton: {
-    backgroundColor: colors.success,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.lg,
     ...shadows.sm,
   },
   addButtonText: {
-    color: colors.text.light,
+    color: '#ffffff',
     fontFamily: fontFamilies.semibold,
     fontSize: 14,
   },
@@ -319,27 +310,24 @@ const styles = StyleSheet.create({
   emptyStateTitle: {
     fontSize: 24,
     fontFamily: fontFamilies.bold,
-    color: colors.text.secondary,
     marginBottom: spacing.md,
     textAlign: 'center',
   },
   emptyStateSubtitle: {
     fontSize: 16,
     fontFamily: fontFamilies.regular,
-    color: colors.text.tertiary,
     textAlign: 'center',
     lineHeight: 24,
     marginBottom: spacing['3xl'],
   },
   addFirstClassButton: {
-    backgroundColor: colors.primary,
     paddingHorizontal: spacing['2xl'],
     paddingVertical: spacing.md,
     borderRadius: borderRadius.lg,
     ...shadows.md,
   },
   addFirstClassButtonText: {
-    color: colors.text.light,
+    color: '#ffffff',
     fontSize: 16,
     fontFamily: fontFamilies.semibold,
   },

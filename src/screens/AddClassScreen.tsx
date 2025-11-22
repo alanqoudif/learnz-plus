@@ -11,8 +11,9 @@ import {
   ScrollView,
 } from 'react-native';
 import { useApp } from '../context/AppContext';
+import { useTheme } from '../context/ThemeContext';
 import { Class } from '../types';
-import { fontFamilies } from '../utils/theme';
+import { fontFamilies, spacing, borderRadius, shadows } from '../utils/theme';
 
 interface AddClassScreenProps {
   navigation: any;
@@ -30,6 +31,7 @@ export default function AddClassScreen({ navigation, route }: AddClassScreenProp
   const [section, setSection] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { state, dispatch, createClass, updateClass } = useApp();
+  const { colors } = useTheme();
 
   // التحقق من وضع التعديل
   const editMode = route?.params?.editMode || false;
@@ -76,10 +78,12 @@ export default function AddClassScreen({ navigation, route }: AddClassScreenProp
     try {
       if (editMode && existingClass) {
         // تحديث الفصل الموجود
+        console.log('🔄 محاولة تحديث الفصل:', existingClass.id);
         await updateClass(existingClass.id, {
           name: className.trim(),
           section: section.trim(),
         });
+        console.log('✅ تم تحديث الفصل بنجاح');
         Alert.alert(
           'تم بنجاح',
           'تم تحديث الفصل الدراسي بنجاح',
@@ -92,11 +96,13 @@ export default function AddClassScreen({ navigation, route }: AddClassScreenProp
         );
       } else {
         // إضافة فصل جديد
+        console.log('🔄 محاولة إضافة فصل جديد:', className.trim());
         const newClass = await createClass({
           name: className.trim(),
           section: section.trim(),
           teacherId: state.currentTeacher.id,
         });
+        console.log('✅ تم إضافة الفصل بنجاح:', newClass.id);
         Alert.alert(
           'تم بنجاح',
           'تم إضافة الفصل الدراسي بنجاح',
@@ -108,60 +114,90 @@ export default function AddClassScreen({ navigation, route }: AddClassScreenProp
           ]
         );
       }
-    } catch (error) {
-      console.error('Error saving class:', error);
-      Alert.alert('خطأ', editMode ? 'حدث خطأ أثناء تحديث الفصل' : 'حدث خطأ أثناء إضافة الفصل');
+    } catch (error: any) {
+      console.error('❌ خطأ في حفظ الفصل:', error);
+      let errorMessage = editMode ? 'حدث خطأ أثناء تحديث الفصل' : 'حدث خطأ أثناء إضافة الفصل';
+      
+      if (error?.code === 'permission-denied' || error?.message?.includes('PERMISSION_DENIED')) {
+        errorMessage = 'لا توجد صلاحية لحفظ البيانات. يرجى التحقق من إعدادات Firebase.';
+      } else if (error?.message) {
+        errorMessage = error.message;
+      }
+      
+      Alert.alert('خطأ', errorMessage);
     } finally {
       setIsLoading(false);
     }
   };
 
+  const dynamicStyles = {
+    container: { backgroundColor: colors.background.secondary },
+    title: { color: colors.text.primary },
+    subtitle: { color: colors.text.secondary },
+    form: { backgroundColor: colors.background.primary },
+    label: { color: colors.text.primary },
+    input: { 
+      backgroundColor: colors.background.secondary,
+      borderColor: colors.border.medium,
+      color: colors.text.primary
+    },
+    previewContainer: { backgroundColor: colors.background.secondary },
+    previewLabel: { color: colors.text.secondary },
+    previewText: { color: colors.text.primary },
+    cancelButton: { backgroundColor: colors.secondary },
+    addButton: { backgroundColor: colors.success },
+    addButtonDisabled: { backgroundColor: colors.secondary, opacity: 0.6 },
+    helpContainer: { backgroundColor: colors.background.primary },
+    helpTitle: { color: colors.text.primary },
+    helpText: { color: colors.text.secondary },
+  };
+
   return (
     <KeyboardAvoidingView 
-      style={styles.container} 
+      style={[styles.container, dynamicStyles.container]} 
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView contentContainerStyle={styles.scrollContainer}>
         <View style={styles.content}>
           <View style={styles.header}>
-            <Text style={styles.title}>
+            <Text style={[styles.title, dynamicStyles.title]}>
               {editMode ? 'تعديل الفصل الدراسي' : 'إضافة فصل دراسي جديد'}
             </Text>
-            <Text style={styles.subtitle}>
+            <Text style={[styles.subtitle, dynamicStyles.subtitle]}>
               {editMode ? 'عدّل تفاصيل الفصل الدراسي' : 'أدخل تفاصيل الفصل الدراسي'}
             </Text>
           </View>
 
-          <View style={styles.form}>
+          <View style={[styles.form, dynamicStyles.form]}>
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>اسم الفصل</Text>
+              <Text style={[styles.label, dynamicStyles.label]}>اسم الفصل</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, dynamicStyles.input]}
                 value={className}
                 onChangeText={setClassName}
                 placeholder="مثال: الخامس، السادس، الأول"
-                placeholderTextColor="#999"
+                placeholderTextColor={colors.text.tertiary}
                 textAlign="right"
                 autoCapitalize="words"
               />
             </View>
 
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>الشعبة</Text>
+              <Text style={[styles.label, dynamicStyles.label]}>الشعبة</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, dynamicStyles.input]}
                 value={section}
                 onChangeText={setSection}
                 placeholder="مثال: أ، ب، ج، الأولى، الثانية"
-                placeholderTextColor="#999"
+                placeholderTextColor={colors.text.tertiary}
                 textAlign="right"
                 autoCapitalize="words"
               />
             </View>
 
-            <View style={styles.previewContainer}>
-              <Text style={styles.previewLabel}>معاينة:</Text>
-              <Text style={styles.previewText}>
+            <View style={[styles.previewContainer, dynamicStyles.previewContainer]}>
+              <Text style={[styles.previewLabel, dynamicStyles.previewLabel]}>معاينة:</Text>
+              <Text style={[styles.previewText, dynamicStyles.previewText]}>
                 {className.trim() && section.trim() 
                   ? `فصل ${className.trim()} - شعبة ${section.trim()}`
                   : 'سيظهر اسم الفصل هنا'
@@ -171,14 +207,18 @@ export default function AddClassScreen({ navigation, route }: AddClassScreenProp
 
             <View style={styles.buttonContainer}>
               <TouchableOpacity
-                style={styles.cancelButton}
+                style={[styles.cancelButton, dynamicStyles.cancelButton]}
                 onPress={() => navigation.goBack()}
               >
                 <Text style={styles.cancelButtonText}>إلغاء</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.addButton, isLoading && styles.addButtonDisabled]}
+                style={[
+                  styles.addButton, 
+                  dynamicStyles.addButton, 
+                  isLoading && dynamicStyles.addButtonDisabled
+                ]}
                 onPress={handleAddClass}
                 disabled={isLoading}
               >
@@ -192,15 +232,15 @@ export default function AddClassScreen({ navigation, route }: AddClassScreenProp
             </View>
           </View>
 
-          <View style={styles.helpContainer}>
-            <Text style={styles.helpTitle}>نصائح:</Text>
-            <Text style={styles.helpText}>
+          <View style={[styles.helpContainer, dynamicStyles.helpContainer]}>
+            <Text style={[styles.helpTitle, dynamicStyles.helpTitle]}>نصائح:</Text>
+            <Text style={[styles.helpText, dynamicStyles.helpText]}>
               • يمكنك إضافة عدة شعب لنفس الفصل (مثل: الخامس أ، الخامس ب)
             </Text>
-            <Text style={styles.helpText}>
+            <Text style={[styles.helpText, dynamicStyles.helpText]}>
               • بعد إضافة الفصل، يمكنك إضافة الطلاب إليه
             </Text>
-            <Text style={styles.helpText}>
+            <Text style={[styles.helpText, dynamicStyles.helpText]}>
               • يمكنك تسجيل الحضور والغياب للطلاب
             </Text>
           </View>
@@ -213,7 +253,6 @@ export default function AddClassScreen({ navigation, route }: AddClassScreenProp
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
     direction: 'rtl',
   },
   scrollContainer: {
@@ -221,141 +260,108 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.xl,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 30,
+    marginBottom: spacing['3xl'],
   },
   title: {
     fontSize: 24,
     fontFamily: fontFamilies.bold,
-    color: '#2c3e50',
     textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   },
   subtitle: {
     fontSize: 16,
     fontFamily: fontFamilies.regular,
-    color: '#6c757d',
     textAlign: 'center',
   },
   form: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-    marginBottom: 20,
+    borderRadius: borderRadius.xl,
+    padding: spacing['2xl'],
+    ...shadows.md,
+    marginBottom: spacing.xl,
     direction: 'rtl',
   },
   inputContainer: {
-    marginBottom: 20,
+    marginBottom: spacing.xl,
   },
   label: {
     fontSize: 16,
     fontFamily: fontFamilies.semibold,
-    color: '#2c3e50',
-    marginBottom: 8,
+    marginBottom: spacing.sm,
     textAlign: 'right',
   },
   input: {
     borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    borderRadius: borderRadius.lg,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
     fontSize: 16,
     fontFamily: fontFamilies.regular,
-    backgroundColor: '#f8f9fa',
-    color: '#2c3e50',
   },
   previewContainer: {
-    backgroundColor: '#e9ecef',
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 20,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.xl,
   },
   previewLabel: {
     fontSize: 14,
     fontFamily: fontFamilies.semibold,
-    color: '#495057',
-    marginBottom: 8,
+    marginBottom: spacing.sm,
     textAlign: 'right',
   },
   previewText: {
     fontSize: 16,
     fontFamily: fontFamilies.medium,
-    color: '#2c3e50',
     textAlign: 'center',
   },
   buttonContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     direction: 'rtl',
+    gap: spacing.md,
   },
   cancelButton: {
     flex: 1,
-    backgroundColor: '#6c757d',
-    borderRadius: 8,
-    paddingVertical: 16,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.lg,
     alignItems: 'center',
-    marginRight: 8,
   },
   cancelButtonText: {
-    color: 'white',
+    color: '#ffffff',
     fontSize: 16,
     fontFamily: fontFamilies.semibold,
   },
   addButton: {
     flex: 1,
-    backgroundColor: '#28a745',
-    borderRadius: 8,
-    paddingVertical: 16,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.lg,
     alignItems: 'center',
-    marginLeft: 8,
-  },
-  addButtonDisabled: {
-    backgroundColor: '#6c757d',
   },
   addButtonText: {
-    color: 'white',
+    color: '#ffffff',
     fontSize: 16,
     fontFamily: fontFamilies.semibold,
   },
   helpContainer: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xl,
+    ...shadows.md,
   },
   helpTitle: {
     fontSize: 16,
     fontFamily: fontFamilies.bold,
-    color: '#2c3e50',
-    marginBottom: 12,
+    marginBottom: spacing.md,
     textAlign: 'right',
   },
   helpText: {
     fontSize: 14,
     fontFamily: fontFamilies.regular,
-    color: '#6c757d',
     lineHeight: 20,
-    marginBottom: 8,
+    marginBottom: spacing.sm,
     textAlign: 'right',
   },
 });

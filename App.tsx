@@ -5,6 +5,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StatusBar } from 'expo-status-bar';
 import { I18nManager } from 'react-native';
 import { AppProvider, useApp } from './src/context/AppContext';
+import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import LoginScreen from './src/screens/LoginScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
 import AddClassScreen from './src/screens/AddClassScreen';
@@ -15,6 +16,7 @@ import CommunityScreen from './src/screens/CommunityScreen';
 import JoinSchoolScreen from './src/screens/JoinSchoolScreen';
 import LeaderAdminScreen from './src/screens/LeaderAdminScreen';
 import AppAdminScreen from './src/screens/AppAdminScreen';
+import SettingsScreen from './src/screens/SettingsScreen';
 import { RootStackParamList } from './src/types';
 
 const Stack = createStackNavigator<RootStackParamList>();
@@ -43,6 +45,7 @@ function MainTabs() {
       {isAppAdmin && (
         <Tab.Screen name="AppAdmin" component={AppAdminScreen} options={{ title: 'إدارة التطبيق' }} />
       )}
+      <Tab.Screen name="Settings" component={SettingsScreen} options={{ title: 'الإعدادات' }} />
     </Tab.Navigator>
   );
 }
@@ -67,6 +70,7 @@ function AppNavigator() {
             <Stack.Screen name="JoinSchool" component={JoinSchoolScreen} />
             <Stack.Screen name="LeaderAdmin" component={LeaderAdminScreen} />
             <Stack.Screen name="AppAdmin" component={AppAdminScreen} />
+            <Stack.Screen name="Settings" component={SettingsScreen} />
             <Stack.Screen name="AddClass" component={AddClassScreen} />
             <Stack.Screen name="StudentManagement" component={StudentManagementScreen} />
             <Stack.Screen name="Attendance" component={AttendanceScreen} />
@@ -81,6 +85,17 @@ function AppNavigator() {
   );
 }
 
+function ThemedAppNavigator() {
+  const { isDark } = useTheme();
+  
+  return (
+    <>
+      <AppNavigator />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
+    </>
+  );
+}
+
 export default function App() {
   // تفعيل دعم RTL للعربية
   React.useEffect(() => {
@@ -89,9 +104,10 @@ export default function App() {
   }, []);
 
   return (
-    <AppProvider>
-      <AppNavigator />
-      <StatusBar style="auto" />
-    </AppProvider>
+    <ThemeProvider>
+      <AppProvider>
+        <ThemedAppNavigator />
+      </AppProvider>
+    </ThemeProvider>
   );
 }

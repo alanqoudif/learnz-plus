@@ -78,18 +78,28 @@ export default function StudentManagementScreen({ navigation, route }: StudentMa
     setIsLoading(true);
 
     try {
+      console.log('🔄 محاولة إضافة طالب جديد:', newStudentName.trim());
       const newStudent = await createStudent({
         name: newStudentName.trim(),
         classId: classId,
       });
       
+      console.log('✅ تم إضافة الطالب بنجاح:', newStudent.id);
       successHaptic();
       setNewStudentName('');
       setShowAddModal(false);
       Alert.alert('تم بنجاح', 'تم إضافة الطالب بنجاح');
-    } catch (error) {
-      console.error('Error adding student:', error);
-      Alert.alert('خطأ', 'حدث خطأ أثناء إضافة الطالب');
+    } catch (error: any) {
+      console.error('❌ خطأ في إضافة الطالب:', error);
+      let errorMessage = 'حدث خطأ أثناء إضافة الطالب';
+      
+      if (error?.code === 'permission-denied' || error?.message?.includes('PERMISSION_DENIED')) {
+        errorMessage = 'لا توجد صلاحية لحفظ البيانات. يرجى التحقق من إعدادات Firebase.';
+      } else if (error?.message) {
+        errorMessage = error.message;
+      }
+      
+      Alert.alert('خطأ', errorMessage);
     } finally {
       setIsLoading(false);
     }

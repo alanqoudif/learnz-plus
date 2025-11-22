@@ -10,6 +10,41 @@ service cloud.firestore {
       allow write: if isSelf(userId);
     }
 
+    // Teachers: each teacher can read/write own data
+    match /teachers/{teacherId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isSelf(teacherId);
+    }
+
+    // Classes: teachers can create/read/update/delete their own classes
+    match /classes/{classId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn();
+    }
+
+    // Students: teachers can create/read/update/delete students in their classes
+    match /students/{studentId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn();
+    }
+
+    // Attendance Sessions: teachers can create/read/update/delete sessions for their classes
+    match /attendance_sessions/{sessionId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn();
+    }
+
+    // Attendance Records: teachers can create/read/update/delete records for their classes
+    match /attendance_records/{recordId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn();
+    }
+
     // Schools: readable to members; writable by leader
     match /schools/{schoolId} {
       allow read: if isSignedIn();
@@ -32,7 +67,5 @@ service cloud.firestore {
     function isMember(schoolId) {
       return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.schoolId == schoolId;
     }
-
-    // Remove permissive legacy rule to tighten security
   }
 }

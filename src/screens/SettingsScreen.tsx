@@ -46,6 +46,11 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
           onPress: async () => {
             try {
               await authService.signOut();
+              // إعادة تعيين Navigation للتأكد من الرجوع لصفحة Login
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'Login' }],
+              });
             } catch (error) {
               console.error('Error signing out:', error);
               Alert.alert('خطأ', 'حدث خطأ أثناء تسجيل الخروج');

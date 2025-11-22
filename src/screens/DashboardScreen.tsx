@@ -49,7 +49,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
     mediumHaptic();
     Alert.alert(
       'تأكيد الحذف',
-      `هل أنت متأكد من حذف الشعبة "${className}"؟\n\n⚠️ تحذير: سيتم حذف:\n• جميع الطلاب في هذه الشعبة\n• جميع سجلات الحضور\n• تاريخ الحضور الكامل\n\nهذا الإجراء لا يمكن التراجع عنه!`,
+      `هل أنت متأكد من حذف الشعبة "${className}"؟\n\nتحذير: سيتم حذف:\n• جميع الطلاب في هذه الشعبة\n• جميع سجلات الحضور\n• تاريخ الحضور الكامل\n\nهذا الإجراء لا يمكن التراجع عنه!`,
       [
         { text: 'إلغاء', style: 'cancel' },
         {
@@ -122,7 +122,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
 
   const renderEmptyState = useCallback(() => (
     <View style={styles.emptyState}>
-      <Text style={styles.emptyIcon}>📚</Text>
+
       <Text style={[styles.emptyStateTitle, dynamicStyles.emptyStateTitle]}>
         لا توجد فصول دراسية
       </Text>
@@ -164,7 +164,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
     <View style={[styles.container, dynamicStyles.container]}>
       <View style={[styles.header, dynamicStyles.header]}>
         <View>
-          <Text style={[styles.welcomeText, dynamicStyles.welcomeText]}>مرحباً 👋</Text>
+          <Text style={[styles.welcomeText, dynamicStyles.welcomeText]}>مرحباً</Text>
           <Text style={[styles.teacherName, dynamicStyles.teacherName]}>
             {userProfile?.name || currentTeacher?.name}
           </Text>
@@ -174,14 +174,14 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
       {isOffline && (
         <View style={[styles.syncNotice, dynamicStyles.offlineNotice]}>
           <Text style={[styles.syncNoticeText, dynamicStyles.syncNoticeText]}>
-            🛜 التطبيق يعمل حالياً دون اتصال. سيتم حفظ كل شيء ومزامنته تلقائياً عند توفر الإنترنت.
+            التطبيق يعمل حالياً دون اتصال. سيتم حفظ كل شيء ومزامنته تلقائياً عند توفر الإنترنت.
           </Text>
         </View>
       )}
       {!isOffline && pendingCount > 0 && (
         <View style={[styles.syncNotice, dynamicStyles.pendingNotice]}>
           <Text style={[styles.syncNoticeText, dynamicStyles.syncNoticeText]}>
-            ⏳ يتم إرسال {pendingCount} عملية معلّقة إلى السحابة...
+            يتم إرسال {pendingCount} عملية معلّقة إلى السحابة...
           </Text>
         </View>
       )}

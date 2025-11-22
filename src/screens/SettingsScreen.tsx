@@ -7,7 +7,6 @@ import {
   ScrollView,
   TextInput,
   Alert,
-  Switch,
 } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
@@ -25,11 +24,14 @@ interface SettingsScreenProps {
 
 export default function SettingsScreen({ navigation }: SettingsScreenProps) {
   const { state } = useApp();
-  const { mode, isDark, setMode, colors } = useTheme();
+  const { mode, setMode, colors } = useTheme();
   const { userProfile, currentTeacher } = state as any;
   const [isEditingName, setIsEditingName] = useState(false);
   const [newName, setNewName] = useState(userProfile?.name || currentTeacher?.name || '');
   const [isUpdating, setIsUpdating] = useState(false);
+
+  // حالة الأقسام المفتوحة/المغلقة
+  const [expandedSection, setExpandedSection] = useState<string | null>(null);
 
   const handleLogout = () => {
     mediumHaptic();
@@ -70,12 +72,10 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
         return;
       }
 
-      // تحديث الاسم في Firebase Auth
       await updateProfile(user, {
         displayName: newName.trim(),
       });
 
-      // تحديث الاسم في Firestore
       const userRef = doc(firestore, COLLECTIONS.USERS, user.uid);
       await updateDoc(userRef, {
         name: newName.trim(),
@@ -96,6 +96,11 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
     await setMode(newMode);
   };
 
+  const toggleSection = (section: string) => {
+    lightHaptic();
+    setExpandedSection(expandedSection === section ? null : section);
+  };
+
   return (
     <ScrollView style={[styles.container, { backgroundColor: colors.background.secondary }]}>
       <View style={styles.content}>
@@ -105,10 +110,19 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
         </View>
 
         {/* Account Section */}
-        <View style={[styles.section, { backgroundColor: colors.background.primary }]}>
+        <TouchableOpacity
+          style={[styles.sectionHeader, { backgroundColor: colors.background.primary, borderColor: colors.border.light }]}
+          onPress={() => toggleSection('account')}
+          activeOpacity={0.7}
+        >
           <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>حسابي</Text>
-          
-          <View style={styles.accountInfo}>
+          <Text style={[styles.chevron, { color: colors.text.secondary }]}>
+            {expandedSection === 'account' ? '▼' : '◀'}
+          </Text>
+        </TouchableOpacity>
+
+        {expandedSection === 'account' && (
+          <View style={[styles.sectionContent, { backgroundColor: colors.background.primary }]}>
             <View style={styles.infoRow}>
               <Text style={[styles.infoLabel, { color: colors.text.secondary }]}>البريد الإلكتروني</Text>
               <Text style={[styles.infoValue, { color: colors.text.primary }]}>
@@ -121,7 +135,7 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
               {isEditingName ? (
                 <View style={styles.editNameContainer}>
                   <TextInput
-                    style={[styles.nameInput, { 
+                    style={[styles.nameInput, {
                       backgroundColor: colors.background.secondary,
                       color: colors.text.primary,
                       borderColor: colors.border.medium
@@ -134,20 +148,20 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
                   />
                   <View style={styles.editButtons}>
                     <TouchableOpacity
-                      style={[styles.cancelEditButton, { backgroundColor: colors.secondary }]}
+                      style={[styles.cancelButton, { backgroundColor: colors.border.medium }]}
                       onPress={() => {
                         setNewName(userProfile?.name || currentTeacher?.name || '');
                         setIsEditingName(false);
                       }}
                     >
-                      <Text style={[styles.editButtonText, { color: colors.text.light }]}>إلغاء</Text>
+                      <Text style={[styles.buttonText, { color: colors.text.primary }]}>إلغاء</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={[styles.saveEditButton, { backgroundColor: colors.success }]}
+                      style={[styles.saveButton, { backgroundColor: colors.primary }]}
                       onPress={handleUpdateName}
                       disabled={isUpdating}
                     >
-                      <Text style={[styles.editButtonText, { color: colors.text.light }]}>
+                      <Text style={[styles.buttonText, { color: colors.text.light }]}>
                         {isUpdating ? 'جاري الحفظ...' : 'حفظ'}
                       </Text>
                     </TouchableOpacity>
@@ -159,29 +173,38 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
                     {userProfile?.name || currentTeacher?.name || 'غير متوفر'}
                   </Text>
                   <TouchableOpacity
-                    style={[styles.editButton, { backgroundColor: colors.background.secondary }]}
+                    style={[styles.editButton, { backgroundColor: colors.primary }]}
                     onPress={() => {
                       setIsEditingName(true);
                       lightHaptic();
                     }}
                   >
-                    <Text style={[styles.editButtonText, { color: colors.primary }]}>تعديل</Text>
+                    <Text style={[styles.buttonText, { color: colors.text.light }]}>تعديل</Text>
                   </TouchableOpacity>
                 </View>
               )}
             </View>
           </View>
-        </View>
+        )}
 
         {/* Appearance Section */}
-        <View style={[styles.section, { backgroundColor: colors.background.primary }]}>
+        <TouchableOpacity
+          style={[styles.sectionHeader, { backgroundColor: colors.background.primary, borderColor: colors.border.light }]}
+          onPress={() => toggleSection('appearance')}
+          activeOpacity={0.7}
+        >
           <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>المظهر</Text>
-          
-          <View style={styles.themeOptions}>
+          <Text style={[styles.chevron, { color: colors.text.secondary }]}>
+            {expandedSection === 'appearance' ? '▼' : '◀'}
+          </Text>
+        </TouchableOpacity>
+
+        {expandedSection === 'appearance' && (
+          <View style={[styles.sectionContent, { backgroundColor: colors.background.primary }]}>
             <TouchableOpacity
               style={[
                 styles.themeOption,
-                { 
+                {
                   backgroundColor: mode === 'light' ? colors.primary : colors.background.secondary,
                   borderColor: colors.border.medium
                 }
@@ -192,7 +215,7 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
                 styles.themeOptionText,
                 { color: mode === 'light' ? colors.text.light : colors.text.primary }
               ]}>
-                ☀️ الوضع النهاري
+                الوضع النهاري
               </Text>
               {mode === 'light' && (
                 <Text style={[styles.checkmark, { color: colors.text.light }]}>✓</Text>
@@ -202,7 +225,7 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
             <TouchableOpacity
               style={[
                 styles.themeOption,
-                { 
+                {
                   backgroundColor: mode === 'dark' ? colors.primary : colors.background.secondary,
                   borderColor: colors.border.medium
                 }
@@ -213,7 +236,7 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
                 styles.themeOptionText,
                 { color: mode === 'dark' ? colors.text.light : colors.text.primary }
               ]}>
-                🌙 الوضع الليلي
+                الوضع الليلي
               </Text>
               {mode === 'dark' && (
                 <Text style={[styles.checkmark, { color: colors.text.light }]}>✓</Text>
@@ -223,7 +246,7 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
             <TouchableOpacity
               style={[
                 styles.themeOption,
-                { 
+                {
                   backgroundColor: mode === 'auto' ? colors.primary : colors.background.secondary,
                   borderColor: colors.border.medium
                 }
@@ -234,14 +257,14 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
                 styles.themeOptionText,
                 { color: mode === 'auto' ? colors.text.light : colors.text.primary }
               ]}>
-                🔄 تلقائي
+                تلقائي
               </Text>
               {mode === 'auto' && (
                 <Text style={[styles.checkmark, { color: colors.text.light }]}>✓</Text>
               )}
             </TouchableOpacity>
           </View>
-        </View>
+        )}
 
         {/* Logout Section */}
         <View style={styles.logoutSection}>
@@ -265,6 +288,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: spacing.lg,
+    paddingTop: 60, // مسافة من الأعلى
   },
   header: {
     padding: spacing.xl,
@@ -276,40 +300,56 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontFamily: fontFamilies.bold,
     textAlign: 'right',
+    direction: 'rtl',
   },
-  section: {
-    padding: spacing.xl,
-    borderRadius: borderRadius.xl,
-    marginBottom: spacing.lg,
+  sectionHeader: {
+    flexDirection: 'row-reverse', // RTL
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: spacing.lg,
+    borderRadius: borderRadius.lg,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
     ...shadows.sm,
   },
   sectionTitle: {
-    fontSize: 20,
-    fontFamily: fontFamilies.bold,
-    marginBottom: spacing.lg,
+    fontSize: 18,
+    fontFamily: fontFamilies.semibold,
     textAlign: 'right',
+    direction: 'rtl',
   },
-  accountInfo: {
-    gap: spacing.lg,
+  chevron: {
+    fontSize: 16,
+    fontFamily: fontFamilies.bold,
+  },
+  sectionContent: {
+    padding: spacing.lg,
+    borderRadius: borderRadius.lg,
+    marginBottom: spacing.lg,
+    ...shadows.sm,
   },
   infoRow: {
-    flexDirection: 'row',
+    flexDirection: 'row-reverse', // RTL
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
   },
   infoLabel: {
     fontSize: 16,
     fontFamily: fontFamilies.regular,
     textAlign: 'right',
+    direction: 'rtl',
   },
   infoValue: {
     fontSize: 16,
     fontFamily: fontFamilies.semibold,
     textAlign: 'right',
+    direction: 'rtl',
   },
   nameRow: {
-    flexDirection: 'row',
+    flexDirection: 'row-reverse', // RTL
     alignItems: 'center',
     gap: spacing.md,
   },
@@ -330,40 +370,42 @@ const styles = StyleSheet.create({
     fontFamily: fontFamilies.regular,
     marginBottom: spacing.md,
     textAlign: 'right',
+    direction: 'rtl',
   },
   editButtons: {
-    flexDirection: 'row',
+    flexDirection: 'row-reverse', // RTL
     gap: spacing.md,
-    justifyContent: 'flex-end',
+    justifyContent: 'flex-start',
   },
-  cancelEditButton: {
+  cancelButton: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.md,
   },
-  saveEditButton: {
+  saveButton: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.md,
   },
-  editButtonText: {
+  buttonText: {
     fontSize: 14,
     fontFamily: fontFamilies.semibold,
-  },
-  themeOptions: {
-    gap: spacing.md,
+    textAlign: 'center',
   },
   themeOption: {
-    flexDirection: 'row',
+    flexDirection: 'row-reverse', // RTL
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: spacing.lg,
     borderRadius: borderRadius.lg,
     borderWidth: 1,
+    marginBottom: spacing.md,
   },
   themeOptionText: {
     fontSize: 16,
     fontFamily: fontFamilies.semibold,
+    textAlign: 'right',
+    direction: 'rtl',
   },
   checkmark: {
     fontSize: 18,
@@ -382,6 +424,6 @@ const styles = StyleSheet.create({
   logoutButtonText: {
     fontSize: 16,
     fontFamily: fontFamilies.bold,
+    textAlign: 'center',
   },
 });
-

@@ -3,7 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StatusBar } from 'expo-status-bar';
-import { I18nManager } from 'react-native';
+import { I18nManager, Text } from 'react-native';
 import { AppProvider, useApp } from './src/context/AppContext';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import LoginScreen from './src/screens/LoginScreen';
@@ -24,6 +24,7 @@ const Tab = createBottomTabNavigator();
 
 function MainTabs() {
   const { state } = useApp();
+  const { colors } = useTheme();
   const userProfile = (state as any)?.userProfile;
   const isAppAdmin = !!userProfile?.isAppAdmin;
   const canAccessCommunity = userProfile?.tier === 'plus' || isAppAdmin;
@@ -33,19 +34,70 @@ function MainTabs() {
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.text.secondary,
+        tabBarStyle: {
+          backgroundColor: colors.background.primary,
+          borderTopColor: colors.border.light,
+        },
       }}
     >
-      <Tab.Screen name="Dashboard" component={DashboardScreen} options={{ title: 'الرئيسية' }} />
+      <Tab.Screen
+        name="Dashboard"
+        component={DashboardScreen}
+        options={{
+          title: 'الرئيسية',
+          tabBarIcon: ({ color, size }) => (
+            <Text style={{ fontSize: size, color }}>🏠</Text>
+          ),
+        }}
+      />
       {canAccessCommunity && (
-        <Tab.Screen name="Community" component={CommunityScreen} options={{ title: 'المجتمع' }} />
+        <Tab.Screen
+          name="Community"
+          component={CommunityScreen}
+          options={{
+            title: 'المجتمع',
+            tabBarIcon: ({ color, size }) => (
+              <Text style={{ fontSize: size, color }}>👥</Text>
+            ),
+          }}
+        />
       )}
       {isLeader && (
-        <Tab.Screen name="LeaderAdmin" component={LeaderAdminScreen} options={{ title: 'إدارة المدرسة' }} />
+        <Tab.Screen
+          name="LeaderAdmin"
+          component={LeaderAdminScreen}
+          options={{
+            title: 'إدارة المدرسة',
+            tabBarIcon: ({ color, size }) => (
+              <Text style={{ fontSize: size, color }}>🏫</Text>
+            ),
+          }}
+        />
       )}
       {isAppAdmin && (
-        <Tab.Screen name="AppAdmin" component={AppAdminScreen} options={{ title: 'إدارة التطبيق' }} />
+        <Tab.Screen
+          name="AppAdmin"
+          component={AppAdminScreen}
+          options={{
+            title: 'إدارة التطبيق',
+            tabBarIcon: ({ color, size }) => (
+              <Text style={{ fontSize: size, color }}>🛡️</Text>
+            ),
+          }}
+        />
       )}
-      <Tab.Screen name="Settings" component={SettingsScreen} options={{ title: 'الإعدادات' }} />
+      <Tab.Screen
+        name="Settings"
+        component={SettingsScreen}
+        options={{
+          title: 'الإعدادات',
+          tabBarIcon: ({ color, size }) => (
+            <Text style={{ fontSize: size, color }}>⚙️</Text>
+          ),
+        }}
+      />
     </Tab.Navigator>
   );
 }
@@ -87,7 +139,7 @@ function AppNavigator() {
 
 function ThemedAppNavigator() {
   const { isDark } = useTheme();
-  
+
   return (
     <>
       <AppNavigator />

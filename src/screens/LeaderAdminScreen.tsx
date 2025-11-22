@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert, TextInput, Modal } from 'react-native';
 import { useApp } from '../context/AppContext';
-import { fontFamilies } from '../utils/theme';
+import { fontFamilies, colors } from '../utils/theme';
 import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { firestore, COLLECTIONS } from '../config/firebase';
 import { communityService } from '../services/communityService';
@@ -128,7 +128,7 @@ schoolId: ${res.id}
         <Text style={styles.inviteText}>تجديد رمز الدعوة</Text>
       </TouchableOpacity>
       {!schoolId && (
-        <TouchableOpacity style={[styles.inviteBtn, { backgroundColor: '#8e44ad' }]} onPress={handleSeedSchool} disabled={seedLoading}>
+        <TouchableOpacity style={[styles.inviteBtn, { backgroundColor: colors.primary }]} onPress={handleSeedSchool} disabled={seedLoading}>
           <Text style={styles.inviteText}>{seedLoading ? 'جاري الإنشاء...' : 'إنشاء مدرسة "مدرسه فلاح وفيصل"'}</Text>
         </TouchableOpacity>
       )}
@@ -163,12 +163,12 @@ schoolId: ${res.id}
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8f9fa' },
   header: { fontSize: 20, fontFamily: fontFamilies.bold, color: '#2c3e50', padding: 16 },
-  inviteBtn: { backgroundColor: '#27ae60', marginHorizontal: 16, borderRadius: 8, paddingVertical: 12, alignItems: 'center' },
+  inviteBtn: { backgroundColor: colors.primary, marginHorizontal: 16, borderRadius: 8, paddingVertical: 12, alignItems: 'center' },
   inviteText: { color: '#fff', fontFamily: fontFamilies.semibold },
   inviteCode: { textAlign: 'center', marginTop: 8, color: '#2c3e50' },
   formRow: { backgroundColor: '#fff', borderRadius: 12, margin: 16, padding: 16, borderWidth: 1, borderColor: '#eee' },
   input: { backgroundColor: '#f4f6f7', borderRadius: 8, padding: 12, fontFamily: fontFamilies.regular, color: '#2c3e50', marginBottom: 10 },
-  createBtn: { backgroundColor: '#2980b9', borderRadius: 8, paddingVertical: 12, alignItems: 'center' },
+  createBtn: { backgroundColor: colors.primary, borderRadius: 8, paddingVertical: 12, alignItems: 'center' },
   createText: { color: '#fff', fontFamily: fontFamilies.semibold },
   card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#eee' },
   name: { fontFamily: fontFamilies.semibold, color: '#2c3e50' },
@@ -179,7 +179,7 @@ const styles = StyleSheet.create({
   modalCard: { backgroundColor: '#fff', borderRadius: 12, padding: 20, width: '80%' },
   modalTitle: { fontFamily: fontFamilies.bold, color: '#2c3e50', fontSize: 18, marginBottom: 8, textAlign: 'center' },
   modalLine: { fontFamily: fontFamilies.regular, color: '#2c3e50', marginVertical: 4, textAlign: 'center' },
-  modalBtn: { marginTop: 12, backgroundColor: '#27ae60', borderRadius: 8, paddingVertical: 10, alignItems: 'center' },
+  modalBtn: { marginTop: 12, backgroundColor: colors.primary, borderRadius: 8, paddingVertical: 10, alignItems: 'center' },
   modalBtnText: { color: '#fff', fontFamily: fontFamilies.semibold },
 });
 

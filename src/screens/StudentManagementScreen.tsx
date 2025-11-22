@@ -17,7 +17,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
 import { Student } from '../types';
-import { fontFamilies, shadows, borderRadius, spacing } from '../utils/theme';
+import { fontFamilies, shadows, borderRadius, spacing, colors } from '../utils/theme';
 import StudentItem from '../components/StudentItem';
 import { StudentListSkeleton } from '../components/SkeletonLoader';
 import { lightHaptic, mediumHaptic, successHaptic } from '../utils/haptics';
@@ -630,7 +630,7 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     fontSize: 16,
-    color: '#007bff',
+    color: colors.primary,
     fontWeight: '600',
   },
   headerInfo: {
@@ -668,7 +668,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   addButton: {
-    backgroundColor: '#28a745',
+    backgroundColor: colors.primary,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 6,
@@ -679,7 +679,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   imageButton: {
-    backgroundColor: '#007bff',
+    backgroundColor: colors.primary,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 6,
@@ -729,7 +729,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   deleteButton: {
-    backgroundColor: '#dc3545',
+    backgroundColor: colors.danger,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 6,
@@ -814,7 +814,7 @@ const styles = StyleSheet.create({
   },
   modalCancelButton: {
     flex: 1,
-    backgroundColor: '#6c757d',
+    backgroundColor: colors.text.secondary,
     borderRadius: 8,
     paddingVertical: 12,
     alignItems: 'center',
@@ -826,14 +826,14 @@ const styles = StyleSheet.create({
   },
   modalAddButton: {
     flex: 1,
-    backgroundColor: '#28a745',
+    backgroundColor: colors.primary,
     borderRadius: 8,
     paddingVertical: 12,
     alignItems: 'center',
     marginLeft: 8,
   },
   modalAddButtonDisabled: {
-    backgroundColor: '#6c757d',
+    backgroundColor: colors.text.secondary,
   },
   modalAddButtonText: {
     color: 'white',
@@ -878,7 +878,7 @@ const styles = StyleSheet.create({
   extractedStudentNumber: {
     fontSize: 16,
     fontFamily: fontFamilies.bold,
-    color: '#007bff',
+    color: colors.primary,
     marginRight: 12,
     minWidth: 30,
   },
@@ -889,7 +889,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   removeExtractedButton: {
-    backgroundColor: '#dc3545',
+    backgroundColor: colors.danger,
     width: 28,
     height: 28,
     borderRadius: 14,

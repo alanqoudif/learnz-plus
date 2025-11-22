@@ -1,11 +1,11 @@
-// ألوان النظام - تصميم أزرق وأبيض نظيف
+// ألوان النظام - تصميم بنفسجي وأبيض نظيف
 export const lightColors = {
-  primary: '#2563EB', // أزرق
-  secondary: '#60A5FA', // أزرق فاتح
-  success: '#2563EB',
-  danger: '#DC2626',
+  primary: '#7C3AED', // بنفسجي
+  secondary: '#8B5CF6', // بنفسجي فاتح
+  success: '#10B981', // أخضر للنجاح (مبقي عليه للحالات الضرورية)
+  danger: '#EF4444', // أحمر للخطر
   warning: '#F59E0B',
-  info: '#2563EB',
+  info: '#7C3AED', // بنفسجي للمعلومات
 
   background: {
     primary: '#FFFFFF',
@@ -29,12 +29,12 @@ export const lightColors = {
 };
 
 export const darkColors = {
-  primary: '#3B82F6', // أزرق للوضع الداكن
-  secondary: '#60A5FA',
-  success: '#3B82F6',
-  danger: '#EF4444',
-  warning: '#F59E0B',
-  info: '#3B82F6',
+  primary: '#8B5CF6', // بنفسجي للوضع الداكن
+  secondary: '#A78BFA',
+  success: '#34D399',
+  danger: '#F87171',
+  warning: '#FBBF24',
+  info: '#8B5CF6',
 
   background: {
     primary: '#1F2937',

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
-import { fontFamilies } from '../utils/theme';
+import { fontFamilies, colors } from '../utils/theme';
 import { useApp } from '../context/AppContext';
 import { communityService } from '../services/communityService';
 
@@ -75,7 +75,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   joinButton: {
-    backgroundColor: '#3498db',
+    backgroundColor: colors.primary,
     borderRadius: 8,
     paddingVertical: 14,
     paddingHorizontal: 24,

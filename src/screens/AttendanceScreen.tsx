@@ -439,7 +439,7 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
                 <View
                   style={[
                     styles.progressFill,
-                    { 
+                    {
                       width: `${(totalRecorded / students.length) * 100}%`,
                       backgroundColor: colors.primary,
                       shadowColor: colors.primary
@@ -447,11 +447,11 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
                   ]}
                 />
               </View>
-            <View style={styles.statsContainer}>
-              <Text style={[styles.statsText, { color: colors.text.secondary }]}>
-                حاضر: {presentCount} | غائب: {absentCount}
-              </Text>
-            </View>
+              <View style={styles.statsContainer}>
+                <Text style={[styles.statsText, { color: colors.text.secondary }]}>
+                  حاضر: {presentCount} | غائب: {absentCount}
+                </Text>
+              </View>
             </View>
 
             <View style={styles.studentsListContainer}>
@@ -605,33 +605,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderRadius: 12,
     padding: 16,
-    marginBottom: 12,
-    marginHorizontal: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  studentInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  studentNumber: {
-    backgroundColor: '#007bff',
-    borderRadius: 16,
-    width: 32,
-    height: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
   },
   studentNumberText: {
     color: 'white',

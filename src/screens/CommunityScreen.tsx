@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, FlatList, StyleSheet, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Keyboard, TouchableWithoutFeedback } from 'react-native';
-import { fontFamilies } from '../utils/theme';
+import { fontFamilies, colors } from '../utils/theme';
 import { useApp } from '../context/AppContext';
 import { firestore, COLLECTIONS } from '../config/firebase';
 import { CommunityPost } from '../types';
@@ -65,40 +65,40 @@ export default function CommunityScreen() {
         <View style={{ flex: 1 }}>
           <Text style={styles.header}>مجتمع المدرسة</Text>
           <FlatList
-        ref={listRef}
-        data={posts}
-        keyExtractor={(i) => i.id}
-          contentContainerStyle={{ padding: 16, paddingBottom: 24 }}
-          keyboardShouldPersistTaps="handled"
-        renderItem={({ item }) => (
-          <View style={styles.card}>
-            <Text style={styles.title}>{item.title}</Text>
-            <Text style={styles.body}>{item.body}</Text>
-            <Text style={styles.meta}>{new Date(item.createdAt).toLocaleString('ar-SA')}</Text>
-          </View>
-        )}
+            ref={listRef}
+            data={posts}
+            keyExtractor={(i) => i.id}
+            contentContainerStyle={{ padding: 16, paddingBottom: 24 }}
+            keyboardShouldPersistTaps="handled"
+            renderItem={({ item }) => (
+              <View style={styles.card}>
+                <Text style={styles.title}>{item.title}</Text>
+                <Text style={styles.body}>{item.body}</Text>
+                <Text style={styles.meta}>{new Date(item.createdAt).toLocaleString('ar-SA')}</Text>
+              </View>
+            )}
           />
           <View style={styles.composer}>
             <TextInput
-          style={styles.input}
-          placeholder="عنوان مختصر"
-          value={title}
-          onChangeText={setTitle}
-          placeholderTextColor="#95a5a6"
+              style={styles.input}
+              placeholder="عنوان مختصر"
+              value={title}
+              onChangeText={setTitle}
+              placeholderTextColor="#95a5a6"
               returnKeyType="next"
               blurOnSubmit={false}
-        />
+            />
             <TextInput
-          style={[styles.input, styles.multi]}
-          placeholder="اكتب رسالة للمجتمع"
-          value={body}
-          onChangeText={setBody}
-          placeholderTextColor="#95a5a6"
-          multiline
+              style={[styles.input, styles.multi]}
+              placeholder="اكتب رسالة للمجتمع"
+              value={body}
+              onChangeText={setBody}
+              placeholderTextColor="#95a5a6"
+              multiline
               returnKeyType="send"
               onSubmitEditing={() => { if (canSend) { Keyboard.dismiss(); onSend(); } }}
-        />
-            <TouchableOpacity disabled={!canSend} onPress={() => { Keyboard.dismiss(); onSend(); }} style={[styles.sendBtn, !canSend && { opacity: 0.5 }]}> 
+            />
+            <TouchableOpacity disabled={!canSend} onPress={() => { Keyboard.dismiss(); onSend(); }} style={[styles.sendBtn, !canSend && { opacity: 0.5 }]}>
               <Text style={styles.sendText}>{sending ? 'جاري الإرسال...' : 'إرسال'}</Text>
             </TouchableOpacity>
           </View>
@@ -123,7 +123,7 @@ const styles = StyleSheet.create({
   composer: { padding: 12, borderTopWidth: 1, borderColor: '#eee', backgroundColor: '#fff' },
   input: { backgroundColor: '#f4f6f7', borderRadius: 10, padding: 12, fontFamily: fontFamilies.regular, color: '#2c3e50', marginBottom: 8 },
   multi: { minHeight: 60, textAlignVertical: 'top' },
-  sendBtn: { backgroundColor: '#2ecc71', borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
+  sendBtn: { backgroundColor: colors.primary, borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
   sendText: { color: '#fff', fontFamily: fontFamilies.semibold },
 });
 
@@ -175,7 +175,7 @@ function JoinByCode() {
         returnKeyType="done"
         onSubmitEditing={() => { if (canJoin) onJoin(); }}
       />
-      <TouchableOpacity onPress={onJoin} disabled={!canJoin} style={{ backgroundColor: '#2980b9', opacity: canJoin ? 1 : 0.5, borderRadius: 10, paddingVertical: 12, alignItems: 'center', marginTop: 16 }}>
+      <TouchableOpacity onPress={onJoin} disabled={!canJoin} style={{ backgroundColor: colors.primary, opacity: canJoin ? 1 : 0.5, borderRadius: 10, paddingVertical: 12, alignItems: 'center', marginTop: 16 }}>
         <Text style={{ color: '#fff', fontFamily: fontFamilies.semibold }}>{loading ? 'جاري الانضمام...' : 'انضمام'}</Text>
       </TouchableOpacity>
     </View>

@@ -37,8 +37,24 @@ function MainTabs() {
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.text.secondary,
         tabBarStyle: {
-          backgroundColor: colors.background.primary,
-          borderTopColor: colors.border.light,
+          position: 'absolute',
+          bottom: 20,
+          left: 20,
+          right: 20,
+          backgroundColor: 'rgba(255, 255, 255, 0.9)',
+          borderRadius: 20,
+          height: 65,
+          paddingBottom: 8,
+          paddingTop: 8,
+          borderTopWidth: 0,
+          shadowColor: '#000',
+          shadowOffset: {
+            width: 0,
+            height: 4,
+          },
+          shadowOpacity: 0.15,
+          shadowRadius: 12,
+          elevation: 8,
         },
       }}
     >

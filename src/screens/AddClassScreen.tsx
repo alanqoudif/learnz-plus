@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -130,7 +130,7 @@ export default function AddClassScreen({ navigation, route }: AddClassScreenProp
     }
   };
 
-  const dynamicStyles = {
+  const dynamicStyles = useMemo(() => ({
     container: { backgroundColor: colors.background.secondary },
     title: { color: colors.text.primary },
     subtitle: { color: colors.text.secondary },
@@ -150,7 +150,7 @@ export default function AddClassScreen({ navigation, route }: AddClassScreenProp
     helpContainer: { backgroundColor: colors.background.primary },
     helpTitle: { color: colors.text.primary },
     helpText: { color: colors.text.secondary },
-  };
+  }), [colors]);
 
   return (
     <KeyboardAvoidingView 

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
-import { View, StyleSheet, Animated } from 'react-native';
-import { colors } from '../utils/theme';
+import { View, Animated } from 'react-native';
+import { useTheme } from '../context/ThemeContext';
 
 interface SkeletonLoaderProps {
   width?: number | string;
@@ -19,6 +19,7 @@ export const SkeletonLoader: React.FC<SkeletonLoaderProps> = ({
   borderRadius = 4,
   style,
 }) => {
+  const { colors } = useTheme();
   const shimmerAnimation = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -44,15 +45,14 @@ export const SkeletonLoader: React.FC<SkeletonLoaderProps> = ({
   });
 
   return (
-    <View style={[styles.container, { width, height, borderRadius }, style]}>
+    <View style={[{ width, height, borderRadius, backgroundColor: colors.border.light, overflow: 'hidden' }, style]}>
       <Animated.View
-        style={[
-          styles.shimmer,
-          {
-            opacity,
-            borderRadius,
-          },
-        ]}
+        style={{
+          flex: 1,
+          backgroundColor: colors.border.medium,
+          opacity,
+          borderRadius,
+        }}
       />
     </View>
   );
@@ -62,12 +62,23 @@ export const SkeletonLoader: React.FC<SkeletonLoaderProps> = ({
  * Skeleton لبطاقة فصل دراسي
  */
 export const ClassCardSkeleton: React.FC = () => {
+  const { colors } = useTheme();
   return (
-    <View style={styles.classCard}>
-      <SkeletonLoader width="60%" height={24} borderRadius={6} style={styles.mb8} />
-      <SkeletonLoader width="40%" height={18} borderRadius={4} style={styles.mb12} />
-      <View style={styles.row}>
-        <SkeletonLoader width="45%" height={40} borderRadius={8} style={styles.mr8} />
+    <View style={{
+      backgroundColor: colors.background.primary,
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 12,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 3,
+    }}>
+      <SkeletonLoader width="60%" height={24} borderRadius={6} style={{ marginBottom: 8 }} />
+      <SkeletonLoader width="40%" height={18} borderRadius={4} style={{ marginBottom: 12 }} />
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <SkeletonLoader width="45%" height={40} borderRadius={8} style={{ marginRight: 8 }} />
         <SkeletonLoader width="45%" height={40} borderRadius={8} />
       </View>
     </View>
@@ -78,11 +89,19 @@ export const ClassCardSkeleton: React.FC = () => {
  * Skeleton لعنصر طالب
  */
 export const StudentItemSkeleton: React.FC = () => {
+  const { colors } = useTheme();
   return (
-    <View style={styles.studentItem}>
-      <SkeletonLoader width={50} height={50} borderRadius={25} style={styles.mr12} />
-      <View style={styles.flex1}>
-        <SkeletonLoader width="70%" height={18} borderRadius={4} style={styles.mb6} />
+    <View style={{
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.background.primary,
+      borderRadius: 8,
+      padding: 12,
+      marginBottom: 8,
+    }}>
+      <SkeletonLoader width={50} height={50} borderRadius={25} style={{ marginRight: 12 }} />
+      <View style={{ flex: 1 }}>
+        <SkeletonLoader width="70%" height={18} borderRadius={4} style={{ marginBottom: 6 }} />
         <SkeletonLoader width="40%" height={14} borderRadius={4} />
       </View>
     </View>
@@ -93,11 +112,17 @@ export const StudentItemSkeleton: React.FC = () => {
  * Skeleton لجلسة حضور
  */
 export const SessionItemSkeleton: React.FC = () => {
+  const { colors } = useTheme();
   return (
-    <View style={styles.sessionItem}>
-      <SkeletonLoader width="50%" height={20} borderRadius={6} style={styles.mb8} />
-      <View style={styles.row}>
-        <SkeletonLoader width="30%" height={16} borderRadius={4} style={styles.mr12} />
+    <View style={{
+      backgroundColor: colors.background.primary,
+      borderRadius: 8,
+      padding: 16,
+      marginBottom: 12,
+    }}>
+      <SkeletonLoader width="50%" height={20} borderRadius={6} style={{ marginBottom: 8 }} />
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <SkeletonLoader width="30%" height={16} borderRadius={4} style={{ marginRight: 12 }} />
         <SkeletonLoader width="30%" height={16} borderRadius={4} />
       </View>
     </View>
@@ -131,62 +156,3 @@ export const StudentListSkeleton: React.FC = () => {
     </>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    backgroundColor: colors.border.light,
-    overflow: 'hidden',
-  },
-  shimmer: {
-    flex: 1,
-    backgroundColor: colors.border.medium,
-  },
-  classCard: {
-    backgroundColor: colors.background.primary,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  studentItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.background.primary,
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 8,
-  },
-  sessionItem: {
-    backgroundColor: colors.background.primary,
-    borderRadius: 8,
-    padding: 16,
-    marginBottom: 12,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  flex1: {
-    flex: 1,
-  },
-  mb6: {
-    marginBottom: 6,
-  },
-  mb8: {
-    marginBottom: 8,
-  },
-  mb12: {
-    marginBottom: 12,
-  },
-  mr8: {
-    marginRight: 8,
-  },
-  mr12: {
-    marginRight: 12,
-  },
-});
-

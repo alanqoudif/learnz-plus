@@ -9,8 +9,9 @@ import {
   RefreshControl,
 } from 'react-native';
 import { useApp } from '../context/AppContext';
+import { useTheme } from '../context/ThemeContext';
 import { AttendanceSession } from '../types';
-import { colors, fontFamilies, shadows, borderRadius, spacing } from '../utils/theme';
+import { fontFamilies, shadows, borderRadius, spacing } from '../utils/theme';
 // Real-time updates are handled by Firebase through AppContext
 
 interface AttendanceHistoryScreenProps {
@@ -25,6 +26,7 @@ interface AttendanceHistoryScreenProps {
 export default function AttendanceHistoryScreen({ navigation, route }: AttendanceHistoryScreenProps) {
   const { classId } = route.params;
   const { state, loadAttendanceSessions } = useApp();
+  const { colors } = useTheme();
   const [selectedSession, setSelectedSession] = useState<AttendanceSession | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -53,9 +55,9 @@ export default function AttendanceHistoryScreen({ navigation, route }: Attendanc
   // تشخيص تحميل البيانات
   console.log('📊 تشخيص بيانات تاريخ الحضور:', {
     classId,
-    currentClass: currentClass ? { 
-      id: currentClass.id, 
-      name: currentClass.name, 
+    currentClass: currentClass ? {
+      id: currentClass.id,
+      name: currentClass.name,
       section: currentClass.section,
       studentsCount: currentClass.students?.length || 0
     } : null,
@@ -87,7 +89,7 @@ export default function AttendanceHistoryScreen({ navigation, route }: Attendanc
     const absentCount = session.records.filter(r => r.status === 'absent').length;
     const totalStudents = currentClass?.students.length || 0;
     const totalRecorded = presentCount + absentCount;
-    
+
     // إضافة تشخيص للإحصائيات
     console.log('إحصائيات الجلسة:', {
       sessionId: session.id,
@@ -99,7 +101,7 @@ export default function AttendanceHistoryScreen({ navigation, route }: Attendanc
       totalRecorded,
       records: session.records.map(r => ({ studentId: r.studentId, status: r.status }))
     });
-    
+
     return { presentCount, absentCount, totalCount: totalStudents };
   };
 
@@ -107,7 +109,7 @@ export default function AttendanceHistoryScreen({ navigation, route }: Attendanc
     const stats = getAttendanceStats(item);
     const date = new Date(item.date);
     const createdAt = new Date(item.createdAt);
-    
+
     return (
       <TouchableOpacity
         style={styles.sessionCard}
@@ -132,7 +134,7 @@ export default function AttendanceHistoryScreen({ navigation, route }: Attendanc
             </Text>
           </View>
         </View>
-        
+
         <View style={styles.sessionStats}>
           <View style={styles.statItem}>
             <Text style={styles.statNumber}>{stats.presentCount}</Text>
@@ -147,7 +149,7 @@ export default function AttendanceHistoryScreen({ navigation, route }: Attendanc
             <Text style={styles.statLabel}>المجموع</Text>
           </View>
         </View>
-        
+
         {/* إظهار تحذير إذا لم يتم تسجيل جميع الطلاب */}
         {stats.presentCount + stats.absentCount < stats.totalCount && (
           <View style={styles.warningContainer}>
@@ -167,7 +169,7 @@ export default function AttendanceHistoryScreen({ navigation, route }: Attendanc
     // إصلاح مشكلة المنطقة الزمنية
     const rawTime = item.attendanceTime;
     const attendanceTime = new Date(rawTime);
-    
+
     // إضافة تشخيص للوقت
     console.log('🕐 تشخيص الوقت للطالب', student.name, ':', {
       raw: rawTime,

@@ -15,8 +15,9 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useApp } from '../context/AppContext';
+import { useTheme } from '../context/ThemeContext';
 import { Student } from '../types';
-import { colors, fontFamilies, shadows, borderRadius, spacing } from '../utils/theme';
+import { fontFamilies, shadows, borderRadius, spacing } from '../utils/theme';
 import StudentItem from '../components/StudentItem';
 import { StudentListSkeleton } from '../components/SkeletonLoader';
 import { lightHaptic, mediumHaptic, successHaptic } from '../utils/haptics';
@@ -33,6 +34,7 @@ interface StudentManagementScreenProps {
 export default function StudentManagementScreen({ navigation, route }: StudentManagementScreenProps) {
   const { classId } = route.params;
   const { state, dispatch, createStudent, deleteStudent, refreshData } = useApp();
+  const { colors } = useTheme();
   const [showAddModal, setShowAddModal] = useState(false);
   const [newStudentName, setNewStudentName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -83,7 +85,7 @@ export default function StudentManagementScreen({ navigation, route }: StudentMa
         name: newStudentName.trim(),
         classId: classId,
       });
-      
+
       console.log('✅ تم إضافة الطالب بنجاح:', newStudent.id);
       successHaptic();
       setNewStudentName('');
@@ -92,13 +94,13 @@ export default function StudentManagementScreen({ navigation, route }: StudentMa
     } catch (error: any) {
       console.error('❌ خطأ في إضافة الطالب:', error);
       let errorMessage = 'حدث خطأ أثناء إضافة الطالب';
-      
+
       if (error?.code === 'permission-denied' || error?.message?.includes('PERMISSION_DENIED')) {
         errorMessage = 'لا توجد صلاحية لحفظ البيانات. يرجى التحقق من إعدادات Firebase.';
       } else if (error?.message) {
         errorMessage = error.message;
       }
-      
+
       Alert.alert('خطأ', errorMessage);
     } finally {
       setIsLoading(false);
@@ -134,7 +136,7 @@ export default function StudentManagementScreen({ navigation, route }: StudentMa
     try {
       // طلب صلاحية الوصول للصور
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      
+
       if (status !== 'granted') {
         Alert.alert('خطأ', 'نحتاج إلى صلاحية الوصول للصور');
         return;
@@ -213,13 +215,13 @@ export default function StudentManagementScreen({ navigation, route }: StudentMa
       }
 
       const result = await response.json();
-      
+
       console.log('OpenAI Response:', JSON.stringify(result, null, 2));
-      
+
       if (result.choices && result.choices[0] && result.choices[0].message) {
         const text = result.choices[0].message.content;
         console.log('Extracted text:', text);
-        
+
         if (text && text.trim()) {
           parseStudentsFromText(text);
         } else {
@@ -257,9 +259,9 @@ export default function StudentManagementScreen({ navigation, route }: StudentMa
       }
     } catch (error: any) {
       console.error('Error processing image:', error);
-      
+
       let errorMessage = 'حدث خطأ أثناء معالجة الصورة.';
-      
+
       if (error.message?.includes('401')) {
         errorMessage = 'خطأ في مفتاح API. يرجى التحقق من صلاحية المفتاح.';
       } else if (error.message?.includes('429')) {
@@ -267,7 +269,7 @@ export default function StudentManagementScreen({ navigation, route }: StudentMa
       } else if (error.message?.includes('network') || error.message?.includes('fetch')) {
         errorMessage = 'خطأ في الاتصال بالإنترنت. تحقق من اتصالك.';
       }
-      
+
       Alert.alert(
         'خطأ في المعالجة',
         errorMessage + '\n\nيرجى المحاولة مرة أخرى أو استخدام الإضافة اليدوية.',
@@ -293,11 +295,11 @@ export default function StudentManagementScreen({ navigation, route }: StudentMa
         // محاولة استخراج الرقم والاسم
         // نمط 1: رقم. اسم
         let match = line.match(/^(\d+|[٠-٩]+)[\.\-\s:)]+(.+)$/);
-        
+
         if (match) {
           const number = convertArabicNumbersToEnglish(match[1].trim());
           const name = match[2].trim();
-          
+
           if (name && name.length > 1) {
             students.push({ number, name });
           }
@@ -326,7 +328,7 @@ export default function StudentManagementScreen({ navigation, route }: StudentMa
   const convertArabicNumbersToEnglish = (num: string): string => {
     const arabicNumbers = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
     const englishNumbers = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
-    
+
     let result = num;
     for (let i = 0; i < 10; i++) {
       result = result.replace(new RegExp(arabicNumbers[i], 'g'), englishNumbers[i]);
@@ -495,7 +497,7 @@ export default function StudentManagementScreen({ navigation, route }: StudentMa
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>إضافة طالب جديد</Text>
-            
+
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>اسم الطالب</Text>
               <TextInput
@@ -548,10 +550,10 @@ export default function StudentManagementScreen({ navigation, route }: StudentMa
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, styles.imageModalContent]}>
             <Text style={styles.modalTitle}>الطلاب المستخرجين من الصورة</Text>
-            
+
             {selectedImage && (
-              <Image 
-                source={{ uri: selectedImage }} 
+              <Image
+                source={{ uri: selectedImage }}
                 style={styles.previewImage}
                 resizeMode="contain"
               />

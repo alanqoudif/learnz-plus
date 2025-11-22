@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -60,7 +60,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
               await deleteClass(classId);
               mediumHaptic();
               Alert.alert(
-                'تم الحذف بنجاح', 
+                'تم الحذف بنجاح',
                 `تم حذف الشعبة "${className}" وجميع البيانات المرتبطة بها من قاعدة البيانات.`,
                 [{ text: 'موافق' }]
               );
@@ -100,10 +100,25 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   const keyExtractor = useCallback((item: Class, index: number) => `class-${item.id}-${index}`, []);
 
   const getItemLayout = useCallback((data: any, index: number) => ({
-    length: 240, // تقريباً ارتفاع ClassCard
+    length: 240,
     offset: 240 * index,
     index,
   }), []);
+
+  const dynamicStyles = useMemo(() => ({
+    container: { backgroundColor: colors.background.secondary },
+    header: { backgroundColor: colors.background.primary },
+    welcomeText: { color: colors.text.secondary },
+    teacherName: { color: colors.text.primary },
+    offlineNotice: { backgroundColor: colors.warning + '20' },
+    pendingNotice: { backgroundColor: colors.info + '20' },
+    syncNoticeText: { color: colors.text.primary },
+    sectionTitle: { color: colors.text.primary },
+    addButton: { backgroundColor: colors.success },
+    emptyStateTitle: { color: colors.text.secondary },
+    emptyStateSubtitle: { color: colors.text.tertiary },
+    addFirstClassButton: { backgroundColor: colors.primary },
+  }), [colors]);
 
   const renderEmptyState = useCallback(() => (
     <View style={styles.emptyState}>
@@ -114,14 +129,15 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
       <Text style={[styles.emptyStateSubtitle, dynamicStyles.emptyStateSubtitle]}>
         ابدأ بإضافة فصل دراسي جديد لإدارة حضور وغياب الطلاب
       </Text>
-      <TouchableOpacity 
-        style={[styles.addFirstClassButton, dynamicStyles.addFirstClassButton]} 
+      <TouchableOpacity
+        style={[styles.addFirstClassButton, dynamicStyles.addFirstClassButton]}
         onPress={handleAddClass}
       >
         <Text style={styles.addFirstClassButtonText}>+ إضافة فصل دراسي</Text>
       </TouchableOpacity>
     </View>
   ), [handleAddClass, dynamicStyles]);
+
 
 
   if (isLoading) {
@@ -143,20 +159,6 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
     );
   }
 
-  const dynamicStyles = {
-    container: { backgroundColor: colors.background.secondary },
-    header: { backgroundColor: colors.background.primary },
-    welcomeText: { color: colors.text.secondary },
-    teacherName: { color: colors.text.primary },
-    offlineNotice: { backgroundColor: colors.warning + '20' },
-    pendingNotice: { backgroundColor: colors.info + '20' },
-    syncNoticeText: { color: colors.text.primary },
-    sectionTitle: { color: colors.text.primary },
-    addButton: { backgroundColor: colors.success },
-    emptyStateTitle: { color: colors.text.secondary },
-    emptyStateSubtitle: { color: colors.text.tertiary },
-    addFirstClassButton: { backgroundColor: colors.primary },
-  };
 
   return (
     <View style={[styles.container, dynamicStyles.container]}>
@@ -187,8 +189,8 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
       <View style={styles.content}>
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, dynamicStyles.sectionTitle]}>الفصول الدراسية</Text>
-          <TouchableOpacity 
-            style={[styles.addButton, dynamicStyles.addButton]} 
+          <TouchableOpacity
+            style={[styles.addButton, dynamicStyles.addButton]}
             onPress={handleAddClass}
           >
             <Text style={styles.addButtonText}>+ إضافة فصل</Text>
@@ -259,7 +261,6 @@ const styles = StyleSheet.create({
   syncNoticeText: {
     textAlign: 'center',
     fontFamily: fontFamilies.semibold,
-    color: colors.text.primary,
   },
   offlineNotice: {
     backgroundColor: '#fdebd0',

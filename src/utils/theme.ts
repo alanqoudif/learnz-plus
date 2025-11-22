@@ -4,27 +4,27 @@ export const colors = {
   primary: '#6366f1', // Indigo - أكثر حداثة
   primaryLight: '#818cf8',
   primaryDark: '#4f46e5',
-  
+
   secondary: '#64748b', // Slate - أنعم من الرمادي القديم
   secondaryLight: '#94a3b8',
   secondaryDark: '#475569',
-  
+
   success: '#10b981', // Emerald - أكثر حيوية
   successLight: '#34d399',
   successDark: '#059669',
-  
+
   danger: '#ef4444', // Red - أكثر نعومة
   dangerLight: '#f87171',
   dangerDark: '#dc2626',
-  
+
   warning: '#f59e0b', // Amber - أفضل من الأصفر الفاقع
   warningLight: '#fbbf24',
   warningDark: '#d97706',
-  
+
   info: '#06b6d4', // Cyan - أكثر إشراقاً
   infoLight: '#22d3ee',
   infoDark: '#0891b2',
-  
+
   // ألوان النص - محسّنة للوضوح
   text: {
     primary: '#1e293b', // Slate 800 - تباين ممتاز
@@ -34,7 +34,7 @@ export const colors = {
     dark: '#0f172a', // Slate 900
     muted: '#cbd5e1', // Slate 300
   },
-  
+
   // ألوان الخلفية - تدرجات ناعمة
   background: {
     primary: '#ffffff',
@@ -45,7 +45,7 @@ export const colors = {
     card: '#ffffff',
     overlay: 'rgba(15, 23, 42, 0.5)',
   },
-  
+
   // ألوان الحدود - تدرجات متناسقة
   border: {
     light: '#f1f5f9', // Slate 100
@@ -53,7 +53,7 @@ export const colors = {
     dark: '#cbd5e1', // Slate 300
     focus: '#6366f1', // Primary للتركيز
   },
-  
+
   // ألوان الحالة - واضحة وجذابة
   status: {
     present: '#10b981', // Green
@@ -63,7 +63,7 @@ export const colors = {
     pending: '#f59e0b', // Amber
     pendingBg: '#fef3c7', // Amber 100
   },
-  
+
   // ألوان Accent للتفاصيل
   accent: {
     purple: '#a855f7',
@@ -160,89 +160,3 @@ export const borderRadius = {
   full: 9999,
 };
 
-// أنماط الأزرار
-export const buttonStyles = {
-  primary: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.md,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-  },
-  secondary: {
-    backgroundColor: colors.secondary,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.md,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-  },
-  success: {
-    backgroundColor: colors.success,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.md,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-  },
-  danger: {
-    backgroundColor: colors.danger,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.md,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-  },
-};
-
-// أنماط النصوص
-export const textStyles = {
-  heading: {
-    fontSize: fontSizes['2xl'],
-    fontFamily: fontFamilies.bold,
-    color: colors.text.primary,
-  },
-  subheading: {
-    fontSize: fontSizes.lg,
-    fontFamily: fontFamilies.semibold,
-    color: colors.text.primary,
-  },
-  body: {
-    fontSize: fontSizes.base,
-    fontFamily: fontFamilies.regular,
-    color: colors.text.primary,
-  },
-  caption: {
-    fontSize: fontSizes.sm,
-    fontFamily: fontFamilies.regular,
-    color: colors.text.secondary,
-  },
-  button: {
-    fontSize: fontSizes.base,
-    fontFamily: fontFamilies.semibold,
-    color: colors.text.light,
-  },
-};
-
-// أنماط الحاويات
-export const containerStyles = {
-  card: {
-    backgroundColor: colors.background.primary,
-    borderRadius: borderRadius.xl,
-    padding: spacing.lg,
-    ...shadows.md,
-  },
-  section: {
-    backgroundColor: colors.background.primary,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    marginBottom: spacing.md,
-  },
-  modal: {
-    backgroundColor: colors.background.primary,
-    borderRadius: borderRadius.xl,
-    padding: spacing.xl,
-    ...shadows.lg,
-  },
-};

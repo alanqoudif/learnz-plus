@@ -1,7 +1,8 @@
 import React, { useCallback } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
 import { Student } from '../types';
-import { colors, fontFamilies, borderRadius, spacing } from '../utils/theme';
+import { fontFamilies, borderRadius, spacing } from '../utils/theme';
+import { useTheme } from '../context/ThemeContext';
 import { scaleButton } from '../utils/animations';
 import { lightHaptic } from '../utils/haptics';
 
@@ -16,6 +17,7 @@ const StudentItem: React.FC<StudentItemProps> = React.memo(({
   index,
   onDelete,
 }) => {
+  const { colors } = useTheme();
   const scaleAnim = React.useRef(new Animated.Value(1)).current;
 
   const handleDelete = useCallback(() => {
@@ -25,28 +27,69 @@ const StudentItem: React.FC<StudentItemProps> = React.memo(({
   }, [student, onDelete]);
 
   return (
-    <Animated.View 
+    <Animated.View
       style={[
-        styles.container,
+        {
+          backgroundColor: colors.background.card,
+          borderRadius: borderRadius.lg,
+          marginBottom: spacing.sm,
+          borderWidth: 1,
+          borderColor: colors.border.light,
+        },
         { transform: [{ scale: scaleAnim }] }
       ]}
     >
-      <View style={styles.content}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{index + 1}</Text>
+      <View style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: spacing.md,
+        direction: 'rtl',
+      }}>
+        <View style={{
+          width: 48,
+          height: 48,
+          borderRadius: 24,
+          backgroundColor: colors.primary,
+          justifyContent: 'center',
+          alignItems: 'center',
+          marginLeft: spacing.md,
+        }}>
+          <Text style={{
+            color: colors.text.light,
+            fontFamily: fontFamilies.bold,
+            fontSize: 18,
+          }}>{index + 1}</Text>
         </View>
-        <View style={styles.info}>
-          <Text style={styles.name}>{student.name}</Text>
-          <Text style={styles.date}>
+        <View style={{ flex: 1 }}>
+          <Text style={{
+            fontSize: 16,
+            fontFamily: fontFamilies.semibold,
+            color: colors.text.primary,
+            marginBottom: 4,
+          }}>{student.name}</Text>
+          <Text style={{
+            fontSize: 12,
+            fontFamily: fontFamilies.regular,
+            color: colors.text.secondary,
+          }}>
             أضيف في: {new Date(student.createdAt).toLocaleDateString('ar-SA')}
           </Text>
         </View>
         <TouchableOpacity
-          style={styles.deleteButton}
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 18,
+            backgroundColor: colors.background.secondary,
+            justifyContent: 'center',
+            alignItems: 'center',
+            borderWidth: 1,
+            borderColor: colors.border.medium,
+          }}
           onPress={handleDelete}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Text style={styles.deleteIcon}>🗑️</Text>
+          <Text style={{ fontSize: 16 }}>🗑️</Text>
         </TouchableOpacity>
       </View>
     </Animated.View>
@@ -61,63 +104,6 @@ const StudentItem: React.FC<StudentItemProps> = React.memo(({
 });
 
 StudentItem.displayName = 'StudentItem';
-
-const styles = StyleSheet.create({
-  container: {
-    backgroundColor: colors.background.card,
-    borderRadius: borderRadius.lg,
-    marginBottom: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border.light,
-  },
-  content: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing.md,
-    direction: 'rtl',
-  },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: spacing.md,
-  },
-  avatarText: {
-    color: colors.text.light,
-    fontFamily: fontFamilies.bold,
-    fontSize: 18,
-  },
-  info: {
-    flex: 1,
-  },
-  name: {
-    fontSize: 16,
-    fontFamily: fontFamilies.semibold,
-    color: colors.text.primary,
-    marginBottom: 4,
-  },
-  date: {
-    fontSize: 12,
-    fontFamily: fontFamilies.regular,
-    color: colors.text.secondary,
-  },
-  deleteButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.background.secondary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border.medium,
-  },
-  deleteIcon: {
-    fontSize: 16,
-  },
-});
 
 export default StudentItem;
 

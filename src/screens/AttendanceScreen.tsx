@@ -13,10 +13,11 @@ import { useFocusEffect } from '@react-navigation/native';
 // useApp already imported above
 import { AttendanceRecord, AttendanceSession } from '../types';
 import { showErrorAlert, showAttendanceCompleteAlert } from '../utils/notifications';
-import { colors, fontFamilies, shadows, borderRadius, spacing } from '../utils/theme';
+import { fontFamilies, shadows, borderRadius, spacing } from '../utils/theme';
 import { fadeIn, fadeOut, scaleButton } from '../utils/animations';
 import { lightHaptic, successHaptic, errorHaptic } from '../utils/haptics';
 import { useApp } from '../context/AppContext';
+import { useTheme } from '../context/ThemeContext';
 import { communityService } from '../services/communityService';
 // RealtimeNotification component removed - using simple notifications instead
 
@@ -32,6 +33,7 @@ interface AttendanceScreenProps {
 export default function AttendanceScreen({ navigation, route }: AttendanceScreenProps) {
   const { classId } = route.params;
   const { state, dispatch, createAttendanceSession, recordAttendance, refreshData } = useApp();
+  const { colors } = useTheme();
   const [attendanceRecords, setAttendanceRecords] = useState<{ [key: string]: 'present' | 'absent' }>({});
   const [isSessionStarted, setIsSessionStarted] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -46,7 +48,7 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
 
   const currentClass = state.classes.find(cls => cls.id === classId);
   const students = currentClass?.students || [];
-  
+
   // حساب الإحصائيات
   const presentCount = Object.values(attendanceRecords).filter(status => status === 'present').length;
   const absentCount = Object.values(attendanceRecords).filter(status => status === 'absent').length;
@@ -67,7 +69,7 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
         isFinishing: isFinishingRef.current,
         totalRecorded
       });
-      
+
       // إذا كانت الجلسة مكتملة محلياً أو في حالة إنهاء، لا نعيد تعيين أي شيء
       if (isSessionCompleted || isFinishingRef.current) {
         console.log('✅ الجلسة مكتملة أو في حالة إنهاء - لا حاجة لإعادة التعيين');
@@ -79,7 +81,7 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
         });
         return;
       }
-      
+
       // إذا كانت الجلسة نشطة ولا تزال في التقدم، لا نعيد تعيين أي شيء
       if (isSessionStarted && sessionId && !isSessionCompleted) {
         console.log('🔄 الجلسة نشطة - لا حاجة لإعادة التعيين');
@@ -92,9 +94,9 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
         });
         return;
       }
-      
-      
-      
+
+
+
       // إعادة تعيين جميع الحالات
       setAttendanceRecords({});
       setIsSessionStarted(false);
@@ -102,13 +104,13 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
       setIsSessionCompleted(false);
       setIsSubmitting(false);
       isFinishingRef.current = false;
-      
+
       // بدء جلسة جديدة تلقائياً
       setTimeout(() => {
         console.log('🚀 بدء جلسة جديدة تلقائياً...');
         startAttendanceSession();
       }, 100);
-      
+
       return () => {
         console.log('🧹 تنظيف عند مغادرة الشاشة...');
       };
@@ -130,12 +132,12 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
       setSessionId(newSession.id);
       setIsSessionStarted(true);
       setAttendanceRecords({});
-      
+
       console.log('🎯 بدء جلسة جديدة:', {
         sessionId: newSession.id,
         studentsCount: students.length
       });
-      
+
     } catch (error) {
       console.error('Error starting attendance session:', error);
       showErrorAlert('حدث خطأ أثناء بدء جلسة الحضور');
@@ -216,7 +218,7 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
     try {
       // التحقق من تسجيل جميع الطلاب
       const missingStudents = students.filter(student => !attendanceRecords[student.id]);
-      
+
       if (missingStudents.length > 0) {
         Alert.alert(
           'تحذير',
@@ -239,16 +241,16 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
 
   const finishAttendanceSession = useCallback(async () => {
     if (!sessionId) return;
-    
+
     // فحص إضافي لمنع التنفيذ المتعدد
     if (isFinishingRef.current && isSessionCompleted) {
       console.log('🚫 الجلسة في حالة إنهاء بالفعل - تجاهل الطلب');
       return;
     }
-    
+
     // تحديد أن الجلسة في حالة إنهاء
     isFinishingRef.current = true;
-    
+
     console.log('🎯 بدء إنهاء الجلسة مع السجلات:', {
       sessionId,
       recordsCount: Object.keys(attendanceRecords).length,
@@ -262,7 +264,7 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
     const actualAbsentCount = students.filter(s => attendanceRecords[s.id] === 'absent').length;
     const totalStudents = students.length;
     const totalRecorded = actualPresentCount + actualAbsentCount;
-    
+
     console.log('🔍 تشخيص إحصائيات الحضور النهائية:', {
       totalStudents,
       totalRecorded,
@@ -272,11 +274,11 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
       sessionId: sessionId
     });
 
-    
+
     // التأكد من أن الجلسة مكتملة
     setIsSessionCompleted(true);
     setIsSubmitting(false);
-    
+
     // نشر منشور غياب إلى مجتمع المدرسة بعد التسليم
     try {
       const schoolId = (state as any).userProfile?.schoolId;
@@ -300,7 +302,7 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
 
 
 
-  const renderStudentItem = ({ item: student, index }: { item: any, index: number }) => {
+  const renderStudentItem = useCallback(({ item: student, index }: { item: any, index: number }) => {
     const studentStatus = attendanceRecords[student.id];
 
     return (
@@ -311,13 +313,14 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
           </View>
           <Text style={styles.studentName}>{student.name}</Text>
         </View>
-        
+
         <View style={styles.attendanceButtons}>
           <TouchableOpacity
             style={[
               styles.statusButton,
               styles.absentButton,
-              studentStatus === 'absent' && styles.selectedButton,
+              { borderColor: colors.danger },
+              studentStatus === 'absent' && [styles.selectedButton, { backgroundColor: colors.primary }],
               isSessionCompleted && styles.disabledButton
             ]}
             onPress={() => {
@@ -334,12 +337,13 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
               ✗
             </Text>
           </TouchableOpacity>
-          
+
           <TouchableOpacity
             style={[
               styles.statusButton,
               styles.presentButton,
-              studentStatus === 'present' && styles.selectedButton,
+              { borderColor: colors.success },
+              studentStatus === 'present' && [styles.selectedButton, { backgroundColor: colors.primary }],
               isSessionCompleted && styles.disabledButton
             ]}
             onPress={() => {
@@ -359,7 +363,7 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
         </View>
       </View>
     );
-  };
+  }, [attendanceRecords, colors, isSessionCompleted, markStudentAttendance]);
 
   if (!currentClass) {
     return (
@@ -428,22 +432,26 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
         ) : (
           <View style={styles.attendanceContainer}>
             <View style={styles.progressContainer}>
-              <Text style={styles.progressText}>
+              <Text style={[styles.progressText, { color: colors.text.primary }]}>
                 {totalRecorded} من {students.length} طالب
               </Text>
-              <View style={styles.progressBar}>
-                <View 
+              <View style={[styles.progressBar, { backgroundColor: colors.border.light }]}>
+                <View
                   style={[
-                    styles.progressFill, 
-                    { width: `${(totalRecorded / students.length) * 100}%` }
-                  ]} 
+                    styles.progressFill,
+                    { 
+                      width: `${(totalRecorded / students.length) * 100}%`,
+                      backgroundColor: colors.primary,
+                      shadowColor: colors.primary
+                    }
+                  ]}
                 />
               </View>
-              <View style={styles.statsContainer}>
-                <Text style={styles.statsText}>
-                  حاضر: {presentCount} | غائب: {absentCount}
-                </Text>
-              </View>
+            <View style={styles.statsContainer}>
+              <Text style={[styles.statsText, { color: colors.text.secondary }]}>
+                حاضر: {presentCount} | غائب: {absentCount}
+              </Text>
+            </View>
             </View>
 
             <View style={styles.studentsListContainer}>
@@ -460,6 +468,7 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
               <TouchableOpacity
                 style={[
                   styles.submitButton,
+                  { backgroundColor: colors.primary },
                   (!isAllStudentsRecorded || isSubmitting || isSessionCompleted) && styles.disabledButton
                 ]}
                 onPress={submitAttendance}
@@ -569,22 +578,18 @@ const styles = StyleSheet.create({
   progressText: {
     fontSize: 18,
     fontFamily: fontFamilies.semibold,
-    color: colors.text.primary,
     textAlign: 'center',
     marginBottom: spacing.md,
   },
   progressBar: {
     height: 12,
-    backgroundColor: colors.border.light,
     borderRadius: borderRadius.full,
     overflow: 'hidden',
     ...shadows.sm,
   },
   progressFill: {
     height: '100%',
-    backgroundColor: colors.primary,
     borderRadius: borderRadius.full,
-    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.5,
     shadowRadius: 4,
@@ -654,14 +659,12 @@ const styles = StyleSheet.create({
   },
   absentButton: {
     backgroundColor: '#f8f9fa',
-    borderColor: colors.danger,
   },
   presentButton: {
     backgroundColor: '#f8f9fa',
-    borderColor: colors.success,
   },
   selectedButton: {
-    backgroundColor: colors.primary,
+    // سيتم تطبيق اللون ديناميكياً
   },
   statusButtonText: {
     fontSize: 18,
@@ -678,7 +681,6 @@ const styles = StyleSheet.create({
   statsText: {
     fontSize: 14,
     fontFamily: fontFamilies.regular,
-    color: colors.text.secondary,
   },
   submitContainer: {
     paddingHorizontal: 20,
@@ -688,7 +690,6 @@ const styles = StyleSheet.create({
     borderTopColor: '#e9ecef',
   },
   submitButton: {
-    backgroundColor: colors.primary,
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',

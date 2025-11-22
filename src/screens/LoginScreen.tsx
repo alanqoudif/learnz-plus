@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -158,7 +158,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
     }
   };
 
-  const dynamicStyles = {
+  const dynamicStyles = useMemo(() => ({
     container: { backgroundColor: colors.background.secondary },
     title: { color: colors.text.primary },
     subtitle: { color: colors.text.secondary },
@@ -177,7 +177,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
     submitButton: { backgroundColor: colors.success },
     submitButtonDisabled: { opacity: 0.6 },
     footerText: { color: colors.text.secondary },
-  };
+  }), [colors]);
 
   return (
     <KeyboardAvoidingView 

@@ -1,7 +1,8 @@
 import React, { useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, Animated } from 'react-native';
 import { Class } from '../types';
-import { colors, fontFamilies, shadows, borderRadius, spacing } from '../utils/theme';
+import { fontFamilies, shadows, borderRadius, spacing } from '../utils/theme';
+import { useTheme } from '../context/ThemeContext';
 import { scaleButton } from '../utils/animations';
 import { lightHaptic, mediumHaptic } from '../utils/haptics';
 
@@ -22,6 +23,7 @@ const ClassCard: React.FC<ClassCardProps> = React.memo(({
   onAttendance,
   onViewHistory,
 }) => {
+  const { colors } = useTheme();
   const scaleAnim = React.useRef(new Animated.Value(1)).current;
 
   const handlePress = useCallback(() => {
@@ -51,60 +53,148 @@ const ClassCard: React.FC<ClassCardProps> = React.memo(({
   }, [item, onViewHistory]);
 
   return (
-    <Animated.View style={[styles.card, { transform: [{ scale: scaleAnim }] }]}>
+    <Animated.View style={[{
+      backgroundColor: colors.background.card,
+      borderRadius: borderRadius.xl,
+      padding: spacing.lg,
+      marginBottom: spacing.md,
+      ...shadows.md,
+      borderWidth: 1,
+      borderColor: colors.border.light,
+    }, { transform: [{ scale: scaleAnim }] }]}>
       <TouchableOpacity onPress={handlePress} activeOpacity={0.9}>
-        <View style={styles.header}>
-          <View style={styles.headerInfo}>
-            <Text style={styles.className}>{item.name}</Text>
-            <Text style={styles.classSection}>شعبة {item.section}</Text>
+        <View style={{
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          marginBottom: spacing.md,
+          direction: 'rtl',
+        }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{
+              fontSize: 20,
+              fontFamily: fontFamilies.bold,
+              color: colors.text.primary,
+              marginBottom: 4,
+            }}>{item.name}</Text>
+            <Text style={{
+              fontSize: 16,
+              fontFamily: fontFamilies.regular,
+              color: colors.text.secondary,
+            }}>شعبة {item.section}</Text>
           </View>
           <TouchableOpacity
-            style={styles.deleteButton}
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              backgroundColor: colors.background.secondary,
+              justifyContent: 'center',
+              alignItems: 'center',
+              borderWidth: 1,
+              borderColor: colors.border.medium,
+            }}
             onPress={handleDelete}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Text style={styles.deleteIcon}>🗑️</Text>
+            <Text style={{ fontSize: 18 }}>🗑️</Text>
           </TouchableOpacity>
         </View>
 
-        <View style={styles.info}>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoIcon}>👥</Text>
-            <Text style={styles.infoText}>عدد الطلاب: {item.students.length}</Text>
+        <View style={{ marginBottom: spacing.md }}>
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            marginBottom: spacing.xs,
+            direction: 'rtl',
+          }}>
+            <Text style={{ fontSize: 14, marginLeft: spacing.xs }}>👥</Text>
+            <Text style={{
+              fontSize: 14,
+              fontFamily: fontFamilies.medium,
+              color: colors.text.primary,
+            }}>عدد الطلاب: {item.students.length}</Text>
           </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.infoIcon}>📅</Text>
-            <Text style={styles.infoDate}>
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            marginBottom: spacing.xs,
+            direction: 'rtl',
+          }}>
+            <Text style={{ fontSize: 14, marginLeft: spacing.xs }}>📅</Text>
+            <Text style={{
+              fontSize: 13,
+              fontFamily: fontFamilies.regular,
+              color: colors.text.secondary,
+            }}>
               {new Date(item.createdAt).toLocaleDateString('ar-SA')}
             </Text>
           </View>
         </View>
 
-        <View style={styles.actions}>
+        <View style={{
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          marginBottom: spacing.sm,
+          direction: 'rtl',
+          gap: spacing.sm,
+        }}>
           <TouchableOpacity
-            style={[styles.actionButton, styles.secondaryButton]}
+            style={{
+              flex: 1,
+              paddingVertical: spacing.md,
+              borderRadius: borderRadius.lg,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: colors.secondary,
+            }}
             onPress={handleManageStudents}
             activeOpacity={0.8}
           >
-            <Text style={styles.actionButtonText}>إدارة الطلاب</Text>
+            <Text style={{
+              color: colors.text.light,
+              fontFamily: fontFamilies.semibold,
+              fontSize: 14,
+            }}>إدارة الطلاب</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.actionButton, styles.primaryButton]}
+            style={{
+              flex: 1,
+              paddingVertical: spacing.md,
+              borderRadius: borderRadius.lg,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: colors.primary,
+            }}
             onPress={handleAttendance}
             activeOpacity={0.8}
           >
-            <Text style={[styles.actionButtonText, styles.primaryButtonText]}>
+            <Text style={{
+              color: colors.text.light,
+              fontFamily: fontFamilies.semibold,
+              fontSize: 14,
+            }}>
               تسجيل الحضور
             </Text>
           </TouchableOpacity>
         </View>
 
         <TouchableOpacity
-          style={styles.historyButton}
+          style={{
+            backgroundColor: colors.info,
+            paddingVertical: spacing.sm,
+            borderRadius: borderRadius.lg,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
           onPress={handleViewHistory}
           activeOpacity={0.8}
         >
-          <Text style={styles.historyButtonText}>📊 عرض تاريخ الحضور</Text>
+          <Text style={{
+            color: colors.text.light,
+            fontFamily: fontFamilies.semibold,
+            fontSize: 14,
+          }}>📊 عرض تاريخ الحضور</Text>
         </TouchableOpacity>
       </TouchableOpacity>
     </Animated.View>
@@ -121,114 +211,4 @@ const ClassCard: React.FC<ClassCardProps> = React.memo(({
 
 ClassCard.displayName = 'ClassCard';
 
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.background.card,
-    borderRadius: borderRadius.xl,
-    padding: spacing.lg,
-    marginBottom: spacing.md,
-    ...shadows.md,
-    borderWidth: 1,
-    borderColor: colors.border.light,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: spacing.md,
-    direction: 'rtl',
-  },
-  headerInfo: {
-    flex: 1,
-  },
-  className: {
-    fontSize: 20,
-    fontFamily: fontFamilies.bold,
-    color: colors.text.primary,
-    marginBottom: 4,
-  },
-  classSection: {
-    fontSize: 16,
-    fontFamily: fontFamilies.regular,
-    color: colors.text.secondary,
-  },
-  deleteButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.background.secondary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border.medium,
-  },
-  deleteIcon: {
-    fontSize: 18,
-  },
-  info: {
-    marginBottom: spacing.md,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.xs,
-    direction: 'rtl',
-  },
-  infoIcon: {
-    fontSize: 14,
-    marginLeft: spacing.xs,
-  },
-  infoText: {
-    fontSize: 14,
-    fontFamily: fontFamilies.medium,
-    color: colors.text.primary,
-  },
-  infoDate: {
-    fontSize: 13,
-    fontFamily: fontFamilies.regular,
-    color: colors.text.secondary,
-  },
-  actions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: spacing.sm,
-    direction: 'rtl',
-    gap: spacing.sm,
-  },
-  actionButton: {
-    flex: 1,
-    paddingVertical: spacing.md,
-    borderRadius: borderRadius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  secondaryButton: {
-    backgroundColor: colors.secondary,
-  },
-  primaryButton: {
-    backgroundColor: colors.primary,
-  },
-  actionButtonText: {
-    color: colors.text.light,
-    fontFamily: fontFamilies.semibold,
-    fontSize: 14,
-  },
-  primaryButtonText: {
-    color: colors.text.light,
-  },
-  historyButton: {
-    backgroundColor: colors.info,
-    paddingVertical: spacing.sm,
-    borderRadius: borderRadius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  historyButtonText: {
-    color: colors.text.light,
-    fontFamily: fontFamilies.semibold,
-    fontSize: 14,
-  },
-});
-
 export default ClassCard;
-

@@ -310,7 +310,7 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
     return (
       <View style={styles.studentItem}>
         <View style={styles.studentInfo}>
-          <View style={styles.studentNumber}>
+          <View style={[styles.studentNumber, { backgroundColor: colors.primary }]}>
             <Text style={styles.studentNumberText}>{index + 1}</Text>
           </View>
           <Text style={styles.studentName}>{student.name}</Text>
@@ -466,7 +466,7 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
               />
             </View>
 
-      <View style={[styles.submitContainer, { paddingBottom: insets.bottom + 8 }]}>
+            <View style={[styles.submitContainer, { paddingBottom: insets.bottom + 8 }]}>
               <TouchableOpacity
                 style={[
                   styles.submitButton,
@@ -626,7 +626,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   studentNumber: {
-    backgroundColor: colors.primary,
     borderRadius: 16,
     width: 32,
     height: 32,

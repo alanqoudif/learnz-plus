@@ -178,7 +178,7 @@ export default function SchoolReportsScreen() {
 
   if (!isLeader) {
     return (
-      <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background.primary }]}> 
+      <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background.primary }]}>
         <View style={styles.centerMessage}>
           <Text style={[styles.centerText, { color: colors.text.secondary }]}>هذه الصفحة مخصصة لقائد المدرسة.</Text>
         </View>
@@ -187,9 +187,9 @@ export default function SchoolReportsScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background.primary, paddingTop: insets.top }]}> 
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background.primary, paddingTop: insets.top }]}>
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + spacing['2xl'], paddingHorizontal: spacing.lg }}>
-        <View style={[styles.heroCard, { backgroundColor: colors.background.secondary, shadowColor: colors.shadow ?? '#000' }]}>
+        <View style={[styles.heroCard, { backgroundColor: colors.background.secondary, shadowColor: '#000' }]}>
           <View>
             <Text style={[styles.heroLabel, { color: colors.text.secondary }]}>لوحة السيطرة</Text>
             <Text style={[styles.heroTitle, { color: colors.text.primary }]}>تقارير المدرسة</Text>

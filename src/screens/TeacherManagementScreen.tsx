@@ -80,7 +80,7 @@ export default function TeacherManagementScreen() {
 
   if (!isLeader) {
     return (
-      <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background.primary }]}> 
+      <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background.primary }]}>
         <View style={styles.centerMessage}>
           <Text style={[styles.centerText, { color: colors.text.secondary }]}>هذه الصفحة مخصصة لقائد المدرسة.</Text>
         </View>
@@ -89,7 +89,7 @@ export default function TeacherManagementScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background.primary, paddingTop: insets.top }]}> 
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background.primary, paddingTop: insets.top }]}>
       <ScrollView
         contentContainerStyle={{ paddingBottom: insets.bottom + spacing['2xl'], paddingHorizontal: spacing.lg }}
         refreshControl={
@@ -100,7 +100,7 @@ export default function TeacherManagementScreen() {
           />
         }
       >
-        <View style={[styles.headerCard, { backgroundColor: colors.background.secondary, shadowColor: colors.shadow ?? '#000' }]}>
+        <View style={[styles.headerCard, { backgroundColor: colors.background.secondary, shadowColor: '#000' }]}>
           <View>
             <Text style={[styles.headerLabel, { color: colors.text.secondary }]}>قسم الموارد البشرية</Text>
             <Text style={[styles.headerTitle, { color: colors.text.primary }]}>إدارة المعلمين</Text>

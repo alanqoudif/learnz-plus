@@ -1,5 +1,3 @@
-import TesseractOcr, { LANG_ARABIC } from 'react-native-tesseract-ocr';
-
 type MlKitModule = typeof import('expo-mlkit-ocr').default;
 
 let MlKitOcr: MlKitModule | null = null;
@@ -16,12 +14,6 @@ export interface ParsedStudent {
   number?: string;
 }
 
-const OPTIONS = {
-  whitelist: 'ابتثجحخدذرزسشصضطظعغفقكلمنهوي ءأآإىةABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz',
-  blacklist: '0123456789!@#$%^&*()_=+[]{};:\'",.<>/?|`~',
-};
-
-const isTesseractAvailable = !!TesseractOcr && typeof TesseractOcr.recognize === 'function';
 const isMlKitAvailable = !!MlKitOcr && typeof MlKitOcr.recognizeText === 'function';
 const OCR_UNAVAILABLE_MESSAGE =
   'ميزة استخراج الأسماء من الصور غير متاحة في هذه النسخة. يرجى التحديث إلى آخر إصدار (خارج Expo Go) لتفعيل OCR.';
@@ -39,12 +31,7 @@ async function recognizeWithMlKit(uri: string) {
   return blockText || '';
 }
 
-async function recognizeWithTesseract(uri: string) {
-  if (!isTesseractAvailable) {
-    return '';
-  }
-  return await TesseractOcr.recognize(uri, LANG_ARABIC, OPTIONS);
-}
+
 
 function normalizeLine(line: string) {
   if (!line) return '';
@@ -75,9 +62,9 @@ export const ocrService = {
     if (!localUris.length) {
       throw new Error('يرجى اختيار ملف واحد على الأقل');
     }
-    if (!isMlKitAvailable && !isTesseractAvailable) {
+    if (!isMlKitAvailable) {
       console.warn(
-        'ميزة OCR غير متوفرة: لا يتوفر أي محرك OCR مثبت في هذه البناية. تأكد من تثبيت build يدعم expo-mlkit-ocr أو مكتبة Tesseract.'
+        'ميزة OCR غير متوفرة: لا يتوفر محرك OCR مثبت في هذه البناية. تأكد من تثبيت build يدعم expo-mlkit-ocr.'
       );
       throw new Error(OCR_UNAVAILABLE_MESSAGE);
     }
@@ -88,16 +75,10 @@ export const ocrService = {
     for (const uri of localUris) {
       try {
         let text = '';
-        if (isMlKitAvailable) {
-          try {
-            text = await recognizeWithMlKit(uri);
-          } catch (mlError) {
-            console.warn('🔁 فشل OCR باستخدام ML Kit - سيتم استخدام Tesseract كحل احتياطي', mlError);
-          }
-        }
-
-        if (!text && isTesseractAvailable) {
-          text = await recognizeWithTesseract(uri);
+        try {
+          text = await recognizeWithMlKit(uri);
+        } catch (mlError) {
+          console.warn('فشل OCR باستخدام ML Kit', mlError);
         }
 
         if (!text) {

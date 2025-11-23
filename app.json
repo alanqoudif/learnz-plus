@@ -40,8 +40,7 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-camera",
-      "expo-mlkit-ocr"
+      "expo-camera"
     ],
     "extra": {
       "eas": {

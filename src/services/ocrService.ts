@@ -1,5 +1,5 @@
 import * as FileSystem from 'expo-file-system/legacy';
-import { GEMINI_API_KEY, GEMINI_VISION_MODEL } from '../config/appConfig';
+import { OPENAI_API_KEY, OPENAI_VISION_MODEL } from '../config/appConfig';
 
 export interface ParsedStudent {
   id: string;
@@ -13,32 +13,103 @@ export interface SheetFileInput {
   name?: string | null;
 }
 
-const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_VISION_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+const OPENAI_ENDPOINT = 'https://api.openai.com/v1/chat/completions';
 const DEFAULT_MIME_TYPE = 'image/jpeg';
 const OCR_UNAVAILABLE_MESSAGE =
-  'ميزة استخراج الأسماء من الصور غير متاحة حالياً. تحقق من اتصال الإنترنت أو إعداد مفتاح Gemini.';
+  'ميزة استخراج الأسماء من الصور غير متاحة حالياً. تحقق من اتصال الإنترنت أو إعداد مفتاح OpenAI.';
 const OCR_CACHE_DIR = FileSystem.cacheDirectory ? `${FileSystem.cacheDirectory}students-ocr/` : null;
-const GEMINI_PROMPT =
-  'حلل كشف الحضور المرفوع وأعد الاستجابة بتنسيق JSON من الشكل {"students":["اسم1","اسم2", ...]}. ' +
-  'احرص على أن تحتوي المصفوفة على الأسماء فقط بدون أرقام أو رموز أو شرح إضافي، ولا تُرجع أي نص آخر خارج JSON.';
+const OCR_PROMPT =
+  'أنت مساعد متخصص في قراءة وتحليل كشوف الحضور والجداول. مهمتك هي استخراج جميع أسماء الطلاب من الصورة بدقة عالية.\n\n' +
+  'تعليمات صارمة:\n' +
+  '1. اقرأ كل النص الموجود في الصورة بعناية فائقة\n' +
+  '2. استخرج فقط الأسماء الشخصية للطلاب (مثل: أحمد، محمد، فاطمة، خالد)\n' +
+  '3. تجاهل تماماً:\n' +
+  '   - الأرقام (1، 2، 3...)\n' +
+  '   - التواريخ (2024، 1445...)\n' +
+  '   - العناوين (اسم الطالب، الرقم، الحضور...)\n' +
+  '   - الكلمات الشائعة (طالب، طالبة، حاضر، غائب، ملاحظات...)\n' +
+  '   - الرموز والعلامات\n' +
+  '   - أي نص ليس اسماً شخصياً\n' +
+  '4. إذا كان هناك جدول، اقرأ فقط عمود الأسماء وتجاهل باقي الأعمدة\n' +
+  '5. نظف الأسماء: أزل أي أرقام أو رموز ملتصقة بالأسماء\n' +
+  '6. إذا كانت الصورة فارغة أو لا تحتوي على أسماء، أعد {"students":[]}\n\n' +
+  'مهم جداً:\n' +
+  '- استخرج فقط الأسماء الشخصية الحقيقية\n' +
+  '- لا تستخرج كلمات مثل: "طالب"، "اسم"، "الرقم"، "الحضور"، "الغياب"\n' +
+  '- أعد الاستجابة بتنسيق JSON فقط بدون أي نص إضافي\n\n' +
+  'التنسيق المطلوب:\n' +
+  '{"students":["الاسم الأول","الاسم الثاني","الاسم الثالث"]}\n\n' +
+  'أمثلة صحيحة:\n' +
+  'إذا رأيت: "1. أحمد محمد علي" و "2. فاطمة حسن" و "3. خالد"\n' +
+  'أعد: {"students":["أحمد محمد علي","فاطمة حسن","خالد"]}\n\n' +
+  'إذا رأيت: "اسم الطالب: محمد" و "الرقم: 5"\n' +
+  'أعد: {"students":["محمد"]} فقط (تجاهل "اسم الطالب" و "الرقم")\n\n' +
+  'الآن اقرأ الصورة واستخرج فقط الأسماء الشخصية للطلاب:';
 const BASE64_ENCODING: any =
   (FileSystem as any)?.EncodingType?.Base64 ??
   (FileSystem as any)?.EncodingType?.BASE64 ??
   'base64';
 
+// قائمة الكلمات الشائعة التي يجب تجاهلها
+const COMMON_WORDS_TO_REMOVE = [
+  'طالب', 'طالبة', 'طلاب', 'طلبة',
+  'اسم', 'أسماء', 'الاسم', 'الأسماء',
+  'رقم', 'الرقم', 'أرقام',
+  'حاضر', 'حضور', 'الحضور',
+  'غائب', 'غياب', 'الغياب',
+  'ملاحظات', 'ملاحظة',
+  'الصف', 'الفصل', 'الشعبة',
+  'التاريخ', 'تاريخ',
+  'م', 'م.', 'مثال',
+  'من', 'في', 'على', 'إلى', 'عن', 'مع',
+  'هو', 'هي', 'هم', 'هن',
+  'الذي', 'التي', 'الذين', 'اللاتي',
+  'student', 'name', 'number', 'attendance', 'absent',
+  'class', 'grade', 'section', 'date',
+];
+
 function normalizeLine(line: string) {
   if (!line) return '';
-  const noDigits = line.replace(/[0-9.,:;()\-_/\\]+/g, ' ');
-  const normalized = noDigits.replace(/\s+/g, ' ').trim();
+  
+  // إزالة الأرقام والرموز
+  let cleaned = line.replace(/[0-9.,:;()\-_/\\\[\]{}"']+/g, ' ');
+  
+  // إزالة الكلمات الشائعة
+  COMMON_WORDS_TO_REMOVE.forEach(word => {
+    const regex = new RegExp(`\\b${word}\\b`, 'gi');
+    cleaned = cleaned.replace(regex, ' ');
+  });
+  
+  // تنظيف المسافات المتعددة
+  const normalized = cleaned.replace(/\s+/g, ' ').trim();
+  
+  // إزالة الأسطر التي تبدأ بكلمات شائعة أو قصيرة جداً
+  if (normalized.length < 2) {
+    return '';
+  }
+  
   return normalized;
 }
 
 function extractNames(text: string) {
+  // تجاهل JSON الفارغ أو النصوص التي تبدو كـ JSON فقط
+  const trimmedText = text.trim();
+  if (/^\s*\{\s*"students"\s*:\s*\[\s*\]\s*\}\s*$/i.test(trimmedText) ||
+      /^\s*\{\s*"names"\s*:\s*\[\s*\]\s*\}\s*$/i.test(trimmedText)) {
+    return [];
+  }
+
   const containsLetters = /[A-Za-z\u0600-\u06FF]/;
   const candidates = text
     .split(/\r?\n/)
     .map(line => normalizeLine(line))
-    .filter(line => line.length > 1 && containsLetters.test(line));
+    .filter(line => {
+      // تجاهل الأسطر التي تبدو كـ JSON structure
+      if (/^\s*[\{\[\}\]",:\s]+\s*$/i.test(line)) {
+        return false;
+      }
+      return line.length > 1 && containsLetters.test(line);
+    });
 
   const unique = new Map<string, string>();
   candidates.forEach(line => {
@@ -110,9 +181,69 @@ async function prepareLocalUri(uri: string) {
   }
 }
 
-async function recognizeWithGemini(file: SheetFileInput) {
-  if (!GEMINI_API_KEY) {
-    throw new Error('لم يتم إعداد مفتاح Gemini API.');
+async function extractRawTextFromImage(file: SheetFileInput): Promise<string> {
+  if (!OPENAI_API_KEY) {
+    throw new Error('لم يتم إعداد مفتاح OpenAI API.');
+  }
+
+  const localUri = await prepareLocalUri(file.uri);
+  let base64 = '';
+  try {
+    base64 = await FileSystem.readAsStringAsync(localUri, {
+      encoding: BASE64_ENCODING,
+    });
+  } catch (fileError) {
+    throw new Error('تعذر تجهيز الملف للمعالجة.');
+  }
+
+  const mimeType = guessMimeType(file);
+  const imageUrl = `data:${mimeType};base64,${base64}`;
+
+  const payload = {
+    model: OPENAI_VISION_MODEL,
+    messages: [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: 'اقرأ كل النص الموجود في هذه الصورة وأعد النص كما هو بدون أي تعديل. إذا كانت الصورة تحتوي على جدول أو قائمة، أعد كل النص الموجود.',
+          },
+          {
+            type: 'image_url',
+            image_url: {
+              url: imageUrl,
+              detail: 'high',
+            },
+          },
+        ],
+      },
+    ],
+    max_tokens: 4096,
+    temperature: 0.1,
+  };
+
+  const response = await fetch(OPENAI_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await response.json();
+  
+  if (!response.ok || data?.error) {
+    throw new Error(data?.error?.message || 'فشل استخراج النص');
+  }
+
+  return extractTextFromOpenAIResponse(data);
+}
+
+async function recognizeWithOpenAI(file: SheetFileInput) {
+  if (!OPENAI_API_KEY) {
+    throw new Error('لم يتم إعداد مفتاح OpenAI API.');
   }
 
   const localUri = await prepareLocalUri(file.uri);
@@ -126,68 +257,70 @@ async function recognizeWithGemini(file: SheetFileInput) {
     throw new Error('تعذر تجهيز الملف للمعالجة. حاول اختيار صورة أخرى أو أعد المحاولة.');
   }
 
+  const mimeType = guessMimeType(file);
+  const imageUrl = `data:${mimeType};base64,${base64}`;
+
   const payload = {
-    contents: [
+    model: OPENAI_VISION_MODEL,
+    messages: [
       {
         role: 'user',
-        parts: [
-          { text: GEMINI_PROMPT },
+        content: [
           {
-            inline_data: {
-              mime_type: guessMimeType(file),
-              data: base64,
+            type: 'text',
+            text: OCR_PROMPT,
+          },
+          {
+            type: 'image_url',
+            image_url: {
+              url: imageUrl,
+              detail: 'high', // استخدام دقة عالية لقراءة أفضل
             },
           },
         ],
       },
     ],
-    generationConfig: {
-      temperature: 0.2,
-      topP: 0.8,
-      topK: 40,
-      maxOutputTokens: 2048,
-    },
+    max_tokens: 4096, // زيادة الحد الأقصى للتوكنز
+    temperature: 0.1, // تقليل temperature للحصول على نتائج أكثر دقة
   };
 
-  const response = await fetch(GEMINI_ENDPOINT, {
+  const response = await fetch(OPENAI_ENDPOINT, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${OPENAI_API_KEY}`,
+    },
     body: JSON.stringify(payload),
   });
 
   const data = await response.json();
   
   // 🔍 سجل كامل الاستجابة للتشخيص
-  console.log('📥 Gemini Response:', JSON.stringify(data, null, 2));
+  console.log('📥 OpenAI Response:', JSON.stringify(data, null, 2));
   
   if (!response.ok || data?.error) {
-    const message = data?.error?.message || 'تعذر الحصول على استجابة صالحة من Gemini.';
-    console.error('❌ Gemini API Error:', message, data);
+    const message = data?.error?.message || 'تعذر الحصول على استجابة صالحة من OpenAI.';
+    console.error('❌ OpenAI API Error:', message, data);
     throw new Error(message);
   }
 
-  const recognizedText = extractTextFromGeminiResponse(data);
-  console.log('📝 Extracted Text from Gemini:', recognizedText);
+  const recognizedText = extractTextFromOpenAIResponse(data);
+  console.log('📝 Extracted Text from OpenAI:', recognizedText);
   return recognizedText;
 }
 
-function extractTextFromGeminiResponse(payload: any) {
-  if (!payload?.candidates?.length) {
+function extractTextFromOpenAIResponse(payload: any) {
+  if (!payload?.choices?.length) {
     return '';
   }
 
-  for (const candidate of payload.candidates) {
-    const parts = candidate?.content?.parts;
-    if (!Array.isArray(parts)) continue;
+  for (const choice of payload.choices) {
+    const message = choice?.message;
+    if (!message) continue;
 
-    const text = parts
-      .map(part => part?.text)
-      .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
-      .join('\n')
-      .trim();
-
-    if (text) {
-      return text;
+    const content = message?.content;
+    if (typeof content === 'string' && content.trim().length > 0) {
+      return content.trim();
     }
   }
 
@@ -205,6 +338,29 @@ function normalizeSheetInputs(inputs: Array<string | SheetFileInput>): SheetFile
     .filter((file): file is SheetFileInput => !!file && typeof file.uri === 'string' && file.uri.length > 0);
 }
 
+function cleanStudentName(name: string): string {
+  if (!name) return '';
+  
+  let cleaned = name.trim();
+  
+  // إزالة الأرقام في البداية أو النهاية
+  cleaned = cleaned.replace(/^[0-9.\-]+\s*/, '').replace(/\s*[0-9.\-]+$/, '');
+  
+  // إزالة الكلمات الشائعة
+  COMMON_WORDS_TO_REMOVE.forEach(word => {
+    const regex = new RegExp(`\\b${word}\\b`, 'gi');
+    cleaned = cleaned.replace(regex, ' ').trim();
+  });
+  
+  // إزالة الرموز والعلامات
+  cleaned = cleaned.replace(/[.,:;()\-_/\\\[\]{}"'•\-\s]+/g, ' ').trim();
+  
+  // تنظيف المسافات المتعددة
+  cleaned = cleaned.replace(/\s+/g, ' ').trim();
+  
+  return cleaned;
+}
+
 function parseJsonNames(raw: string) {
   if (!raw) {
     return [];
@@ -219,15 +375,20 @@ function parseJsonNames(raw: string) {
 
   try {
     const parsed = JSON.parse(cleaned);
+    let names: string[] = [];
+    
     if (Array.isArray(parsed)) {
-      return parsed.filter(item => typeof item === 'string');
+      names = parsed.filter(item => typeof item === 'string');
+    } else if (Array.isArray(parsed?.students)) {
+      names = parsed.students.filter((item: any) => typeof item === 'string');
+    } else if (Array.isArray(parsed?.names)) {
+      names = parsed.names.filter((item: any) => typeof item === 'string');
     }
-    if (Array.isArray(parsed?.students)) {
-      return parsed.students.filter((item: any) => typeof item === 'string');
-    }
-    if (Array.isArray(parsed?.names)) {
-      return parsed.names.filter((item: any) => typeof item === 'string');
-    }
+    
+    // تنظيف الأسماء المستخرجة
+    return names
+      .map(name => cleanStudentName(name))
+      .filter(name => name.length > 0);
   } catch (error) {
     // ignore JSON parse errors and fallback
   }
@@ -253,20 +414,53 @@ export const ocrService = {
       try {
         let text = '';
         try {
-          text = await recognizeWithGemini(file);
-        } catch (geminiError) {
-          console.warn('فشل الاتصال بـ Gemini Vision', geminiError);
-          throw geminiError;
+          text = await recognizeWithOpenAI(file);
+        } catch (openaiError) {
+          console.warn('فشل الاتصال بـ OpenAI Vision', openaiError);
+          throw openaiError;
         }
 
         if (!text) {
-          console.warn('لم يتمكن Gemini من استخراج نص واضح من الملف:', file.name || file.uri);
+          console.warn('لم يتمكن OpenAI من استخراج نص واضح من الملف:', file.name || file.uri);
           continue;
         }
 
+        console.log(`📄 Raw text from OpenAI:`, text);
+        
         const structuredNames = parseJsonNames(text);
-        const names = structuredNames.length ? structuredNames : extractNames(text);
-        console.log(`📋 Extracted ${names.length} names from file:`, names);
+        let names: string[] = [];
+        
+        if (structuredNames.length > 0) {
+          names = structuredNames;
+          console.log(`✅ Found ${names.length} names from JSON structure`);
+        } else {
+          // إذا كان JSON فارغ أو غير صالح، حاول استخراج الأسماء من النص مباشرة
+          const isLikelyEmptyJson = /^\s*\{\s*"students"\s*:\s*\[\s*\]\s*\}\s*$/i.test(text.trim());
+          
+          if (isLikelyEmptyJson) {
+            console.warn('⚠️ OpenAI returned empty students array. The image might not contain readable names.');
+            // إذا كان JSON فارغ، حاول مرة أخرى مع prompt مختلف يطلب استخراج النص الخام
+            try {
+              const rawText = await extractRawTextFromImage(file);
+              if (rawText && rawText.trim().length > 0) {
+                names = extractNames(rawText);
+                console.log(`📝 Extracted ${names.length} names from raw text fallback`);
+              }
+            } catch (fallbackError) {
+              console.warn('Fallback text extraction failed:', fallbackError);
+            }
+          } else {
+            names = extractNames(text);
+            console.log(`📝 Extracted ${names.length} names from text parsing`);
+          }
+        }
+        
+        // تنظيف جميع الأسماء المستخرجة
+        names = names
+          .map(name => cleanStudentName(name))
+          .filter(name => name.length > 1); // إزالة الأسماء القصيرة جداً
+        
+        console.log(`📋 Final extracted ${names.length} names from file:`, names);
 
         names.forEach((name) => {
           const key = name.toLowerCase();

@@ -20,6 +20,7 @@ import { ocrService } from '../services/ocrService';
 import { lightHaptic, successHaptic } from '../utils/haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { buildSheetFilesFromAssets, fallbackNameFromUri } from '../utils/sheetUpload';
+import type { SheetFileInput } from '../services/ocrService';
 
 type SheetStep = 'options' | 'manual' | 'ocr';
 
@@ -104,31 +105,9 @@ export default function StudentsScreen({ navigation }: any) {
     }
   }, [selectedClass, studentName, createStudent, closeSheet]);
 
-  const handlePickRoster = useCallback(async () => {
-    if (!selectedClass) {
-      Alert.alert('اختر فصلاً', 'يرجى اختيار الفصل أولاً.');
-      return;
-    }
-
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert('صلاحيات مطلوبة', 'يرجى منح إذن الوصول لألبوم الصور لقراءة كشف الطلاب.');
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      allowsMultipleSelection: true,
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      selectionLimit: 10,
-      quality: 1,
-    });
-
-    if (result.canceled) return;
-
-    const files = buildSheetFilesFromAssets(result.assets || []);
-
+  const processImageFiles = useCallback(async (files: SheetFileInput[]) => {
     if (!files.length) {
-      Alert.alert('لم يتم تحديد صور', 'اختر صورة واحدة على الأقل من الألبوم.');
+      Alert.alert('لم يتم تحديد صور', 'اختر صورة واحدة على الأقل.');
       return;
     }
 
@@ -146,7 +125,7 @@ export default function StudentsScreen({ navigation }: any) {
       }));
       setOcrCandidates(formatted);
     } catch (error: any) {
-      console.error('Gemini OCR error', error);
+      console.error('OpenAI OCR error', error);
       Alert.alert(
         'فشل قراءة الشيت',
         error?.message || 'تأكد من وضوح الملفات المختارة ثم حاول مرة أخرى.'
@@ -155,7 +134,69 @@ export default function StudentsScreen({ navigation }: any) {
     } finally {
       setIsOcrLoading(false);
     }
-  }, [selectedClass]);
+  }, []);
+
+  const handlePickRoster = useCallback(async () => {
+    if (!selectedClass) {
+      Alert.alert('اختر فصلاً', 'يرجى اختيار الفصل أولاً.');
+      return;
+    }
+
+    // عرض خيارات المصدر
+    Alert.alert(
+      'اختر المصدر',
+      'من أين تريد اختيار الصورة؟',
+      [
+        {
+          text: 'إلغاء',
+          style: 'cancel',
+        },
+        {
+          text: 'الكاميرا',
+          onPress: async () => {
+            const permission = await ImagePicker.requestCameraPermissionsAsync();
+            if (!permission.granted) {
+              Alert.alert('صلاحيات مطلوبة', 'يرجى منح إذن الوصول للكاميرا لالتقاط صورة كشف الحضور.');
+              return;
+            }
+
+            const result = await ImagePicker.launchCameraAsync({
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              quality: 1,
+              allowsEditing: false,
+            });
+
+            if (result.canceled) return;
+
+            const files = buildSheetFilesFromAssets(result.assets || []);
+            await processImageFiles(files);
+          },
+        },
+        {
+          text: 'الألبوم',
+          onPress: async () => {
+            const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (!permission.granted) {
+              Alert.alert('صلاحيات مطلوبة', 'يرجى منح إذن الوصول لألبوم الصور لقراءة كشف الطلاب.');
+              return;
+            }
+
+            const result = await ImagePicker.launchImageLibraryAsync({
+              allowsMultipleSelection: true,
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
+              selectionLimit: 10,
+              quality: 1,
+            });
+
+            if (result.canceled) return;
+
+            const files = buildSheetFilesFromAssets(result.assets || []);
+            await processImageFiles(files);
+          },
+        },
+      ]
+    );
+  }, [selectedClass, processImageFiles]);
 
   const handleSaveOcrStudents = useCallback(async () => {
     if (!selectedClass) return;
@@ -296,7 +337,7 @@ export default function StudentsScreen({ navigation }: any) {
             {isOcrLoading ? 'جارٍ قراءة الشيت...' : `مراجعة ${ocrCandidates.length} طالب`}
           </Text>
           {isOcrLoading ? (
-            <Text style={styles.loadingText}>جارٍ استخراج الأسماء باستخدام Gemini Vision...</Text>
+            <Text style={styles.loadingText}>جارٍ استخراج الأسماء باستخدام OpenAI Vision...</Text>
           ) : (
             <>
               {selectedRosterFiles.length > 0 && (
@@ -314,12 +355,15 @@ export default function StudentsScreen({ navigation }: any) {
                   key={candidate.id}
                   style={[styles.candidateRow, { borderColor: candidate.selected ? colors.primary : colors.border.light }]}
                 >
-                  <TouchableOpacity onPress={() => {
+                  <TouchableOpacity 
+                  onPress={() => {
                     setOcrCandidates(prev => prev.map(item => item.id === candidate.id ? { ...item, selected: !item.selected } : item));
-                  }}>
+                  }}
+                  style={styles.checkboxContainer}
+                  >
                     <Ionicons
                       name={candidate.selected ? 'checkbox' : 'square-outline'}
-                      size={20}
+                      size={22}
                       color={candidate.selected ? colors.primary : colors.text.secondary}
                     />
                   </TouchableOpacity>
@@ -328,7 +372,17 @@ export default function StudentsScreen({ navigation }: any) {
                     onChangeText={text => {
                       setOcrCandidates(prev => prev.map(item => item.id === candidate.id ? { ...item, name: text } : item));
                     }}
-                    style={[styles.candidateInput, { color: colors.text.primary }]}
+                    placeholder="اضغط لتعديل الاسم"
+                    placeholderTextColor={colors.text.tertiary}
+                    style={[styles.candidateInput, { color: colors.text.primary, borderColor: colors.border.light }]}
+                    multiline={false}
+                    selectTextOnFocus={true}
+                  />
+                  <Ionicons
+                    name="create-outline"
+                    size={18}
+                    color={colors.text.secondary}
+                    style={styles.editIcon}
                   />
                 </View>
               ))}
@@ -371,9 +425,9 @@ export default function StudentsScreen({ navigation }: any) {
         >
           <Ionicons name="scan-outline" size={20} color={colors.primary} />
           <View>
-            <Text style={[styles.optionTitle, { color: colors.text.primary }]}>مسح الشيت (Gemini)</Text>
+            <Text style={[styles.optionTitle, { color: colors.text.primary }]}>مسح الشيت (OCR)</Text>
             <Text style={[styles.optionSubtitle, { color: colors.text.secondary }]}>
-              رفع صورة وتحويلها إلى أسماء تلقائياً
+              التقاط أو رفع صورة وتحويلها إلى أسماء تلقائياً
             </Text>
           </View>
         </TouchableOpacity>
@@ -628,13 +682,26 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 16,
     paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
     marginBottom: spacing.sm,
     gap: spacing.sm,
+    backgroundColor: '#fff',
+  },
+  checkboxContainer: {
+    padding: spacing.xs,
   },
   candidateInput: {
     flex: 1,
     fontFamily: fontFamilies.regular,
     fontSize: 15,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.xs,
+    borderWidth: 1,
+    borderRadius: 8,
+    minHeight: 36,
+  },
+  editIcon: {
+    marginLeft: spacing.xs,
   },
   filesList: {
     marginBottom: spacing.sm,

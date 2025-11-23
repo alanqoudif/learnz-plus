@@ -138,33 +138,87 @@ export default function StudentManagementScreen({ navigation, route }: StudentMa
 
   const pickSheets = async () => {
     try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        Alert.alert('صلاحيات مطلوبة', 'يرجى منح إذن الوصول إلى ألبوم الصور لاختيار الكشف.');
-        return;
-      }
+      // عرض خيارات المصدر
+      Alert.alert(
+        'اختر المصدر',
+        'من أين تريد اختيار الصورة؟',
+        [
+          {
+            text: 'إلغاء',
+            style: 'cancel',
+          },
+          {
+            text: 'الكاميرا',
+            onPress: async () => {
+              try {
+                const permission = await ImagePicker.requestCameraPermissionsAsync();
+                if (!permission.granted) {
+                  Alert.alert('صلاحيات مطلوبة', 'يرجى منح إذن الوصول للكاميرا لالتقاط صورة كشف الحضور.');
+                  return;
+                }
 
-      const result = await ImagePicker.launchImageLibraryAsync({
-        allowsMultipleSelection: true,
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        selectionLimit: 10,
-        quality: 1,
-      });
+                const result = await ImagePicker.launchCameraAsync({
+                  mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                  quality: 1,
+                  allowsEditing: false,
+                });
 
-      if (result.canceled) {
-        return;
-      }
+                if (result.canceled) {
+                  return;
+                }
 
-      const files = buildSheetFilesFromAssets(result.assets || []);
-      if (!files.length) {
-        Alert.alert('خطأ', 'لم يتم اختيار أي صورة من الألبوم.');
-        return;
-      }
+                const files = buildSheetFilesFromAssets(result.assets || []);
+                if (!files.length) {
+                  Alert.alert('خطأ', 'لم يتم التقاط أي صورة.');
+                  return;
+                }
 
-      await processSheetsWithOCR(files);
+                await processSheetsWithOCR(files);
+              } catch (error) {
+                console.error('Error taking photo with camera:', error);
+                Alert.alert('خطأ', 'حدث خطأ أثناء التقاط الصورة بالكاميرا.');
+              }
+            },
+          },
+          {
+            text: 'الألبوم',
+            onPress: async () => {
+              try {
+                const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+                if (!permission.granted) {
+                  Alert.alert('صلاحيات مطلوبة', 'يرجى منح إذن الوصول إلى ألبوم الصور لاختيار الكشف.');
+                  return;
+                }
+
+                const result = await ImagePicker.launchImageLibraryAsync({
+                  allowsMultipleSelection: true,
+                  mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                  selectionLimit: 10,
+                  quality: 1,
+                });
+
+                if (result.canceled) {
+                  return;
+                }
+
+                const files = buildSheetFilesFromAssets(result.assets || []);
+                if (!files.length) {
+                  Alert.alert('خطأ', 'لم يتم اختيار أي صورة من الألبوم.');
+                  return;
+                }
+
+                await processSheetsWithOCR(files);
+              } catch (error) {
+                console.error('Error picking images from gallery:', error);
+                Alert.alert('خطأ', 'حدث خطأ أثناء اختيار الصور من ألبوم الجهاز.');
+              }
+            },
+          },
+        ]
+      );
     } catch (error) {
-      console.error('Error picking images from gallery:', error);
-      Alert.alert('خطأ', 'حدث خطأ أثناء اختيار الصور من ألبوم الجهاز.');
+      console.error('Error in pickSheets:', error);
+      Alert.alert('خطأ', 'حدث خطأ أثناء اختيار المصدر.');
     }
   };
 
@@ -439,7 +493,18 @@ export default function StudentManagementScreen({ navigation, route }: StudentMa
                 <View key={index} style={styles.extractedStudentItem}>
                   <View style={styles.extractedStudentInfo}>
                     <Text style={styles.extractedStudentNumber}>{student.number}</Text>
-                    <Text style={styles.extractedStudentName}>{student.name}</Text>
+                    <TextInput
+                      value={student.name}
+                      onChangeText={(text) => {
+                        const updated = [...extractedStudents];
+                        updated[index].name = text;
+                        setExtractedStudents(updated);
+                      }}
+                      style={styles.extractedStudentNameInput}
+                      placeholder="اضغط لتعديل الاسم"
+                      placeholderTextColor={colors.text.tertiary}
+                      selectTextOnFocus={true}
+                    />
                   </View>
                   <TouchableOpacity
                     onPress={() => removeExtractedStudent(index)}
@@ -759,6 +824,19 @@ const styles = StyleSheet.create({
     color: baseColors.primary,
     marginRight: 12,
     minWidth: 30,
+  },
+  extractedStudentNameInput: {
+    flex: 1,
+    fontSize: 16,
+    fontFamily: fontFamilies.regular,
+    color: '#2c3e50',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderWidth: 1,
+    borderColor: '#dee2e6',
+    borderRadius: 6,
+    backgroundColor: '#fff',
+    minHeight: 36,
   },
   extractedStudentName: {
     fontSize: 16,

@@ -3,7 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StatusBar } from 'expo-status-bar';
-import { I18nManager } from 'react-native';
+import { I18nManager, Platform } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { AppProvider, useApp } from './src/context/AppContext';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
@@ -20,6 +20,8 @@ import JoinSchoolScreen from './src/screens/JoinSchoolScreen';
 import LeaderAdminScreen from './src/screens/LeaderAdminScreen';
 import AppAdminScreen from './src/screens/AppAdminScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
+import TeacherManagementScreen from './src/screens/TeacherManagementScreen';
+import SchoolReportsScreen from './src/screens/SchoolReportsScreen';
 import { RootStackParamList } from './src/types';
 
 const Stack = createStackNavigator<RootStackParamList>();
@@ -27,7 +29,7 @@ const Tab = createBottomTabNavigator();
 
 function MainTabs() {
   const { state } = useApp();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const userProfile = (state as any)?.userProfile;
   const showSchoolManagementTab = Boolean(userProfile?.schoolId) && userProfile?.role === 'leader';
 
@@ -39,28 +41,32 @@ function MainTabs() {
         tabBarInactiveTintColor: colors.text.muted || colors.text.secondary,
         tabBarStyle: {
           position: 'absolute',
-          bottom: 18,
-          left: 24,
-          right: 24,
+          bottom: 16,
+          alignSelf: 'center',
+          width: '92%',
+          maxWidth: 420,
           backgroundColor: colors.background.glass || 'rgba(255,255,255,0.9)',
-          borderRadius: 32,
-          height: 70,
-          paddingBottom: 10,
-          paddingTop: 10,
+          borderRadius: 28,
+          height: 64,
+          paddingHorizontal: 12,
+          paddingBottom: Platform.OS === 'ios' ? 14 : 8,
+          paddingTop: 8,
           borderTopWidth: 0,
-          shadowColor: '#000',
+          borderWidth: isDark ? 0 : 1,
+          borderColor: isDark ? 'transparent' : colors.border.light,
+          shadowColor: isDark ? '#000' : '#2C2C2C',
           shadowOffset: {
             width: 0,
-            height: 10,
+            height: 8,
           },
-          shadowOpacity: 0.12,
-          shadowRadius: 20,
+          shadowOpacity: 0.15,
+          shadowRadius: 16,
           elevation: 12,
         },
         tabBarLabelStyle: {
-          fontSize: 12,
+          fontSize: 11,
           fontWeight: '600',
-          marginBottom: 0,
+          marginBottom: Platform.OS === 'ios' ? 0 : 2,
         },
         tabBarHideOnKeyboard: true,
       }}
@@ -130,6 +136,8 @@ function AppNavigator() {
             <Stack.Screen name="Community" component={CommunityScreen} />
             <Stack.Screen name="JoinSchool" component={JoinSchoolScreen} />
             <Stack.Screen name="LeaderAdmin" component={LeaderAdminScreen} />
+            <Stack.Screen name="TeacherManagement" component={TeacherManagementScreen} />
+            <Stack.Screen name="SchoolReports" component={SchoolReportsScreen} />
             <Stack.Screen name="AppAdmin" component={AppAdminScreen} />
             <Stack.Screen name="Settings" component={SettingsScreen} />
             <Stack.Screen name="AddClass" component={AddClassScreen} />

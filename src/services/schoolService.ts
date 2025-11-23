@@ -158,7 +158,46 @@ export async function joinSchoolByTeacherCode(joinerId: string, teacherCode: str
   }
 
   if (!teacherId) {
-    throw new Error('لم يتم العثور على معلم بهذا الرمز');
+    const schoolQuery = query(
+      collection(firestore, COLLECTIONS.SCHOOLS),
+      where('inviteCode', '==', normalized),
+      limit(1)
+    );
+    const schoolSnapshot = await getDocs(schoolQuery);
+    if (!schoolSnapshot.empty) {
+      const schoolDoc = schoolSnapshot.docs[0];
+      const schoolData: any = schoolDoc.data();
+      const inviteExpiresAt = schoolData.inviteExpiresAt?.toDate
+        ? schoolData.inviteExpiresAt.toDate()
+        : schoolData.inviteExpiresAt?.seconds
+          ? new Date(schoolData.inviteExpiresAt.seconds * 1000)
+          : schoolData.inviteExpiresAt
+            ? new Date(schoolData.inviteExpiresAt)
+            : null;
+      if (inviteExpiresAt && inviteExpiresAt.getTime() < Date.now()) {
+        throw new Error('انتهت صلاحية رمز المدرسة، اطلب من قائدك رمزاً محدثاً.');
+      }
+
+      await setDoc(doc(firestore, COLLECTIONS.USERS, joinerId), {
+        schoolId: schoolDoc.id,
+        schoolName: schoolData.name,
+        role: 'member',
+      }, { merge: true });
+      await ensureUserCode(joinerId, {
+        schoolId: schoolDoc.id,
+        schoolName: schoolData.name,
+      });
+
+      return {
+        id: schoolDoc.id,
+        name: schoolData.name,
+        leaderUserId: schoolData.leaderUserId,
+        inviteCode: schoolData.inviteCode,
+        inviteExpiresAt,
+      };
+    }
+
+    throw new Error('لم يتم العثور على معلم أو مدرسة بهذا الرمز');
   }
 
   const teacherRef = doc(firestore, COLLECTIONS.USERS, teacherId);
@@ -244,4 +283,26 @@ export async function getSchoolMembers(schoolId: string): Promise<UserProfile[]>
       userCode: data.userCode || codesMap.get(docSnap.id),
     };
   });
+}
+
+export async function getSchoolById(schoolId: string): Promise<School | null> {
+  const ref = doc(firestore, COLLECTIONS.SCHOOLS, schoolId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) {
+    return null;
+  }
+  const data: any = snap.data();
+  return {
+    id: snap.id,
+    name: data?.name,
+    leaderUserId: data?.leaderUserId,
+    inviteCode: data?.inviteCode,
+    inviteExpiresAt: data?.inviteExpiresAt?.toDate
+      ? data.inviteExpiresAt.toDate()
+      : data?.inviteExpiresAt?.seconds
+        ? new Date(data.inviteExpiresAt.seconds * 1000)
+        : data?.inviteExpiresAt
+          ? new Date(data.inviteExpiresAt)
+          : undefined,
+  };
 }

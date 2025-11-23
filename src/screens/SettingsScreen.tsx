@@ -7,6 +7,7 @@ import {
   ScrollView,
   TextInput,
   Alert,
+  Modal,
 } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
@@ -18,6 +19,7 @@ import { fontFamilies, spacing, borderRadius, shadows } from '../utils/theme';
 import { mediumHaptic, lightHaptic } from '../utils/haptics';
 import * as Clipboard from 'expo-clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import QRCode from 'react-native-qrcode-svg';
 
 interface SettingsScreenProps {
   navigation: any;
@@ -25,16 +27,19 @@ interface SettingsScreenProps {
 
 export default function SettingsScreen({ navigation }: SettingsScreenProps) {
   const { state, logout } = useApp();
-  const { mode, setMode, colors } = useTheme();
+  const { mode, isDark, setMode, colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { userProfile, currentTeacher, classes = [] } = state as any;
   const [isEditingName, setIsEditingName] = useState(false);
   const [newName, setNewName] = useState(userProfile?.name || currentTeacher?.name || '');
   const [isUpdating, setIsUpdating] = useState(false);
   const [teacherCode, setTeacherCode] = useState(userProfile?.userCode || '');
+  const [showQrModal, setShowQrModal] = useState(false);
   const hasSchool = Boolean(userProfile?.schoolId);
   const isLeader = userProfile?.role === 'leader';
   const showQuickTour = !Array.isArray(classes) || classes.length === 0;
+  const activeThemeMode = mode === 'auto' ? (isDark ? 'dark' : 'light') : mode;
+
   const handleCopyCode = useCallback(async () => {
     if (!teacherCode) return;
     await Clipboard.setStringAsync(teacherCode);
@@ -56,9 +61,6 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
     });
     return () => unsubscribe();
   }, [currentTeacher?.id]);
-
-  // حالة الأقسام المفتوحة/المغلقة
-  const [expandedSection, setExpandedSection] = useState<string | null>(null);
 
   const handleLogout = () => {
     mediumHaptic();
@@ -118,267 +120,287 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
     }
   };
 
-  const handleThemeChange = async (newMode: 'light' | 'dark' | 'auto') => {
+  const handleThemeChange = async (newMode: 'light' | 'dark') => {
     lightHaptic();
     await setMode(newMode);
   };
 
-  const toggleSection = (section: string) => {
-    lightHaptic();
-    setExpandedSection(expandedSection === section ? null : section);
-  };
-
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: colors.background.secondary }]}
-      contentContainerStyle={{ paddingBottom: insets.bottom + spacing['2xl'] }}
-    >
-      <View style={[styles.content, { paddingTop: insets.top + spacing.lg }]}>
-        {/* Header */}
-        <View style={[styles.header, { backgroundColor: colors.background.primary }]}>
-          <Text style={[styles.headerTitle, { color: colors.text.primary }]}>الإعدادات</Text>
+    <>
+      <ScrollView
+        style={[styles.container, { backgroundColor: colors.background.primary }]}
+        contentContainerStyle={{ paddingBottom: insets.bottom + spacing['2xl'] }}
+      >
+        <View style={[styles.content, { paddingTop: insets.top + spacing.lg }]}>
+        <View style={[styles.heroCard, { backgroundColor: colors.primary }]}>
+          <View style={styles.heroHeader}>
+            <View style={styles.heroBadge}>
+              <Text style={[styles.heroBadgeText, { color: colors.primary }]}>ملفك الشخصي</Text>
+            </View>
+            <Text style={[styles.heroTitle, { color: colors.text.light }]}>الإعدادات</Text>
+          </View>
+          <Text style={[styles.heroName, { color: colors.text.light }]}>
+            {userProfile?.name || currentTeacher?.name || 'معلم'}
+          </Text>
+          <Text style={[styles.heroSubtitle, { color: colors.text.light }]}>
+            {userProfile?.email || currentTeacher?.phoneNumber || 'لا يوجد بريد مسجل'}
+          </Text>
+          <View style={styles.heroPills}>
+            <View style={[styles.pill, { backgroundColor: colors.background.secondary }]}>
+              <Text style={[styles.pillText, { color: colors.text.primary }]}>
+                {hasSchool ? userProfile?.schoolName || 'مدرستك' : 'بدون مدرسة'}
+              </Text>
+            </View>
+            {isLeader && (
+              <View style={[styles.pill, { backgroundColor: colors.background.secondary }]}>
+                <Text style={[styles.pillText, { color: colors.text.primary }]}>قائد المدرسة</Text>
+              </View>
+            )}
+          </View>
         </View>
 
-        {/* Account Section */}
-        <TouchableOpacity
-          style={[styles.sectionHeader, { backgroundColor: colors.background.primary, borderColor: colors.border.light }]}
-          onPress={() => toggleSection('account')}
-          activeOpacity={0.7}
-        >
-          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>حسابي</Text>
-          <Text style={[styles.chevron, { color: colors.text.secondary }]}>
-            {expandedSection === 'account' ? '▼' : '◀'}
-          </Text>
-        </TouchableOpacity>
-
-        {expandedSection === 'account' && (
-          <View style={[styles.sectionContent, { backgroundColor: colors.background.primary }]}>
-            <View style={styles.infoRow}>
-              <Text style={[styles.infoLabel, { color: colors.text.secondary }]}>البريد الإلكتروني</Text>
-              <Text style={[styles.infoValue, { color: colors.text.primary }]}>
+        <View style={[styles.sectionCard, { backgroundColor: colors.background.secondary, borderColor: colors.border.light }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>بيانات الحساب</Text>
+          <View style={[styles.sectionDivider, { backgroundColor: colors.border.light }]} />
+          <View style={styles.row}>
+            <View style={styles.rowTexts}>
+              <Text style={[styles.rowLabel, { color: colors.text.secondary }]}>البريد الإلكتروني</Text>
+              <Text style={[styles.rowValue, { color: colors.text.primary }]}>
                 {userProfile?.email || currentTeacher?.phoneNumber || 'غير متوفر'}
               </Text>
             </View>
-
-            <View style={styles.infoRow}>
-              <Text style={[styles.infoLabel, { color: colors.text.secondary }]}>الاسم</Text>
-              {isEditingName ? (
-                <View style={styles.editNameContainer}>
-                  <TextInput
-                    style={[styles.nameInput, {
-                      backgroundColor: colors.background.secondary,
-                      color: colors.text.primary,
-                      borderColor: colors.border.medium
-                    }]}
-                    value={newName}
-                    onChangeText={setNewName}
-                    placeholder="أدخل الاسم الجديد"
-                    placeholderTextColor={colors.text.tertiary}
-                    autoFocus
-                  />
-                  <View style={styles.editButtons}>
-                    <TouchableOpacity
-                      style={[styles.cancelButton, { backgroundColor: colors.border.medium }]}
-                      onPress={() => {
-                        setNewName(userProfile?.name || currentTeacher?.name || '');
-                        setIsEditingName(false);
-                      }}
-                    >
-                      <Text style={[styles.buttonText, { color: colors.text.primary }]}>إلغاء</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.saveButton, { backgroundColor: colors.primary }]}
-                      onPress={handleUpdateName}
-                      disabled={isUpdating}
-                    >
-                      <Text style={[styles.buttonText, { color: colors.text.light }]}>
-                        {isUpdating ? 'جاري الحفظ...' : 'حفظ'}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ) : (
-                <View style={styles.nameRow}>
-                  <Text style={[styles.infoValue, { color: colors.text.primary }]}>
-                    {userProfile?.name || currentTeacher?.name || 'غير متوفر'}
-                  </Text>
-                  <TouchableOpacity
-                    style={[styles.editButton, { backgroundColor: colors.primary }]}
-                    onPress={() => {
-                      setIsEditingName(true);
-                      lightHaptic();
-                    }}
-                  >
-                    <Text style={[styles.buttonText, { color: colors.text.light }]}>تعديل</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-            <View style={styles.infoRow}>
-              <Text style={[styles.infoLabel, { color: colors.text.secondary }]}>اسم المدرسة</Text>
-              <Text style={[styles.infoValue, { color: colors.text.primary }]}>
-                {userProfile?.schoolName || 'لم يتم التعيين بعد'}
+          </View>
+          <View style={styles.row}>
+            <View style={styles.rowTexts}>
+              <Text style={[styles.rowLabel, { color: colors.text.secondary }]}>الاسم</Text>
+              <Text style={[styles.rowValue, { color: colors.text.primary }]}>
+                {userProfile?.name || currentTeacher?.name || 'غير متوفر'}
               </Text>
             </View>
-            <View style={styles.infoRow}>
-              <Text style={[styles.infoLabel, { color: colors.text.secondary }]}>رمز المعلم الخاص بك</Text>
-              <View style={styles.codeRow}>
-                <Text style={[styles.codeValue, { color: colors.text.primary }]}>
-                  {teacherCode || '------'}
-                </Text>
+            <TouchableOpacity
+              style={[styles.chipButton, { backgroundColor: colors.background.tertiary, opacity: isEditingName ? 0.5 : 1 }]}
+              onPress={() => {
+                setIsEditingName(true);
+                lightHaptic();
+              }}
+              disabled={isEditingName}
+            >
+              <Text style={[styles.chipButtonText, { color: colors.text.primary }]}>تعديل</Text>
+            </TouchableOpacity>
+          </View>
+          {isEditingName && (
+            <View style={[styles.inlineCard, { backgroundColor: colors.background.primary, borderColor: colors.border.light }]}>
+              <Text style={[styles.inlineLabel, { color: colors.text.secondary }]}>الاسم الجديد</Text>
+              <TextInput
+                style={[
+                  styles.nameInput,
+                  {
+                    backgroundColor: colors.background.secondary,
+                    color: colors.text.primary,
+                    borderColor: colors.border.medium,
+                  },
+                ]}
+                value={newName}
+                onChangeText={setNewName}
+                placeholder="أدخل الاسم"
+                placeholderTextColor={colors.text.tertiary}
+                autoFocus
+              />
+              <View style={styles.editButtons}>
                 <TouchableOpacity
-                  style={[styles.copyButton, { borderColor: colors.primary }]}
-                  onPress={handleCopyCode}
-                  disabled={!teacherCode}
+                  style={[styles.cancelButton, { backgroundColor: colors.background.secondary, borderColor: colors.border.medium }]}
+                  onPress={() => {
+                    setNewName(userProfile?.name || currentTeacher?.name || '');
+                    setIsEditingName(false);
+                  }}
                 >
-                  <Text style={[styles.copyButtonText, { color: colors.primary }]}>نسخ</Text>
+                  <Text style={[styles.buttonText, { color: colors.text.primary }]}>إلغاء</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.saveButton, { backgroundColor: colors.primary }]}
+                  onPress={handleUpdateName}
+                  disabled={isUpdating}
+                >
+                  <Text style={[styles.buttonText, { color: colors.text.light }]}>
+                    {isUpdating ? 'جاري الحفظ...' : 'حفظ'}
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>
-            {!userProfile?.schoolId && (
-              <TouchableOpacity
-                style={[styles.joinSchoolButton, { borderColor: colors.primary }]}
-                onPress={() => navigation.navigate('JoinSchool')}
-              >
-                <Text style={[styles.joinSchoolText, { color: colors.primary }]}>
-                  انضم إلى مدرسة باستخدام رمز زميلك
-                </Text>
-              </TouchableOpacity>
+          )}
+        </View>
+
+        <View style={[styles.sectionCard, { backgroundColor: colors.background.secondary, borderColor: colors.border.light }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>مدرستي</Text>
+          <View style={[styles.sectionDivider, { backgroundColor: colors.border.light }]} />
+          <Text style={[styles.sectionHint, { color: colors.text.secondary }]}>
+            {hasSchool
+              ? 'أنت مرتبط بالفعل بمدرسة ويمكنك مشاركة الرمز مع فريقك.'
+              : 'اربط حسابك بمدرسة لعرض الفصول المشتركة والحصول على رمز مخصص.'}
+          </Text>
+          <View style={[styles.inlineCard, { backgroundColor: colors.background.primary, borderColor: colors.border.light }]}>
+            <Text style={[styles.inlineLabel, { color: colors.text.secondary }]}>اسم المدرسة</Text>
+            <Text style={[styles.inlineValue, { color: colors.text.primary }]}>
+              {userProfile?.schoolName || 'لم يتم التعيين بعد'}
+            </Text>
+          </View>
+          {!hasSchool && (
+            <TouchableOpacity
+              style={[styles.primaryOutlineButton, { borderColor: colors.primary }]}
+              onPress={() => navigation.navigate('JoinSchool')}
+            >
+              <Text style={[styles.primaryOutlineText, { color: colors.primary }]}>
+                انضم إلى مدرسة باستخدام رمز زميلك
+              </Text>
+            </TouchableOpacity>
+          )}
+          <View style={[styles.infoCard, { backgroundColor: colors.background.primary, borderColor: colors.border.light }]}>
+            <Text style={[styles.infoTitle, { color: colors.text.primary }]}>المشاركة مع الفريق</Text>
+            <Text style={[styles.infoText, { color: colors.text.secondary }]}>
+              شارك رمز المعلم مع زملائك للدخول إلى نفس المدرسة. بعد الربط ستظهر لهم الشُعب المتاحة ويمكنهم تسجيل حضورهم.
+            </Text>
+            {!teacherCode && (
+              <Text style={[styles.infoText, { color: colors.text.secondary }]}>
+                يتم إنشاء الرمز تلقائياً بعد إنشاء المدرسة بدقائق قليلة.
+              </Text>
             )}
-            {!hasSchool ? (
-              <View style={[styles.infoCard, { borderColor: colors.border.light, backgroundColor: colors.background.secondary }]}>
-                <Text style={[styles.infoTitle, { color: colors.text.primary }]}>اربط حسابك بمدرسة</Text>
-                <Text style={[styles.infoText, { color: colors.text.secondary }]}>
-                  أنشئ مدرسة جديدة من شاشة الحضور أو استخدم زر "انضم إلى مدرسة" لمشاركة رمز قائدك. بمجرد الربط سيظهر اسم المدرسة في هذه الصفحة وسيتم إنشاء رمز خاص بك تلقائياً.
-                </Text>
-              </View>
-            ) : (
-              <View style={[styles.infoCard, { borderColor: colors.border.light, backgroundColor: colors.background.secondary }]}>
-                <Text style={[styles.infoTitle, { color: colors.text.primary }]}>طريقة دعوة زملائك</Text>
-                <Text style={[styles.infoText, { color: colors.text.secondary }]}>
-                  شارك رمز المعلم الظاهر أعلاه مع معلمي مدرستك. يدخلون الرمز من صفحة "الانضمام للمدرسة" ليتم ربطهم بنفس المنظمة فوراً.
-                </Text>
-                {!teacherCode && (
-                  <Text style={[styles.infoText, { color: colors.text.secondary }]}>
-                    إذا لم تتمكن من رؤية الرمز بعد إنشاء المدرسة فامنحه دقائق قليلة ليتم إنشاؤه وحفظه تلقائياً.
-                  </Text>
-                )}
-                {isLeader && (
-                  <Text style={[styles.infoText, { color: colors.text.secondary }]}>
-                    بعد الربط ستجد تبويب "إدارة المدرسة" في شريط التنقل بالأسفل لتعيين الأدوار، استعراض فصول كل المعلمين وتنزيل تقارير الحضور.
-                  </Text>
-                )}
-              </View>
-            )}
-            {showQuickTour && (
-              <View style={[styles.infoCard, { borderColor: colors.border.light, backgroundColor: colors.background.secondary }]}>
-                <Text style={[styles.infoTitle, { color: colors.text.primary }]}>جولة سريعة</Text>
-                <Text style={[styles.infoBullet, { color: colors.text.secondary }]}>
-                  ١. من تبويب الحضور أنشئ أول فصل واضغط عليه لبدء تسجيل الحضور اليومي.
-                </Text>
-                <Text style={[styles.infoBullet, { color: colors.text.secondary }]}>
-                  ٢. انتقل إلى تبويب الطلاب لضبط بيانات الطلبة ومتابعة تقدمهم.
-                </Text>
-                <Text style={[styles.infoBullet, { color: colors.text.secondary }]}>
-                  ٣. شارك رمزك مع زملائك ثم استخدم تبويب إدارة المدرسة (عند توفره) لمتابعة فصول المدرسة كاملة.
-                </Text>
-              </View>
+            {isLeader && (
+              <Text style={[styles.infoText, { color: colors.text.secondary }]}>
+                أداة "إدارة المدرسة" ستظهر في الشريط السفلي لمراجعة الفصول وتعيين الصلاحيات.
+              </Text>
             )}
           </View>
-        )}
+        </View>
 
-        {/* Appearance Section */}
-        <TouchableOpacity
-          style={[styles.sectionHeader, { backgroundColor: colors.background.primary, borderColor: colors.border.light }]}
-          onPress={() => toggleSection('appearance')}
-          activeOpacity={0.7}
-        >
+        <View style={[styles.sectionCard, { backgroundColor: colors.background.secondary, borderColor: colors.border.light }]}>
+          <View style={styles.rowBetween}>
+            <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>رمز المعلم</Text>
+            {!!teacherCode && (
+              <Text style={[styles.badge, { color: colors.primary, borderColor: colors.primary }]}>جاهز للمشاركة</Text>
+            )}
+          </View>
+          <View style={[styles.sectionDivider, { backgroundColor: colors.border.light }]} />
+          <View style={[styles.codeContainer, { backgroundColor: colors.background.primary, borderColor: colors.border.light }]}>
+            <Text style={[styles.codeValue, { color: colors.text.primary }]}>
+              {teacherCode || '------'}
+            </Text>
+            <TouchableOpacity
+              style={[
+                styles.copyButton,
+                { backgroundColor: teacherCode ? colors.primary : colors.border.medium },
+              ]}
+              onPress={handleCopyCode}
+              disabled={!teacherCode}
+            >
+              <Text
+                style={[
+                  styles.copyButtonText,
+                  { color: teacherCode ? colors.text.light : colors.text.primary },
+                ]}
+              >
+                نسخ الرمز
+              </Text>
+            </TouchableOpacity>
+            {teacherCode ? (
+              <TouchableOpacity
+                style={[styles.qrLink, { borderColor: colors.border.light }]}
+                onPress={() => setShowQrModal(true)}
+              >
+                <Text style={[styles.qrLinkText, { color: colors.text.primary }]}>عرض رمز QR</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        </View>
+
+        <View style={[styles.sectionCard, { backgroundColor: colors.background.secondary, borderColor: colors.border.light }]}>
           <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>المظهر</Text>
-          <Text style={[styles.chevron, { color: colors.text.secondary }]}>
-            {expandedSection === 'appearance' ? '▼' : '◀'}
+          <View style={[styles.sectionDivider, { backgroundColor: colors.border.light }]} />
+          <Text style={[styles.sectionHint, { color: colors.text.secondary }]}>
+            اختر النمط الذي يناسبك. يمكن تغيير الوضع في أي وقت.
           </Text>
-        </TouchableOpacity>
-
-        {expandedSection === 'appearance' && (
-          <View style={[styles.sectionContent, { backgroundColor: colors.background.primary }]}>
+          <View style={styles.themeRow}>
             <TouchableOpacity
               style={[
                 styles.themeOption,
                 {
-                  backgroundColor: mode === 'light' ? colors.primary : colors.background.secondary,
-                  borderColor: colors.border.medium
-                }
+                  borderColor: activeThemeMode === 'light' ? colors.primary : colors.border.medium,
+                  backgroundColor: activeThemeMode === 'light' ? colors.background.primary : colors.background.tertiary,
+                },
               ]}
               onPress={() => handleThemeChange('light')}
             >
-              <Text style={[
-                styles.themeOptionText,
-                { color: mode === 'light' ? colors.text.light : colors.text.primary }
-              ]}>
-                الوضع النهاري
-              </Text>
-              {mode === 'light' && (
-                <Text style={[styles.checkmark, { color: colors.text.light }]}>✓</Text>
-              )}
+              <Text style={[styles.themeLabel, { color: colors.text.primary }]}>نهاري</Text>
             </TouchableOpacity>
-
             <TouchableOpacity
               style={[
                 styles.themeOption,
                 {
-                  backgroundColor: mode === 'dark' ? colors.primary : colors.background.secondary,
-                  borderColor: colors.border.medium
-                }
+                  borderColor: activeThemeMode === 'dark' ? colors.primary : colors.border.medium,
+                  backgroundColor: activeThemeMode === 'dark' ? colors.background.primary : colors.background.tertiary,
+                },
               ]}
               onPress={() => handleThemeChange('dark')}
             >
-              <Text style={[
-                styles.themeOptionText,
-                { color: mode === 'dark' ? colors.text.light : colors.text.primary }
-              ]}>
-                الوضع الليلي
-              </Text>
-              {mode === 'dark' && (
-                <Text style={[styles.checkmark, { color: colors.text.light }]}>✓</Text>
-              )}
+              <Text style={[styles.themeLabel, { color: colors.text.primary }]}>ليلي</Text>
             </TouchableOpacity>
+          </View>
+        </View>
 
-            <TouchableOpacity
-              style={[
-                styles.themeOption,
-                {
-                  backgroundColor: mode === 'auto' ? colors.primary : colors.background.secondary,
-                  borderColor: colors.border.medium
-                }
-              ]}
-              onPress={() => handleThemeChange('auto')}
-            >
-              <Text style={[
-                styles.themeOptionText,
-                { color: mode === 'auto' ? colors.text.light : colors.text.primary }
-              ]}>
-                تلقائي
+        {showQuickTour && (
+          <View style={[styles.sectionCard, { backgroundColor: colors.background.secondary, borderColor: colors.border.light }]}>
+            <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>جولة سريعة</Text>
+            <View style={[styles.sectionDivider, { backgroundColor: colors.border.light }]} />
+            <View style={styles.bulletRow}>
+              <Text style={[styles.bulletNumber, { color: colors.primary }]}>١</Text>
+              <Text style={[styles.bulletText, { color: colors.text.primary }]}>
+                من تبويب الحضور أنشئ أول فصل واضغط عليه لبدء تسجيل الحضور.
               </Text>
-              {mode === 'auto' && (
-                <Text style={[styles.checkmark, { color: colors.text.light }]}>✓</Text>
-              )}
-            </TouchableOpacity>
+            </View>
+            <View style={styles.bulletRow}>
+              <Text style={[styles.bulletNumber, { color: colors.primary }]}>٢</Text>
+              <Text style={[styles.bulletText, { color: colors.text.primary }]}>
+                زر الطلاب يسمح لك بضبط بيانات الطلبة ومتابعة التقدم الأكاديمي.
+              </Text>
+            </View>
+            <View style={styles.bulletRow}>
+              <Text style={[styles.bulletNumber, { color: colors.primary }]}>٣</Text>
+              <Text style={[styles.bulletText, { color: colors.text.primary }]}>
+                شارك الرمز مع زملائك ثم استخدم إدارة المدرسة لمراقبة الحضور الكامل.
+              </Text>
+            </View>
           </View>
         )}
 
-        {/* Logout Section */}
-        <View style={styles.logoutSection}>
-          <TouchableOpacity
-            style={[styles.logoutButton, { backgroundColor: colors.danger }]}
-            onPress={handleLogout}
-          >
-            <Text style={[styles.logoutButtonText, { color: colors.text.light }]}>
-              تسجيل الخروج
-            </Text>
-          </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.logoutButton, { backgroundColor: colors.danger }]}
+          onPress={handleLogout}
+        >
+          <Text style={[styles.logoutButtonText, { color: colors.text.light }]}>
+            تسجيل الخروج
+          </Text>
+        </TouchableOpacity>
         </View>
-      </View>
-    </ScrollView>
+      </ScrollView>
+      <Modal visible={showQrModal} transparent animationType="fade">
+        <View style={styles.qrModalBackdrop}>
+          <View style={[styles.qrModalCard, { backgroundColor: colors.background.card }]}>
+            <Text style={[styles.qrModalTitle, { color: colors.text.primary }]}>شارك رمزك</Text>
+            <Text style={[styles.qrModalSubtitle, { color: colors.text.secondary }]}>يمكن لزملائك مسح هذا الرمز أو إدخال الرمز النصي للانضمام إلى مدرستك.</Text>
+            <View style={[styles.qrCodeWrapper, { borderColor: colors.border.light }]}>
+              {teacherCode ? (
+                <QRCode value={teacherCode} size={220} color={colors.text.primary} backgroundColor="transparent" />
+              ) : null}
+            </View>
+            <TouchableOpacity
+              style={[styles.qrCloseButton, { backgroundColor: colors.primary }]}
+              onPress={() => setShowQrModal(false)}
+            >
+              <Text style={styles.qrCloseText}>إغلاق</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </>
   );
 }
 
@@ -389,199 +411,322 @@ const styles = StyleSheet.create({
   content: {
     padding: spacing.lg,
   },
-  header: {
-    padding: spacing.xl,
-    borderRadius: borderRadius.xl,
-    marginBottom: spacing.lg,
-    ...shadows.sm,
+  heroCard: {
+    borderRadius: 28,
+    padding: spacing['2xl'],
+    marginBottom: spacing['2xl'],
+    ...shadows.md,
   },
-  headerTitle: {
+  heroHeader: {
+    flexDirection: 'row-reverse',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  heroBadge: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+  },
+  heroBadgeText: {
+    fontSize: 12,
+    fontFamily: fontFamilies.semibold,
+  },
+  heroTitle: {
+    fontSize: 16,
+    fontFamily: fontFamilies.semibold,
+  },
+  heroName: {
     fontSize: 28,
     fontFamily: fontFamilies.bold,
     textAlign: 'right',
-    direction: 'rtl',
-  },
-  sectionHeader: {
-    flexDirection: 'row-reverse',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: spacing.lg,
-    borderRadius: borderRadius.lg,
-    marginBottom: spacing.sm,
-    borderWidth: 1,
-    ...shadows.sm,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontFamily: fontFamilies.semibold,
-    textAlign: 'right',
-    direction: 'rtl',
-  },
-  chevron: {
-    fontSize: 16,
-    fontFamily: fontFamilies.bold,
-  },
-  sectionContent: {
-    padding: spacing.lg,
-    borderRadius: borderRadius.lg,
-    marginBottom: spacing.lg,
-    ...shadows.sm,
-  },
-  infoRow: {
-    flexDirection: 'row-reverse',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  codeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  codeValue: {
-    fontFamily: fontFamilies.bold,
-    fontSize: 18,
-    letterSpacing: 2,
-  },
-  copyButton: {
-    borderWidth: 1,
-    borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-  },
-  copyButtonText: {
-    fontFamily: fontFamilies.semibold,
-  },
-  joinSchoolButton: {
-    borderWidth: 1,
-    borderRadius: borderRadius.lg,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
     marginTop: spacing.md,
   },
-  joinSchoolText: {
-    fontFamily: fontFamilies.semibold,
-    textAlign: 'center',
-  },
-  infoLabel: {
+  heroSubtitle: {
     fontSize: 16,
     fontFamily: fontFamilies.regular,
     textAlign: 'right',
-    direction: 'rtl',
+    opacity: 0.9,
   },
-  infoValue: {
-    fontSize: 16,
-    fontFamily: fontFamilies.semibold,
-    textAlign: 'right',
-    direction: 'rtl',
-  },
-  nameRow: {
+  heroPills: {
     flexDirection: 'row-reverse',
-    alignItems: 'center',
-    gap: spacing.md,
+    gap: spacing.sm,
+    marginTop: spacing.lg,
   },
-  editButton: {
+  pill: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.full,
   },
-  editNameContainer: {
+  pillText: {
+    fontSize: 14,
+    fontFamily: fontFamilies.semibold,
+  },
+  sectionCard: {
+    borderWidth: 1,
+    borderRadius: 24,
+    padding: spacing['2xl'],
+    marginBottom: spacing.lg,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontFamily: fontFamilies.bold,
+    textAlign: 'right',
+  },
+  sectionDivider: {
+    height: 1,
     width: '100%',
-    marginTop: spacing.md,
+    marginVertical: spacing.lg,
+    opacity: 0.1,
+  },
+  sectionHint: {
+    fontSize: 14,
+    fontFamily: fontFamilies.regular,
+    textAlign: 'right',
+    marginBottom: spacing.lg,
+    lineHeight: 22,
+  },
+  row: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
+  },
+  rowTexts: {
+    flex: 1,
+    marginLeft: spacing.md,
+  },
+  rowLabel: {
+    fontSize: 14,
+    fontFamily: fontFamilies.medium,
+    textAlign: 'right',
+  },
+  rowValue: {
+    fontSize: 16,
+    fontFamily: fontFamilies.bold,
+    textAlign: 'right',
+  },
+  chipButton: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full,
+  },
+  chipButtonText: {
+    fontSize: 14,
+    fontFamily: fontFamilies.semibold,
+  },
+  inlineCard: {
+    borderWidth: 1,
+    borderRadius: borderRadius.xl,
+    padding: spacing.lg,
+    marginTop: spacing.sm,
+  },
+  inlineLabel: {
+    fontSize: 14,
+    fontFamily: fontFamilies.medium,
+    marginBottom: spacing.xs,
+    textAlign: 'right',
+  },
+  inlineValue: {
+    fontSize: 16,
+    fontFamily: fontFamilies.bold,
+    textAlign: 'right',
   },
   nameInput: {
     borderWidth: 1,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.lg,
     padding: spacing.md,
     fontSize: 16,
     fontFamily: fontFamilies.regular,
     marginBottom: spacing.md,
     textAlign: 'right',
-    direction: 'rtl',
   },
   editButtons: {
     flexDirection: 'row-reverse',
     gap: spacing.md,
-    justifyContent: 'flex-start',
   },
   cancelButton: {
-    paddingHorizontal: spacing.lg,
+    flex: 1,
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.md,
+    borderWidth: 1,
+    alignItems: 'center',
   },
   saveButton: {
-    paddingHorizontal: spacing.lg,
+    flex: 1,
     paddingVertical: spacing.sm,
     borderRadius: borderRadius.md,
+    alignItems: 'center',
   },
   buttonText: {
     fontSize: 14,
     fontFamily: fontFamilies.semibold,
-    textAlign: 'center',
   },
-  themeOption: {
-    flexDirection: 'row-reverse',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: spacing.lg,
-    borderRadius: borderRadius.lg,
+  primaryOutlineButton: {
     borderWidth: 1,
-    marginBottom: spacing.md,
+    borderRadius: borderRadius.full,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    marginTop: spacing.lg,
+    alignItems: 'center',
   },
-  themeOptionText: {
-    fontSize: 16,
-    fontFamily: fontFamilies.semibold,
-    textAlign: 'right',
-    direction: 'rtl',
-  },
-  checkmark: {
-    fontSize: 18,
+  primaryOutlineText: {
+    fontSize: 14,
     fontFamily: fontFamilies.bold,
   },
   infoCard: {
-    marginTop: spacing.md,
     borderWidth: 1,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
+    borderRadius: borderRadius.xl,
+    padding: spacing.lg,
+    marginTop: spacing.lg,
   },
   infoTitle: {
     fontSize: 16,
-    fontFamily: fontFamilies.semibold,
-    marginBottom: spacing.xs,
+    fontFamily: fontFamilies.bold,
+    marginBottom: spacing.sm,
     textAlign: 'right',
-    direction: 'rtl',
   },
   infoText: {
     fontSize: 14,
     fontFamily: fontFamilies.regular,
     lineHeight: 22,
     textAlign: 'right',
-    direction: 'rtl',
     marginBottom: spacing.xs,
   },
-  infoBullet: {
-    fontSize: 14,
+  rowBetween: {
+    flexDirection: 'row-reverse',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  badge: {
+    fontSize: 12,
     fontFamily: fontFamilies.semibold,
-    lineHeight: 22,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+  },
+  codeContainer: {
+    borderWidth: 1,
+    borderRadius: borderRadius['2xl'],
+    padding: spacing['2xl'],
+    alignItems: 'center',
+    marginTop: spacing.md,
+  },
+  codeValue: {
+    fontSize: 24,
+    fontFamily: fontFamilies.bold,
+    letterSpacing: 4,
+    marginBottom: spacing.lg,
+  },
+  copyButton: {
+    paddingHorizontal: spacing['2xl'],
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full,
+  },
+  copyButtonText: {
+    fontSize: 16,
+    fontFamily: fontFamilies.semibold,
+  },
+  qrLink: {
+    marginTop: spacing.md,
+    paddingHorizontal: spacing['2xl'],
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+  },
+  qrLinkText: {
+    fontSize: 16,
+    fontFamily: fontFamilies.semibold,
+    textAlign: 'center',
+  },
+  themeRow: {
+    flexDirection: 'row-reverse',
+    gap: spacing.md,
+  },
+  themeOption: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: borderRadius['2xl'],
+    paddingVertical: spacing.lg,
+    alignItems: 'center',
+  },
+  themeLabel: {
+    fontSize: 16,
+    fontFamily: fontFamilies.bold,
+  },
+  bulletRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
+  bulletNumber: {
+    width: 28,
+    height: 28,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    fontFamily: fontFamilies.bold,
+    marginLeft: spacing.sm,
+  },
+  bulletText: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: fontFamilies.medium,
     textAlign: 'right',
-    direction: 'rtl',
+    lineHeight: 22,
+  },
+  qrModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.lg,
+  },
+  qrModalCard: {
+    width: '90%',
+    borderRadius: borderRadius['2xl'],
+    padding: spacing['2xl'],
+    alignItems: 'center',
+  },
+  qrModalTitle: {
+    fontSize: 20,
+    fontFamily: fontFamilies.bold,
     marginBottom: spacing.xs,
   },
-  logoutSection: {
-    marginTop: spacing.xl,
-    marginBottom: spacing['2xl'],
+  qrModalSubtitle: {
+    fontSize: 14,
+    fontFamily: fontFamilies.regular,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: spacing.lg,
+  },
+  qrCodeWrapper: {
+    borderWidth: 1,
+    borderRadius: borderRadius['2xl'],
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+  },
+  qrCloseButton: {
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing['2xl'],
+    paddingVertical: spacing.sm,
+  },
+  qrCloseText: {
+    fontSize: 16,
+    fontFamily: fontFamilies.semibold,
+    color: '#fff',
   },
   logoutButton: {
+    marginTop: spacing['2xl'],
     padding: spacing.lg,
-    borderRadius: borderRadius.xl,
+    borderRadius: borderRadius['2xl'],
     alignItems: 'center',
     ...shadows.sm,
   },
   logoutButtonText: {
     fontSize: 16,
     fontFamily: fontFamilies.bold,
-    textAlign: 'center',
   },
 });

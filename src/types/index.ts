@@ -87,6 +87,8 @@ export type RootStackParamList = {
   JoinSchool: undefined;
   Community: undefined;
   LeaderAdmin: undefined;
+  TeacherManagement: undefined;
+  SchoolReports: undefined;
   AppAdmin: undefined;
   Settings: undefined;
 };

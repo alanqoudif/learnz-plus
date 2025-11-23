@@ -1,183 +1,112 @@
-import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   SafeAreaView,
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
   StyleSheet,
+  TouchableOpacity,
   Alert,
   TextInput,
   Modal,
-  Share,
   ActivityIndicator,
-  LayoutChangeEvent,
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Clipboard from 'expo-clipboard';
 import { useApp } from '../context/AppContext';
-import { fontFamilies, colors, spacing, borderRadius, shadows } from '../utils/theme';
+import { useTheme } from '../context/ThemeContext';
+import { fontFamilies, spacing, borderRadius, shadows } from '../utils/theme';
 import { communityService } from '../services/communityService';
 import { adminService } from '../services/adminService';
-import { getSchoolMembers, updateMemberRole } from '../services/schoolService';
-import { smartClassService, smartAttendanceService } from '../services/smartService';
-import type { UserRole } from '../types';
+import { getSchoolMembers, getSchoolById } from '../services/schoolService';
+import type { UserProfile } from '../types';
 
-interface TeacherReportCard {
-  teacherId: string;
-  name: string;
-  role: UserRole;
-  classes: number;
-  students: number;
-  attendance: {
-    sessions: number;
-    present: number;
-    absent: number;
-  };
+interface LeaderAdminScreenProps {
+  navigation: any;
 }
 
-interface SchoolOverview {
-  teachersCount: number;
-  classesCount: number;
-  studentsCount: number;
-  attendance: {
-    sessions: number;
-    present: number;
-    absent: number;
-  };
-  teacherBreakdown: TeacherReportCard[];
-}
-
-export default function LeaderAdminScreen() {
+export default function LeaderAdminScreen({ navigation }: LeaderAdminScreenProps) {
   const { state } = useApp();
-  const user = (state as any).userProfile;
+  const { colors: themeColors } = useTheme();
   const insets = useSafeAreaInsets();
-  const scrollRef = useRef<ScrollView>(null);
-  const sectionPositions = useRef<Record<string, number>>({});
-  const [members, setMembers] = useState<any[]>([]);
-  const [invite, setInvite] = useState<string>('');
+  const user = (state as any).userProfile as UserProfile | undefined;
+  const classes = (state as any).classes || [];
+  const totalStudents = classes.reduce((count: number, cls: any) => count + (cls.students?.length || 0), 0);
+  const schoolId = user?.schoolId;
+  const isLeader = user?.role === 'leader';
+  const [members, setMembers] = useState<UserProfile[]>([]);
+  const [invite, setInvite] = useState('');
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [inviteModalVisible, setInviteModalVisible] = useState(false);
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [creating, setCreating] = useState(false);
   const [credVisible, setCredVisible] = useState(false);
   const [lastCred, setLastCred] = useState<{ email: string; password: string } | null>(null);
-  const [seedLoading, setSeedLoading] = useState(false);
-  const [roleUpdatingId, setRoleUpdatingId] = useState<string | null>(null);
-  const [overview, setOverview] = useState<SchoolOverview | null>(null);
-  const [overviewLoading, setOverviewLoading] = useState(false);
-  const [inviteLoading, setInviteLoading] = useState(false);
-  const [exportingReport, setExportingReport] = useState(false);
-
-  const schoolId = user?.schoolId;
-  const isLeader = user?.role === 'leader';
+  const [loadingMembers, setLoadingMembers] = useState(false);
 
   const loadMembers = useCallback(async () => {
     if (!schoolId || !isLeader) return;
     try {
+      setLoadingMembers(true);
       const list = await getSchoolMembers(schoolId);
       setMembers(list);
     } catch (error) {
       console.error('Failed to load members', error);
       Alert.alert('خطأ', 'تعذر تحميل قائمة المعلمين');
+    } finally {
+      setLoadingMembers(false);
+    }
+  }, [schoolId, isLeader]);
+
+  const loadInvite = useCallback(async () => {
+    if (!schoolId || !isLeader) return;
+    try {
+      const school = await getSchoolById(schoolId);
+      if (school?.inviteCode) {
+        setInvite(school.inviteCode);
+      }
+    } catch (error) {
+      console.warn('Failed to load invite code', error);
     }
   }, [schoolId, isLeader]);
 
   useEffect(() => {
     loadMembers();
-  }, [loadMembers]);
+    loadInvite();
+  }, [loadMembers, loadInvite]);
 
-  const buildOverview = useCallback(async () => {
-    if (!isLeader || !schoolId || !members.length) {
-      setOverview(null);
-      return;
-    }
-
-    setOverviewLoading(true);
-    try {
-      const teacherStats: TeacherReportCard[] = [];
-      for (const member of members) {
-        try {
-          const teacherClasses = await smartClassService.getClassesByTeacher(member.id);
-          let studentCount = 0;
-          let sessionsCount = 0;
-          let presentCount = 0;
-          let absentCount = 0;
-
-          for (const cls of teacherClasses) {
-            studentCount += Array.isArray(cls.students) ? cls.students.length : 0;
-            try {
-              const sessions = await smartAttendanceService.getAttendanceSessionsByClass(cls.id, 15);
-              sessionsCount += sessions.length;
-              sessions.forEach(session => {
-                (session.records || []).forEach(record => {
-                  if (record.status === 'present') presentCount += 1;
-                  if (record.status === 'absent') absentCount += 1;
-                });
-              });
-            } catch (error) {
-              console.warn('تعذر تحميل جلسات الفصل', cls.id, error);
-            }
-          }
-
-          teacherStats.push({
-            teacherId: member.id,
-            name: member.name,
-            role: member.role,
-            classes: teacherClasses.length,
-            students: studentCount,
-            attendance: {
-              sessions: sessionsCount,
-              present: presentCount,
-              absent: absentCount,
-            },
-          });
-        } catch (error) {
-          console.error('تعذر تحميل بيانات المعلم', member.id, error);
-          teacherStats.push({
-            teacherId: member.id,
-            name: member.name,
-            role: member.role,
-            classes: 0,
-            students: 0,
-            attendance: { sessions: 0, present: 0, absent: 0 },
-          });
-        }
-      }
-
-      const totals = teacherStats.reduce(
-        (acc, teacher) => {
-          acc.classesCount += teacher.classes;
-          acc.studentsCount += teacher.students;
-          acc.attendance.sessions += teacher.attendance.sessions;
-          acc.attendance.present += teacher.attendance.present;
-          acc.attendance.absent += teacher.attendance.absent;
-          return acc;
-        },
-        {
-          classesCount: 0,
-          studentsCount: 0,
-          attendance: { sessions: 0, present: 0, absent: 0 },
-        }
-      );
-
-      setOverview({
-        teachersCount: members.length,
-        classesCount: totals.classesCount,
-        studentsCount: totals.studentsCount,
-        attendance: totals.attendance,
-        teacherBreakdown: teacherStats,
-      });
-    } catch (error) {
-      console.error('تعذر تحميل لوحة التقارير', error);
-      Alert.alert('خطأ', 'تعذر تحميل التقارير الشاملة');
-    } finally {
-      setOverviewLoading(false);
-    }
-  }, [isLeader, schoolId, members]);
-
-  useEffect(() => {
-    buildOverview();
-  }, [buildOverview]);
+  const quickActions = useMemo(
+    () => [
+      {
+        key: 'create',
+        label: 'إنشاء معلّم',
+        icon: 'person-add-outline',
+        action: () => setCreateModalVisible(true),
+      },
+      {
+        key: 'members',
+        label: 'إدارة المعلمين',
+        icon: 'people-outline',
+        action: () => navigation.navigate('TeacherManagement'),
+      },
+      {
+        key: 'reports',
+        label: 'تقارير المدرسة',
+        icon: 'bar-chart-outline',
+        action: () => navigation.navigate('SchoolReports'),
+      },
+      {
+        key: 'invite',
+        label: 'رمز الانضمام',
+        icon: 'key-outline',
+        action: () => setInviteModalVisible(true),
+      },
+    ],
+    [navigation]
+  );
 
   const handleRefreshInvite = useCallback(async () => {
     if (!schoolId) return;
@@ -193,10 +122,15 @@ export default function LeaderAdminScreen() {
     }
   }, [schoolId]);
 
-  const handleCreateTeacher = async () => {
-    if (!isLeader) return;
-    if (!email || !name) {
-      Alert.alert('تنبيه', 'الرجاء إدخال الاسم والبريد');
+  const handleCopyInvite = useCallback(async () => {
+    if (!invite) return;
+    await Clipboard.setStringAsync(invite);
+    Alert.alert('تم النسخ', 'تم نسخ رمز المدرسة. شاركه مع فريقك.');
+  }, [invite]);
+
+  const handleCreateTeacher = useCallback(async () => {
+    if (!name.trim() || !email.trim()) {
+      Alert.alert('تنبيه', 'الرجاء إدخال الاسم والبريد الإلكتروني');
       return;
     }
     try {
@@ -207,336 +141,153 @@ export default function LeaderAdminScreen() {
       setEmail('');
       setName('');
       await loadMembers();
-      await buildOverview();
-    } catch (e: any) {
-      Alert.alert('خطأ', e?.message || 'فشل إنشاء الحساب');
+      setCreateModalVisible(false);
+    } catch (error: any) {
+      Alert.alert('خطأ', error?.message || 'فشل إنشاء الحساب');
     } finally {
       setCreating(false);
     }
-  };
+  }, [email, name, loadMembers]);
 
-  const handleToggleRole = useCallback(
-    async (memberId: string, currentRole: UserRole) => {
-      if (!isLeader || memberId === user?.id) return;
-      const nextRole: UserRole = currentRole === 'leader' ? 'member' : 'leader';
-      setRoleUpdatingId(memberId);
-      try {
-        await updateMemberRole(memberId, nextRole);
-        setMembers(prev => prev.map(member => (member.id === memberId ? { ...member, role: nextRole } : member)));
-        if (memberId === user?.id) {
-          Alert.alert('تنبيه', 'لقد غيرت دورك. أعد فتح الصفحة للتأكد من التحديث.');
-        }
-      } catch (e: any) {
-        Alert.alert('خطأ', e?.message || 'تعذر تحديث دور العضو');
-      } finally {
-        setRoleUpdatingId(null);
-      }
-    },
-    [isLeader, user?.id]
-  );
-
-  const handleSeedSchool = async () => {
-    if (!isLeader) return;
-    if (schoolId) {
-      Alert.alert('تنبيه', 'تم ربط حسابك بمدرسة بالفعل');
-      return;
-    }
-    try {
-      setSeedLoading(true);
-      const res = await communityService.createSchool('مدرسه فلاح وفيصل', user?.id);
-      setInvite(res.inviteCode || '');
-      Alert.alert('تم', `تم إنشاء المدرسة.\nschoolId: ${res.id}\nرمز الدعوة: ${res.inviteCode}`);
-    } catch (e: any) {
-      Alert.alert('خطأ', e?.message || 'فشل إنشاء المدرسة');
-    } finally {
-      setSeedLoading(false);
-    }
-  };
-
-  const handleExportSummary = async () => {
-    if (!overview) return;
-    try {
-      setExportingReport(true);
-      const lines: string[] = [
-        `تقرير المدرسة: ${user?.schoolName || ''}`,
-        `المعلمين النشطين: ${overview.teachersCount}`,
-        `إجمالي الفصول: ${overview.classesCount}`,
-        `إجمالي الطلاب: ${overview.studentsCount}`,
-        `جلسات الحضور المجمعة: ${overview.attendance.sessions}`,
-        `الحضور: ${overview.attendance.present} | الغياب: ${overview.attendance.absent}`,
-        '',
-        'تفاصيل كل معلم:',
-      ];
-      overview.teacherBreakdown.forEach((teacher, index) => {
-        lines.push(
-          `${index + 1}- ${teacher.name} (${teacher.role === 'leader' ? 'قائد' : 'معلم'}): ${teacher.classes} فصل / ${teacher.students} طالب — حضور ${teacher.attendance.present} | غياب ${teacher.attendance.absent}`
-        );
-      });
-      await Share.share({ message: lines.join('\n') });
-    } catch (error) {
-      Alert.alert('خطأ', 'تعذر مشاركة التقرير');
-    } finally {
-      setExportingReport(false);
-    }
-  };
-
-  const scrollToSection = (key: string) => {
-    const position = sectionPositions.current[key];
-    if (position != null && scrollRef.current) {
-      scrollRef.current.scrollTo({ y: Math.max(position - spacing.lg, 0), animated: true });
-    }
-  };
-
-  const quickActions = useMemo(
+  const summaryStats = useMemo(
     () => [
-      {
-        key: 'members',
-        label: 'إدارة المعلمين',
-        icon: 'people-outline',
-        action: () => scrollToSection('members'),
-      },
-      {
-        key: 'create',
-        label: 'إنشاء معلّم',
-        icon: 'person-add-outline',
-        action: () => scrollToSection('create'),
-      },
-      {
-        key: 'reports',
-        label: 'تقارير المدرسة',
-        icon: 'bar-chart-outline',
-        action: () => scrollToSection('reports'),
-      },
-      {
-        key: 'invite',
-        label: inviteLoading ? '...جاري' : 'رمز الانضمام',
-        icon: 'key-outline',
-        action: handleRefreshInvite,
-        disabled: inviteLoading,
-      },
+      { label: 'المعلمين النشطين', value: members.length, icon: 'people-outline' },
+      { label: 'الفصول الحالية', value: classes.length, icon: 'layers-outline' },
+      { label: 'عدد الطلاب', value: totalStudents, icon: 'school-outline' },
     ],
-    [handleRefreshInvite, inviteLoading, scrollToSection]
-  );
-
-  const handleSectionLayout = useCallback(
-    (key: string) => (event: LayoutChangeEvent) => {
-      sectionPositions.current[key] = event.nativeEvent.layout.y;
-    },
-    []
+    [members.length, classes.length, totalStudents]
   );
 
   if (!isLeader) {
     return (
-      <SafeAreaView style={styles.center}>
-        <Text style={styles.note}>هذه الصفحة خاصة بقائد المدرسة</Text>
+      <SafeAreaView style={[styles.safeArea, { backgroundColor: themeColors.background.primary }]}> 
+        <View style={styles.centerMessage}>
+          <Text style={[styles.centerText, { color: themeColors.text.secondary }]}>هذه الصفحة خاصة بقائد المدرسة.</Text>
+        </View>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <ScrollView
-        ref={scrollRef}
-        style={styles.container}
-        contentContainerStyle={{ paddingBottom: insets.bottom + spacing['2xl'] }}
-      >
-        <View style={[styles.hero, { paddingTop: insets.top + spacing.lg }]}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: themeColors.background.primary }]}> 
+      <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + spacing['2xl'], paddingHorizontal: spacing.lg, paddingTop: insets.top + spacing.lg }}>
+        <View style={[styles.hero, { backgroundColor: themeColors.background.secondary, shadowColor: themeColors.shadow ?? '#000' }]}>
           <View>
-            <Text style={styles.heroLabel}>إدارة المدرسة</Text>
-            <Text style={styles.heroTitle}>{user?.schoolName || 'مدرستي'}</Text>
-            <Text style={styles.heroSubtitle}>
-              راقب فصول جميع المعلمين، انشر الأكواد، وصدّر تقارير الحضور بضغطة زر.
-            </Text>
+            <Text style={[styles.heroLabel, { color: themeColors.text.secondary }]}>إدارة المدرسة</Text>
+            <Text style={[styles.heroTitle, { color: themeColors.text.primary }]}>{user?.schoolName || 'مدرستي'}</Text>
+            <Text style={[styles.heroSubtitle, { color: themeColors.text.secondary }]}>نفّذ العمليات الإدارية، شارك الرموز، وتابع أداء المدرسة من مكان واحد.</Text>
           </View>
-          <Ionicons name="school-outline" size={32} color={colors.primary} />
+          <Ionicons name="school-outline" size={32} color={themeColors.primary} />
         </View>
-
-        {invite ? (
-          <View style={styles.invitePill}>
-            <Text style={styles.inviteLabel}>رمز المدرسة الحالي:</Text>
-            <Text style={styles.inviteCode}>{invite}</Text>
-          </View>
-        ) : null}
 
         <View style={styles.quickGrid}>
           {quickActions.map(action => (
-            <TouchableOpacity
-              key={action.key}
-              style={styles.quickButton}
-              onPress={action.action}
-              disabled={action.disabled}
-            >
-              <Ionicons name={action.icon as any} size={22} color={colors.primary} />
-              <Text style={styles.quickText}>{action.label}</Text>
+            <TouchableOpacity key={action.key} style={[styles.quickButton, { backgroundColor: themeColors.background.secondary }]} onPress={action.action}>
+              <Ionicons name={action.icon as any} size={22} color={themeColors.primary} />
+              <Text style={[styles.quickText, { color: themeColors.text.primary }]}>{action.label}</Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        <View style={styles.section} onLayout={handleSectionLayout('reports')}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>لوحة القائد</Text>
-            <TouchableOpacity
-              style={[styles.outlineBtn, exportingReport && { opacity: 0.6 }]}
-              onPress={handleExportSummary}
-              disabled={!overview || overviewLoading || exportingReport}
-            >
-              <Ionicons name="download-outline" size={16} color={colors.primary} />
-              <Text style={[styles.outlineBtnText, { color: colors.primary }]}>
-                {exportingReport ? '...جارٍ التصدير' : 'تقرير شامل'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-          {overviewLoading ? (
-            <View style={styles.loadingState}>
-              <ActivityIndicator color={colors.primary} />
-              <Text style={styles.loadingText}>جارٍ جمع البيانات من الفصول...</Text>
+        <View style={styles.statsRow}>
+          {summaryStats.map(stat => (
+            <View key={stat.label} style={[styles.statCard, { backgroundColor: themeColors.background.secondary }] }>
+              <Ionicons name={stat.icon as any} size={18} color={themeColors.primary} />
+              <Text style={[styles.statValue, { color: themeColors.text.primary }]}>{stat.value}</Text>
+              <Text style={[styles.statLabel, { color: themeColors.text.secondary }]}>{stat.label}</Text>
+            </View>
+          ))}
+        </View>
+
+        <View style={[styles.infoCard, { backgroundColor: themeColors.background.secondary, borderColor: themeColors.border?.light || '#e5e7eb' }]}>
+          <Text style={[styles.infoTitle, { color: themeColors.text.primary }]}>آخر التحديثات</Text>
+          {loadingMembers ? (
+            <View style={styles.loadingRow}>
+              <ActivityIndicator color={themeColors.primary} />
+              <Text style={[styles.loadingText, { color: themeColors.text.secondary }]}>جارٍ تحديث البيانات...</Text>
             </View>
           ) : (
             <>
-              <View style={styles.metricsRow}>
-                {[
-                  { label: 'المعلمين', value: overview?.teachersCount ?? members.length },
-                  { label: 'الفصول', value: overview?.classesCount ?? 0 },
-                  { label: 'الطلاب', value: overview?.studentsCount ?? 0 },
-                  { label: 'جلسات الحضور', value: overview?.attendance.sessions ?? 0 },
-                ].map(metric => (
-                  <View key={metric.label} style={styles.metricCard}>
-                    <Text style={styles.metricValue}>{metric.value}</Text>
-                    <Text style={styles.metricLabel}>{metric.label}</Text>
-                  </View>
-                ))}
-              </View>
-              {overview?.teacherBreakdown?.length ? (
-                <View style={styles.reportList}>
-                  {overview.teacherBreakdown.map(item => (
-                    <View key={item.teacherId} style={styles.reportCard}>
-                      <View style={styles.reportHeader}>
-                        <Text style={styles.reportName}>{item.name}</Text>
-                        <View
-                          style={[
-                            styles.roleBadge,
-                            item.role === 'leader' ? styles.leaderBadge : styles.memberBadge,
-                          ]}
-                        >
-                          <Text style={styles.roleBadgeText}>
-                            {item.role === 'leader' ? 'قائد' : 'معلم'}
-                          </Text>
-                        </View>
-                      </View>
-                      <Text style={styles.reportLine}>
-                        الفصول: {item.classes} • الطلاب: {item.students}
-                      </Text>
-                      <Text style={styles.reportLine}>
-                        حضور: {item.attendance.present} | غياب: {item.attendance.absent}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              ) : (
-                <Text style={styles.emptyHint}>
-                  لا توجد بيانات فصول حتى الآن. اطلب من المعلمين إنشاء فصولهم ثم عد مجدداً.
-                </Text>
-              )}
+              <Text style={[styles.infoLine, { color: themeColors.text.secondary }]}>تم ربط {members.length} معلمًا بهذه المدرسة.</Text>
+              <Text style={[styles.infoLine, { color: themeColors.text.secondary }]}>استخدم "رمز الانضمام" أو رمز المعلم لربط من تبقى من الفريق.</Text>
+              <Text style={[styles.infoLine, { color: themeColors.text.secondary }]}>توجه لتقارير المدرسة لمشاهدة إحصاءات الحضور لكل معلم.</Text>
             </>
-          )}
-        </View>
-
-        <View style={styles.section} onLayout={handleSectionLayout('members')}>
-          <Text style={styles.sectionTitle}>قائمة المعلمين</Text>
-          {members.map(item => (
-            <View key={item.id} style={styles.memberCard}>
-              <View style={styles.memberHeader}>
-                <View>
-                  <Text style={styles.memberName}>{item.name}</Text>
-                  <Text style={styles.memberEmail}>{item.email}</Text>
-                </View>
-                <View
-                  style={[
-                    styles.roleBadge,
-                    item.role === 'leader' ? styles.leaderBadge : styles.memberBadge,
-                  ]}
-                >
-                  <Text style={styles.roleBadgeText}>
-                    {item.role === 'leader' ? 'قائد' : 'معلم'}
-                  </Text>
-                </View>
-              </View>
-              <Text style={styles.memberCode}>رمز المعلم: {item.userCode || '------'}</Text>
-              {isLeader && item.id !== user?.id && (
-                <TouchableOpacity
-                  style={[
-                    styles.roleButton,
-                    roleUpdatingId === item.id && { opacity: 0.6 },
-                  ]}
-                  onPress={() => handleToggleRole(item.id, item.role)}
-                  disabled={roleUpdatingId === item.id}
-                >
-                  <Text style={styles.roleButtonText}>
-                    {item.role === 'leader' ? 'إرجاع كمعلم' : 'منح صلاحية قائد'}
-                  </Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          ))}
-        </View>
-
-        <View style={styles.section} onLayout={handleSectionLayout('create')}>
-          <Text style={styles.sectionTitle}>إنشاء حساب معلّم</Text>
-          <Text style={styles.sectionSubtitle}>
-            أنشئ حسابًا لزميلك وأرسل له بيانات الدخول المؤقتة للمرة الأولى.
-          </Text>
-          <View style={styles.formRow}>
-            <TextInput
-              style={styles.input}
-              placeholder="اسم المعلّم"
-              value={name}
-              onChangeText={setName}
-              placeholderTextColor="#95a5a6"
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="البريد الإلكتروني"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              value={email}
-              onChangeText={setEmail}
-              placeholderTextColor="#95a5a6"
-            />
-            <TouchableOpacity
-              disabled={creating}
-              onPress={handleCreateTeacher}
-              style={[styles.createBtn, creating && { opacity: 0.5 }]}
-            >
-              <Text style={styles.createText}>{creating ? 'جاري الإنشاء...' : 'إنشاء حساب معلّم'}</Text>
-            </TouchableOpacity>
-          </View>
-          <TouchableOpacity style={styles.inviteBtn} onPress={handleRefreshInvite}>
-            <Text style={styles.inviteText}>
-              {inviteLoading ? 'جاري تحديث الرمز...' : 'تجديد رمز الدعوة للمدرسة'}
-            </Text>
-          </TouchableOpacity>
-          {!schoolId && (
-            <TouchableOpacity
-              style={[styles.inviteBtn, { backgroundColor: colors.primary }]}
-              onPress={handleSeedSchool}
-              disabled={seedLoading}
-            >
-              <Text style={styles.inviteText}>
-                {seedLoading ? 'جاري الإنشاء...' : 'إنشاء مدرسة "مدرسه فلاح وفيصل"'}
-              </Text>
-            </TouchableOpacity>
           )}
         </View>
       </ScrollView>
 
+      {/* إنشاء معلم */}
+      <Modal transparent visible={createModalVisible} animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { backgroundColor: themeColors.background.card }]}>
+            <Text style={[styles.modalTitle, { color: themeColors.text.primary }]}>إنشاء حساب معلّم</Text>
+            <TextInput
+              style={[styles.modalInput, { borderColor: themeColors.border?.light || '#e5e5e5', color: themeColors.text.primary }]}
+              placeholder="اسم المعلم"
+              placeholderTextColor={themeColors.text.secondary}
+              value={name}
+              onChangeText={setName}
+            />
+            <TextInput
+              style={[styles.modalInput, { borderColor: themeColors.border?.light || '#e5e5e5', color: themeColors.text.primary }]}
+              placeholder="البريد الإلكتروني"
+              placeholderTextColor={themeColors.text.secondary}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              value={email}
+              onChangeText={setEmail}
+            />
+            <TouchableOpacity
+              style={[styles.modalActionButton, { backgroundColor: themeColors.primary, opacity: creating ? 0.6 : 1 }]}
+              onPress={handleCreateTeacher}
+              disabled={creating}
+            >
+              <Text style={styles.modalActionText}>{creating ? '...جاري الإنشاء' : 'إنشاء الحساب'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setCreateModalVisible(false)}>
+              <Text style={[styles.modalCancel, { color: themeColors.text.secondary }]}>إلغاء</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* رمز الدعوة */}
+      <Modal transparent visible={inviteModalVisible} animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { backgroundColor: themeColors.background.card }]}
+          >
+            <Text style={[styles.modalTitle, { color: themeColors.text.primary }]}>رمز المدرسة</Text>
+            <Text style={[styles.inviteHint, { color: themeColors.text.secondary }]}>شارك هذا الرمز مع المعلمين الجدد لربطهم بمدرستك.</Text>
+            <View style={[styles.inviteBox, { borderColor: themeColors.border?.light || '#e5e5e5' }]}>
+              <Text style={[styles.inviteCode, { color: themeColors.text.primary }]}>{invite || '------'}</Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.modalActionButton, { backgroundColor: themeColors.primary, opacity: inviteLoading ? 0.6 : 1 }]}
+              onPress={handleRefreshInvite}
+              disabled={inviteLoading}
+            >
+              <Text style={styles.modalActionText}>{inviteLoading ? '...جاري تحديث الرمز' : 'تجديد الرمز'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.modalSecondaryButton, { borderColor: themeColors.border?.light || '#d1d5db' }]} onPress={handleCopyInvite} disabled={!invite}>
+              <Text style={[styles.modalSecondaryText, { color: invite ? themeColors.text.primary : themeColors.text.secondary }]}>نسخ الرمز</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setInviteModalVisible(false)}>
+              <Text style={[styles.modalCancel, { color: themeColors.text.secondary }]}>إغلاق</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* بيانات الاعتماد بعد الإنشاء */}
       <Modal transparent visible={credVisible} animationType="fade">
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>تم إنشاء الحساب</Text>
-            <Text style={styles.modalLine}>البريد: {lastCred?.email}</Text>
-            <Text style={styles.modalLine}>كلمة المرور المؤقتة: {lastCred?.password}</Text>
-            <TouchableOpacity onPress={() => setCredVisible(false)} style={styles.modalBtn}>
-              <Text style={styles.modalBtnText}>تم</Text>
+          <View style={[styles.modalCard, { backgroundColor: themeColors.background.card }]}
+          >
+            <Text style={[styles.modalTitle, { color: themeColors.text.primary }]}>تم إنشاء الحساب</Text>
+            <Text style={[styles.credLine, { color: themeColors.text.primary }]}>البريد: {lastCred?.email}</Text>
+            <Text style={[styles.credLine, { color: themeColors.text.primary }]}>كلمة المرور المؤقتة: {lastCred?.password}</Text>
+            <TouchableOpacity style={[styles.modalActionButton, { backgroundColor: themeColors.primary }]} onPress={() => setCredVisible(false)}>
+              <Text style={styles.modalActionText}>تم</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -548,38 +299,38 @@ export default function LeaderAdminScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.background.primary,
   },
-  container: {
+  centerMessage: {
     flex: 1,
-    paddingHorizontal: spacing.lg,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.lg,
   },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f8f9fa' },
-  note: { fontFamily: fontFamilies.regular, color: '#7f8c8d' },
+  centerText: {
+    fontFamily: fontFamilies.regular,
+    fontSize: 16,
+  },
   hero: {
-    backgroundColor: colors.background.secondary,
     borderRadius: borderRadius['2xl'],
     padding: spacing.xl,
     marginBottom: spacing.lg,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    ...shadows.md,
+    ...shadows.sm,
   },
   heroLabel: {
     fontFamily: fontFamilies.semibold,
-    color: colors.text.secondary,
     fontSize: 14,
     marginBottom: spacing.xs,
   },
   heroTitle: {
     fontFamily: fontFamilies.bold,
-    color: colors.text.primary,
     fontSize: 24,
   },
   heroSubtitle: {
     fontFamily: fontFamilies.regular,
-    color: colors.text.secondary,
+    fontSize: 14,
     marginTop: spacing.sm,
     lineHeight: 20,
   },
@@ -591,7 +342,6 @@ const styles = StyleSheet.create({
   },
   quickButton: {
     flexBasis: '48%',
-    backgroundColor: colors.background.secondary,
     borderRadius: borderRadius.xl,
     padding: spacing.lg,
     flexDirection: 'row',
@@ -601,193 +351,124 @@ const styles = StyleSheet.create({
   },
   quickText: {
     fontFamily: fontFamilies.semibold,
-    color: colors.text.primary,
   },
-  section: {
-    backgroundColor: colors.background.secondary,
-    borderRadius: borderRadius['2xl'],
-    padding: spacing.lg,
-    marginBottom: spacing.lg,
-    ...shadows.sm,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  sectionTitle: {
-    fontFamily: fontFamilies.bold,
-    color: colors.text.primary,
-    fontSize: 18,
-    marginBottom: spacing.sm,
-  },
-  sectionSubtitle: {
-    fontFamily: fontFamilies.regular,
-    color: colors.text.secondary,
-    lineHeight: 20,
-    marginBottom: spacing.md,
-  },
-  outlineBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-  },
-  outlineBtnText: {
-    fontFamily: fontFamilies.semibold,
-    fontSize: 12,
-  },
-  metricsRow: {
+  statsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm,
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
   },
-  metricCard: {
-    flexBasis: '48%',
-    backgroundColor: colors.background.tertiary,
+  statCard: {
+    flexBasis: '31%',
     borderRadius: borderRadius.xl,
     padding: spacing.md,
+    gap: spacing.xs,
   },
-  metricValue: {
+  statValue: {
     fontFamily: fontFamilies.bold,
-    color: colors.text.primary,
-    fontSize: 22,
+    fontSize: 20,
   },
-  metricLabel: {
+  statLabel: {
     fontFamily: fontFamilies.regular,
-    color: colors.text.secondary,
-    marginTop: spacing.xs,
+    fontSize: 13,
   },
-  loadingState: {
+  infoCard: {
+    borderWidth: 1,
+    borderRadius: borderRadius['2xl'],
+    padding: spacing.lg,
+  },
+  infoTitle: {
+    fontFamily: fontFamilies.bold,
+    fontSize: 18,
+    marginBottom: spacing.sm,
+  },
+  infoLine: {
+    fontFamily: fontFamilies.regular,
+    fontSize: 14,
+    marginBottom: spacing.xs,
+    lineHeight: 20,
+  },
+  loadingRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.lg,
     gap: spacing.sm,
   },
   loadingText: {
     fontFamily: fontFamilies.regular,
-    color: colors.text.secondary,
   },
-  reportList: {
-    gap: spacing.sm,
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.lg,
   },
-  reportCard: {
+  modalCard: {
+    width: '100%',
+    borderRadius: borderRadius['2xl'],
+    padding: spacing.lg,
+  },
+  modalTitle: {
+    fontFamily: fontFamilies.bold,
+    fontSize: 20,
+    marginBottom: spacing.md,
+    textAlign: 'center',
+  },
+  modalInput: {
     borderWidth: 1,
-    borderColor: colors.border.light,
     borderRadius: borderRadius.lg,
     padding: spacing.md,
+    marginBottom: spacing.md,
   },
-  reportHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.xs,
-  },
-  reportName: {
-    fontFamily: fontFamilies.semibold,
-    color: colors.text.primary,
-  },
-  reportLine: {
-    fontFamily: fontFamilies.regular,
-    color: colors.text.secondary,
-    marginTop: spacing.xs,
-  },
-  emptyHint: {
-    fontFamily: fontFamilies.regular,
-    color: colors.text.secondary,
-  },
-  memberCard: {
-    borderWidth: 1,
-    borderColor: colors.border.light,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-  },
-  memberHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.sm,
-  },
-  memberName: {
-    fontFamily: fontFamilies.semibold,
-    color: colors.text.primary,
-  },
-  memberEmail: {
-    fontFamily: fontFamilies.regular,
-    color: colors.text.secondary,
-    marginTop: spacing.xs,
-  },
-  memberCode: {
-    fontFamily: fontFamilies.semibold,
-    color: colors.text.secondary,
-  },
-  roleBadge: {
+  modalActionButton: {
     borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    marginTop: spacing.sm,
   },
-  leaderBadge: { backgroundColor: '#E6F4EA' },
-  memberBadge: { backgroundColor: '#E7E9F5' },
-  roleBadgeText: { fontFamily: fontFamilies.semibold, color: '#2c3e50', fontSize: 12 },
-  roleButton: {
+  modalActionText: {
+    color: '#fff',
+    fontFamily: fontFamilies.semibold,
+    fontSize: 16,
+  },
+  modalCancel: {
+    textAlign: 'center',
     marginTop: spacing.md,
-    borderRadius: borderRadius.lg,
+    fontFamily: fontFamilies.semibold,
+  },
+  inviteHint: {
+    fontFamily: fontFamilies.regular,
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: spacing.md,
+  },
+  inviteBox: {
+    borderWidth: 1,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xl,
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  inviteCode: {
+    fontFamily: fontFamilies.bold,
+    fontSize: 26,
+    letterSpacing: 4,
+  },
+  modalSecondaryButton: {
+    borderWidth: 1,
+    borderRadius: borderRadius.full,
     paddingVertical: spacing.sm,
     alignItems: 'center',
-    backgroundColor: colors.primary,
-  },
-  roleButtonText: { color: '#fff', fontFamily: fontFamilies.semibold },
-  formRow: {
-    backgroundColor: colors.background.tertiary,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-  },
-  input: {
-    backgroundColor: '#f4f6f7',
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    fontFamily: fontFamilies.regular,
-    color: '#2c3e50',
-    marginBottom: spacing.sm,
-  },
-  createBtn: {
-    backgroundColor: colors.primary,
-    borderRadius: borderRadius.lg,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-  },
-  createText: { color: '#fff', fontFamily: fontFamilies.semibold },
-  inviteBtn: {
-    backgroundColor: '#111827',
     marginTop: spacing.sm,
-    borderRadius: borderRadius.lg,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
   },
-  inviteText: { color: '#fff', fontFamily: fontFamilies.semibold },
-  invitePill: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: colors.background.secondary,
-    padding: spacing.md,
-    borderRadius: borderRadius.xl,
-    marginBottom: spacing.md,
-    ...shadows.sm,
+  modalSecondaryText: {
+    fontFamily: fontFamilies.semibold,
+    fontSize: 16,
   },
-  inviteLabel: { fontFamily: fontFamilies.regular, color: colors.text.secondary },
-  inviteCode: { fontFamily: fontFamilies.bold, color: colors.text.primary, fontSize: 18 },
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
-  modalCard: { backgroundColor: '#fff', borderRadius: 12, padding: 20, width: '80%' },
-  modalTitle: { fontFamily: fontFamilies.bold, color: '#2c3e50', fontSize: 18, marginBottom: 8, textAlign: 'center' },
-  modalLine: { fontFamily: fontFamilies.regular, color: '#2c3e50', marginVertical: 4, textAlign: 'center' },
-  modalBtn: { marginTop: 12, backgroundColor: colors.primary, borderRadius: 8, paddingVertical: 10, alignItems: 'center' },
-  modalBtnText: { color: '#fff', fontFamily: fontFamilies.semibold },
+  credLine: {
+    fontFamily: fontFamilies.regular,
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: spacing.xs,
+  },
 });

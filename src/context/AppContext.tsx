@@ -687,19 +687,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             const data: any = snap.data();
             const tier = data.tier || (isAppAdmin ? ADMIN_ACCOUNT_TIER : DEFAULT_ACCOUNT_TIER);
             const role = data.role || (isAppAdmin ? 'leader' : 'member');
+            const schoolName = data.schoolName ?? null;
+            const resolvedName = data.name || user.displayName || 'معلم';
+            const userCode = data.userCode || await ensureUserCode(user.uid, {
+              name: resolvedName,
+              phoneNumber: data.phoneNumber || user.phoneNumber || user.email || null,
+              schoolId: data.schoolId ?? null,
+              schoolName,
+            });
             dispatch({
               type: 'SET_USER_PROFILE', payload: {
                 id: user.uid,
                 email: data.email || normalizedEmail,
-                name: data.name || user.displayName || 'معلم',
+                name: resolvedName,
                 schoolId: data.schoolId ?? null,
+                schoolName,
+                userCode,
                 role,
                 createdAt: data.createdAt ? new Date(data.createdAt.seconds ? data.createdAt.seconds * 1000 : data.createdAt) : undefined,
                 tier,
                 isAppAdmin,
               }
             });
-            await setDoc(userRef, { tier, isAppAdmin, role }, { merge: true });
+            await setDoc(userRef, { tier, isAppAdmin, role, schoolName, userCode }, { merge: true });
           }
         } catch (e) {
           console.warn('Failed to refresh user profile', e);

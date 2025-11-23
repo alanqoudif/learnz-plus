@@ -28,6 +28,8 @@ const Tab = createBottomTabNavigator();
 function MainTabs() {
   const { state } = useApp();
   const { colors } = useTheme();
+  const userProfile = (state as any)?.userProfile;
+  const showSchoolManagementTab = Boolean(userProfile?.schoolId) && userProfile?.role === 'leader';
 
   return (
     <Tab.Navigator
@@ -83,6 +85,18 @@ function MainTabs() {
           ),
         }}
       />
+      {showSchoolManagementTab && (
+        <Tab.Screen
+          name="SchoolManagement"
+          component={LeaderAdminScreen}
+          options={{
+            title: 'إدارة المدرسة',
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="business-outline" size={size} color={color} />
+            ),
+          }}
+        />
+      )}
       <Tab.Screen
         name="Settings"
         component={SettingsScreen}

@@ -38,6 +38,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   const [isSchoolSubmitting, setIsSchoolSubmitting] = useState(false);
   const pendingCount = Array.isArray(pendingActions) ? pendingActions.length : 0;
   const canAccessCommunity = userProfile?.tier === 'plus' || userProfile?.isAppAdmin;
+  const showSchoolManagementTab = Boolean(userProfile?.schoolId) && userProfile?.role === 'leader';
   const totalStudents = useMemo(
     () => classes.reduce((count: number, cls: Class) => count + cls.students.length, 0),
     [classes]
@@ -334,7 +335,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
         </View>
       )}
 
-      {userProfile?.role === 'leader' && (
+      {userProfile?.role === 'leader' && !showSchoolManagementTab && (
         <TouchableOpacity
           style={[styles.bannerCard, { backgroundColor: colors.background.secondary }]}
           onPress={() => navigation.navigate('LeaderAdmin')}

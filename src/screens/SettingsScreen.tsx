@@ -27,11 +27,14 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
   const { state, logout } = useApp();
   const { mode, setMode, colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const { userProfile, currentTeacher } = state as any;
+  const { userProfile, currentTeacher, classes = [] } = state as any;
   const [isEditingName, setIsEditingName] = useState(false);
   const [newName, setNewName] = useState(userProfile?.name || currentTeacher?.name || '');
   const [isUpdating, setIsUpdating] = useState(false);
   const [teacherCode, setTeacherCode] = useState(userProfile?.userCode || '');
+  const hasSchool = Boolean(userProfile?.schoolId);
+  const isLeader = userProfile?.role === 'leader';
+  const showQuickTour = !Array.isArray(classes) || classes.length === 0;
   const handleCopyCode = useCallback(async () => {
     if (!teacherCode) return;
     await Clipboard.setStringAsync(teacherCode);
@@ -241,6 +244,45 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
                   انضم إلى مدرسة باستخدام رمز زميلك
                 </Text>
               </TouchableOpacity>
+            )}
+            {!hasSchool ? (
+              <View style={[styles.infoCard, { borderColor: colors.border.light, backgroundColor: colors.background.secondary }]}>
+                <Text style={[styles.infoTitle, { color: colors.text.primary }]}>اربط حسابك بمدرسة</Text>
+                <Text style={[styles.infoText, { color: colors.text.secondary }]}>
+                  أنشئ مدرسة جديدة من شاشة الحضور أو استخدم زر "انضم إلى مدرسة" لمشاركة رمز قائدك. بمجرد الربط سيظهر اسم المدرسة في هذه الصفحة وسيتم إنشاء رمز خاص بك تلقائياً.
+                </Text>
+              </View>
+            ) : (
+              <View style={[styles.infoCard, { borderColor: colors.border.light, backgroundColor: colors.background.secondary }]}>
+                <Text style={[styles.infoTitle, { color: colors.text.primary }]}>طريقة دعوة زملائك</Text>
+                <Text style={[styles.infoText, { color: colors.text.secondary }]}>
+                  شارك رمز المعلم الظاهر أعلاه مع معلمي مدرستك. يدخلون الرمز من صفحة "الانضمام للمدرسة" ليتم ربطهم بنفس المنظمة فوراً.
+                </Text>
+                {!teacherCode && (
+                  <Text style={[styles.infoText, { color: colors.text.secondary }]}>
+                    إذا لم تتمكن من رؤية الرمز بعد إنشاء المدرسة فامنحه دقائق قليلة ليتم إنشاؤه وحفظه تلقائياً.
+                  </Text>
+                )}
+                {isLeader && (
+                  <Text style={[styles.infoText, { color: colors.text.secondary }]}>
+                    بعد الربط ستجد تبويب "إدارة المدرسة" في شريط التنقل بالأسفل لتعيين الأدوار، استعراض فصول كل المعلمين وتنزيل تقارير الحضور.
+                  </Text>
+                )}
+              </View>
+            )}
+            {showQuickTour && (
+              <View style={[styles.infoCard, { borderColor: colors.border.light, backgroundColor: colors.background.secondary }]}>
+                <Text style={[styles.infoTitle, { color: colors.text.primary }]}>جولة سريعة</Text>
+                <Text style={[styles.infoBullet, { color: colors.text.secondary }]}>
+                  ١. من تبويب الحضور أنشئ أول فصل واضغط عليه لبدء تسجيل الحضور اليومي.
+                </Text>
+                <Text style={[styles.infoBullet, { color: colors.text.secondary }]}>
+                  ٢. انتقل إلى تبويب الطلاب لضبط بيانات الطلبة ومتابعة تقدمهم.
+                </Text>
+                <Text style={[styles.infoBullet, { color: colors.text.secondary }]}>
+                  ٣. شارك رمزك مع زملائك ثم استخدم تبويب إدارة المدرسة (عند توفره) لمتابعة فصول المدرسة كاملة.
+                </Text>
+              </View>
             )}
           </View>
         )}
@@ -497,6 +539,35 @@ const styles = StyleSheet.create({
   checkmark: {
     fontSize: 18,
     fontFamily: fontFamilies.bold,
+  },
+  infoCard: {
+    marginTop: spacing.md,
+    borderWidth: 1,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+  },
+  infoTitle: {
+    fontSize: 16,
+    fontFamily: fontFamilies.semibold,
+    marginBottom: spacing.xs,
+    textAlign: 'right',
+    direction: 'rtl',
+  },
+  infoText: {
+    fontSize: 14,
+    fontFamily: fontFamilies.regular,
+    lineHeight: 22,
+    textAlign: 'right',
+    direction: 'rtl',
+    marginBottom: spacing.xs,
+  },
+  infoBullet: {
+    fontSize: 14,
+    fontFamily: fontFamilies.semibold,
+    lineHeight: 22,
+    textAlign: 'right',
+    direction: 'rtl',
+    marginBottom: spacing.xs,
   },
   logoutSection: {
     marginTop: spacing.xl,

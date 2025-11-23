@@ -9,9 +9,11 @@ import {
   TouchableOpacity,
   Alert,
   Share,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import * as FileSystem from 'expo-file-system';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
 import { fontFamilies, spacing, borderRadius, shadows } from '../utils/theme';
@@ -60,18 +62,28 @@ export default function SchoolReportsScreen() {
     setLoading(true);
     try {
       const members = await getSchoolMembers(schoolId);
-      const teacherStats: TeacherReportCard[] = [];
-      for (const member of members) {
+      
+      // تحميل البيانات بالتوازي لجميع المعلمين
+      const teacherStatsPromises = members.map(async (member) => {
         try {
           const teacherClasses = await smartClassService.getClassesByTeacher(member.id);
+          
+          // تحميل جلسات الحضور بالتوازي لجميع الفصول
+          const sessionsPromises = teacherClasses.map(cls =>
+            smartAttendanceService.getAttendanceSessionsByClass(cls.id, 20)
+          );
+          const allSessions = await Promise.all(sessionsPromises);
+          
           let studentCount = 0;
           let sessionsCount = 0;
           let presentCount = 0;
           let absentCount = 0;
 
-          for (const cls of teacherClasses) {
+          teacherClasses.forEach(cls => {
             studentCount += Array.isArray(cls.students) ? cls.students.length : 0;
-            const sessions = await smartAttendanceService.getAttendanceSessionsByClass(cls.id, 20);
+          });
+
+          allSessions.forEach(sessions => {
             sessionsCount += sessions.length;
             sessions.forEach(session => {
               (session.records || []).forEach(record => {
@@ -79,9 +91,9 @@ export default function SchoolReportsScreen() {
                 if (record.status === 'absent') absentCount += 1;
               });
             });
-          }
+          });
 
-          teacherStats.push({
+          return {
             teacherId: member.id,
             name: member.name,
             role: member.role,
@@ -92,19 +104,21 @@ export default function SchoolReportsScreen() {
               present: presentCount,
               absent: absentCount,
             },
-          });
+          };
         } catch (error) {
           console.error('Failed to build stats for teacher', member.id, error);
-          teacherStats.push({
+          return {
             teacherId: member.id,
             name: member.name,
             role: member.role,
             classes: 0,
             students: 0,
             attendance: { sessions: 0, present: 0, absent: 0 },
-          });
+          };
         }
-      }
+      });
+
+      const teacherStats = await Promise.all(teacherStatsPromises);
 
       const totals = teacherStats.reduce(
         (acc, teacher) => {
@@ -149,12 +163,21 @@ export default function SchoolReportsScreen() {
     ]
   ), [overview]);
 
-  const handleExport = useCallback(async () => {
-    if (!overview) return;
-    try {
-      setExporting(true);
+  const generateReportContent = useCallback((format: 'text' | 'pdf' | 'word') => {
+    if (!overview) return '';
+    
+    const date = new Date().toLocaleDateString('ar-SA', { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
+    
+    if (format === 'text') {
       const lines = [
         `تقرير المدرسة: ${user?.schoolName || ''}`,
+        `تاريخ التقرير: ${date}`,
+        '',
+        'الإحصائيات العامة:',
         `المعلمين النشطين: ${overview.teachersCount}`,
         `إجمالي الفصول: ${overview.classesCount}`,
         `إجمالي الطلاب: ${overview.studentsCount}`,
@@ -168,13 +191,106 @@ export default function SchoolReportsScreen() {
           `${index + 1}- ${teacher.name} (${teacher.role === 'leader' ? 'قائد' : 'معلم'}): ${teacher.classes} فصل / ${teacher.students} طالب — حضور ${teacher.attendance.present} | غياب ${teacher.attendance.absent}`
         );
       });
-      await Share.share({ message: lines.join('\n') });
+      return lines.join('\n');
+    } else {
+      // Format for PDF/Word (HTML-like structure)
+      const htmlContent = `
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <meta charset="UTF-8">
+  <title>تقرير المدرسة</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; direction: rtl; text-align: right; }
+    h1 { color: #333; border-bottom: 2px solid #007AFF; padding-bottom: 10px; }
+    h2 { color: #555; margin-top: 20px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+    th, td { border: 1px solid #ddd; padding: 12px; text-align: right; }
+    th { background-color: #007AFF; color: white; }
+    tr:nth-child(even) { background-color: #f2f2f2; }
+    .summary { background-color: #f9f9f9; padding: 15px; border-radius: 5px; margin: 15px 0; }
+  </style>
+</head>
+<body>
+  <h1>تقرير المدرسة: ${user?.schoolName || ''}</h1>
+  <p><strong>تاريخ التقرير:</strong> ${date}</p>
+  
+  <div class="summary">
+    <h2>الإحصائيات العامة</h2>
+    <p><strong>المعلمين النشطين:</strong> ${overview.teachersCount}</p>
+    <p><strong>إجمالي الفصول:</strong> ${overview.classesCount}</p>
+    <p><strong>إجمالي الطلاب:</strong> ${overview.studentsCount}</p>
+    <p><strong>جلسات الحضور:</strong> ${overview.attendance.sessions}</p>
+    <p><strong>الحضور:</strong> ${overview.attendance.present} | <strong>الغياب:</strong> ${overview.attendance.absent}</p>
+  </div>
+  
+  <h2>تفاصيل كل معلم</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>اسم المعلم</th>
+        <th>الدور</th>
+        <th>عدد الفصول</th>
+        <th>عدد الطلاب</th>
+        <th>جلسات الحضور</th>
+        <th>حضور</th>
+        <th>غياب</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${overview.teacherBreakdown.map((teacher, index) => `
+      <tr>
+        <td>${index + 1}</td>
+        <td>${teacher.name}</td>
+        <td>${teacher.role === 'leader' ? 'قائد' : 'معلم'}</td>
+        <td>${teacher.classes}</td>
+        <td>${teacher.students}</td>
+        <td>${teacher.attendance.sessions}</td>
+        <td>${teacher.attendance.present}</td>
+        <td>${teacher.attendance.absent}</td>
+      </tr>
+      `).join('')}
+    </tbody>
+  </table>
+</body>
+</html>
+      `.trim();
+      return htmlContent;
+    }
+  }, [overview, user?.schoolName]);
+
+  const handleExport = useCallback(async (format: 'text' | 'pdf' | 'word' = 'text') => {
+    if (!overview) return;
+    try {
+      setExporting(true);
+      
+      if (format === 'text') {
+        const content = generateReportContent('text');
+        await Share.share({ message: content });
+      } else {
+        // For PDF/Word, create HTML file and share it
+        const htmlContent = generateReportContent(format);
+        const fileName = `تقرير_المدرسة_${Date.now()}.${format === 'pdf' ? 'html' : 'doc'}`;
+        const fileUri = `${FileSystem.documentDirectory}${fileName}`;
+        
+        await FileSystem.writeAsStringAsync(fileUri, htmlContent, {
+          encoding: FileSystem.EncodingType.UTF8,
+        });
+        
+        // Share the file - users can open it in Word/PDF viewers
+        await Share.share({
+          url: fileUri,
+          message: `تقرير المدرسة - ${user?.schoolName || ''}\n\nيمكنك فتح هذا الملف في Word أو أي برنامج عرض PDF`,
+        });
+      }
     } catch (error) {
+      console.error('Export error:', error);
       Alert.alert('خطأ', 'تعذر مشاركة التقرير');
     } finally {
       setExporting(false);
     }
-  }, [overview, user?.schoolName]);
+  }, [overview, user?.schoolName, generateReportContent]);
 
   if (!isLeader) {
     return (
@@ -208,13 +324,22 @@ export default function SchoolReportsScreen() {
           ))}
         </View>
 
-        <TouchableOpacity
-          style={[styles.exportButton, { backgroundColor: colors.primary, opacity: exporting ? 0.6 : 1 }]}
-          onPress={handleExport}
-          disabled={!overview || exporting}
-        >
-          <Text style={styles.exportText}>{exporting ? '...جارٍ التصدير' : 'مشاركة تقرير شامل'}</Text>
-        </TouchableOpacity>
+        <View style={styles.exportButtonsContainer}>
+          <TouchableOpacity
+            style={[styles.exportButton, { backgroundColor: colors.primary, opacity: exporting ? 0.6 : 1 }]}
+            onPress={() => handleExport('text')}
+            disabled={!overview || exporting}
+          >
+            <Text style={styles.exportText}>{exporting ? '...جارٍ التصدير' : 'مشاركة كنص'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.exportButton, styles.exportButtonSecondary, { backgroundColor: colors.background.secondary, borderColor: colors.primary, opacity: exporting ? 0.6 : 1 }]}
+            onPress={() => handleExport('word')}
+            disabled={!overview || exporting}
+          >
+            <Text style={[styles.exportText, { color: colors.primary }]}>{exporting ? '...جارٍ التصدير' : 'تصدير كملف Word'}</Text>
+          </TouchableOpacity>
+        </View>
 
         {loading ? (
           <View style={styles.loadingContainer}>
@@ -302,11 +427,17 @@ const styles = StyleSheet.create({
     fontFamily: fontFamilies.medium,
     fontSize: 13,
   },
+  exportButtonsContainer: {
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+  },
   exportButton: {
     borderRadius: borderRadius.full,
     paddingVertical: spacing.md,
     alignItems: 'center',
-    marginBottom: spacing.lg,
+  },
+  exportButtonSecondary: {
+    borderWidth: 2,
   },
   exportText: {
     color: '#fff',

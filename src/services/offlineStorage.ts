@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AttendanceRecord, AttendanceSession, Class, Teacher } from '../types';
 
-export type PendingActionType = 'CREATE_SESSION' | 'RECORD_ATTENDANCE';
+export type PendingActionType = 'CREATE_SESSION' | 'RECORD_ATTENDANCE' | 'CREATE_STUDENT' | 'UPDATE_STUDENT' | 'DELETE_STUDENT';
 
 export interface PendingAction<T = any> {
   id: string;

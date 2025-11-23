@@ -77,11 +77,13 @@ const ClassCard: React.FC<ClassCardProps> = React.memo(({
               fontFamily: fontFamilies.bold,
               color: colors.text.primary,
               marginBottom: 4,
+              textAlign: 'right',
             }}>{item.name}</Text>
             <Text style={{
               fontSize: 16,
               fontFamily: fontFamilies.regular,
               color: colors.text.secondary,
+              textAlign: 'right',
             }}>شعبة {item.section}</Text>
           </View>
           <TouchableOpacity
@@ -115,6 +117,7 @@ const ClassCard: React.FC<ClassCardProps> = React.memo(({
             fontSize: 14,
             fontFamily: fontFamilies.medium,
             color: colors.text.primary,
+            textAlign: 'right',
           }}>عدد الطلاب: {item.students.length}</Text>
         </View>
         <View style={{
@@ -129,6 +132,7 @@ const ClassCard: React.FC<ClassCardProps> = React.memo(({
             fontSize: 13,
             fontFamily: fontFamilies.regular,
             color: colors.text.secondary,
+            textAlign: 'right',
           }}>
             {new Date(item.createdAt).toLocaleDateString('ar-SA')}
           </Text>

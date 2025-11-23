@@ -492,21 +492,92 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const createStudent = async (student: Omit<Student, 'id' | 'createdAt'>): Promise<Student> => {
-    const newStudent = await studentService.createStudent(student);
-    dispatch({ type: 'ADD_STUDENT', payload: { classId: student.classId, student: newStudent } });
-    const updatedClasses = state.classes.map(cls =>
-      cls.id === student.classId
-        ? { ...cls, students: [...cls.students, newStudent] }
-        : cls
-    );
-    await offlineStorage.saveClasses(updatedClasses);
-    return newStudent;
+    const buildOfflineStudent = () => {
+      const createdAt = new Date();
+      return {
+        id: offlineStorage.generateTempId(),
+        name: student.name,
+        classId: student.classId,
+        createdAt,
+      } as Student;
+    };
+
+    if (state.isOffline) {
+      const offlineStudent = buildOfflineStudent();
+      dispatch({ type: 'ADD_STUDENT', payload: { classId: student.classId, student: offlineStudent } });
+      const updatedClasses = state.classes.map(cls =>
+        cls.id === student.classId
+          ? { ...cls, students: [...cls.students, offlineStudent] }
+          : cls
+      );
+      await offlineStorage.saveClasses(updatedClasses);
+      await offlineStorage.addPendingAction({
+        id: offlineStorage.generateTempId(),
+        type: 'CREATE_STUDENT',
+        payload: {
+          tempId: offlineStudent.id,
+          student: {
+            name: student.name,
+            classId: student.classId,
+            createdAt: offlineStudent.createdAt,
+          },
+        },
+        createdAt: Date.now(),
+      });
+      const pending = await offlineStorage.getPendingActions();
+      dispatch({ type: 'SET_PENDING_ACTIONS', payload: pending });
+      return offlineStudent;
+    }
+
+    try {
+      const newStudent = await studentService.createStudent(student);
+      dispatch({ type: 'ADD_STUDENT', payload: { classId: student.classId, student: newStudent } });
+      const updatedClasses = state.classes.map(cls =>
+        cls.id === student.classId
+          ? { ...cls, students: [...cls.students, newStudent] }
+          : cls
+      );
+      await offlineStorage.saveClasses(updatedClasses);
+      return newStudent;
+    } catch (error) {
+      // Fallback to offline mode
+      const offlineStudent = buildOfflineStudent();
+      dispatch({ type: 'ADD_STUDENT', payload: { classId: student.classId, student: offlineStudent } });
+      dispatch({ type: 'SET_OFFLINE', payload: true });
+      const updatedClasses = state.classes.map(cls =>
+        cls.id === student.classId
+          ? { ...cls, students: [...cls.students, offlineStudent] }
+          : cls
+      );
+      await offlineStorage.saveClasses(updatedClasses);
+      await offlineStorage.addPendingAction({
+        id: offlineStorage.generateTempId(),
+        type: 'CREATE_STUDENT',
+        payload: {
+          tempId: offlineStudent.id,
+          student: {
+            name: student.name,
+            classId: student.classId,
+            createdAt: offlineStudent.createdAt,
+          },
+        },
+        createdAt: Date.now(),
+      });
+      const pending = await offlineStorage.getPendingActions();
+      dispatch({ type: 'SET_PENDING_ACTIONS', payload: pending });
+      return offlineStudent;
+    }
   };
 
   const updateStudent = async (id: string, updates: Partial<Omit<Student, 'id' | 'createdAt' | 'classId'>>): Promise<Student> => {
-    const updatedStudent = await studentService.updateStudent(id, updates);
     const classItem = state.classes.find(cls => cls.students.some(s => s.id === id));
-    if (classItem) {
+    if (!classItem) {
+      throw new Error('Student not found');
+    }
+    const existingStudent = classItem.students.find(s => s.id === id)!;
+
+    if (state.isOffline || id.startsWith('offline-')) {
+      const updatedStudent = { ...existingStudent, ...updates } as Student;
       dispatch({ type: 'UPDATE_STUDENT', payload: { classId: classItem.id, student: updatedStudent } });
       const updatedClasses = state.classes.map(cls =>
         cls.id === classItem.id
@@ -519,21 +590,102 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           : cls
       );
       await offlineStorage.saveClasses(updatedClasses);
+      if (id.startsWith('offline-')) {
+        await offlineStorage.addPendingAction({
+          id: offlineStorage.generateTempId(),
+          type: 'UPDATE_STUDENT',
+          payload: { studentId: id, updates, createdAt: new Date() },
+          createdAt: Date.now(),
+        });
+        const pending = await offlineStorage.getPendingActions();
+        dispatch({ type: 'SET_PENDING_ACTIONS', payload: pending });
+      }
+      return updatedStudent;
     }
-    return updatedStudent;
-  };
 
-  const deleteStudent = async (id: string): Promise<void> => {
-    await studentService.deleteStudent(id);
-    const classItem = state.classes.find(cls => cls.students.some(s => s.id === id));
-    if (classItem) {
-      dispatch({ type: 'DELETE_STUDENT', payload: { classId: classItem.id, studentId: id } });
+    try {
+      const updatedStudent = await studentService.updateStudent(id, updates);
+      dispatch({ type: 'UPDATE_STUDENT', payload: { classId: classItem.id, student: updatedStudent } });
       const updatedClasses = state.classes.map(cls =>
         cls.id === classItem.id
-          ? { ...cls, students: cls.students.filter(student => student.id !== id) }
+          ? {
+            ...cls,
+            students: cls.students.map(student =>
+              student.id === updatedStudent.id ? updatedStudent : student
+            ),
+          }
           : cls
       );
       await offlineStorage.saveClasses(updatedClasses);
+      return updatedStudent;
+    } catch (error) {
+      // Fallback to offline mode
+      const updatedStudent = { ...existingStudent, ...updates } as Student;
+      dispatch({ type: 'UPDATE_STUDENT', payload: { classId: classItem.id, student: updatedStudent } });
+      dispatch({ type: 'SET_OFFLINE', payload: true });
+      const updatedClasses = state.classes.map(cls =>
+        cls.id === classItem.id
+          ? {
+            ...cls,
+            students: cls.students.map(student =>
+              student.id === updatedStudent.id ? updatedStudent : student
+            ),
+          }
+          : cls
+      );
+      await offlineStorage.saveClasses(updatedClasses);
+      await offlineStorage.addPendingAction({
+        id: offlineStorage.generateTempId(),
+        type: 'UPDATE_STUDENT',
+        payload: { studentId: id, updates, createdAt: new Date() },
+        createdAt: Date.now(),
+      });
+      const pending = await offlineStorage.getPendingActions();
+      dispatch({ type: 'SET_PENDING_ACTIONS', payload: pending });
+      return updatedStudent;
+    }
+  };
+
+  const deleteStudent = async (id: string): Promise<void> => {
+    const classItem = state.classes.find(cls => cls.students.some(s => s.id === id));
+    if (!classItem) {
+      return;
+    }
+
+    // Update local state immediately
+    dispatch({ type: 'DELETE_STUDENT', payload: { classId: classItem.id, studentId: id } });
+    const updatedClasses = state.classes.map(cls =>
+      cls.id === classItem.id
+        ? { ...cls, students: cls.students.filter(student => student.id !== id) }
+        : cls
+    );
+    await offlineStorage.saveClasses(updatedClasses);
+
+    if (state.isOffline || id.startsWith('offline-')) {
+      await offlineStorage.addPendingAction({
+        id: offlineStorage.generateTempId(),
+        type: 'DELETE_STUDENT',
+        payload: { studentId: id },
+        createdAt: Date.now(),
+      });
+      const pending = await offlineStorage.getPendingActions();
+      dispatch({ type: 'SET_PENDING_ACTIONS', payload: pending });
+      return;
+    }
+
+    try {
+      await studentService.deleteStudent(id);
+    } catch (error) {
+      // Already updated locally, just mark as offline
+      dispatch({ type: 'SET_OFFLINE', payload: true });
+      await offlineStorage.addPendingAction({
+        id: offlineStorage.generateTempId(),
+        type: 'DELETE_STUDENT',
+        payload: { studentId: id },
+        createdAt: Date.now(),
+      });
+      const pending = await offlineStorage.getPendingActions();
+      dispatch({ type: 'SET_PENDING_ACTIONS', payload: pending });
     }
   };
 

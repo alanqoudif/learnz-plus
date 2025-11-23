@@ -308,12 +308,12 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
     const studentStatus = attendanceRecords[student.id];
 
     return (
-      <View style={styles.studentItem}>
+      <View style={[styles.studentItem, { backgroundColor: colors.background.secondary }]}>
         <View style={styles.studentInfo}>
           <View style={[styles.studentNumber, { backgroundColor: colors.primary }]}>
             <Text style={styles.studentNumberText}>{index + 1}</Text>
           </View>
-          <Text style={styles.studentName}>{student.name}</Text>
+          <Text style={[styles.studentName, { color: colors.text.primary }]}>{student.name}</Text>
         </View>
 
         <View style={styles.attendanceButtons}>
@@ -334,6 +334,7 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
           >
             <Text style={[
               styles.statusButtonText,
+              { color: studentStatus === 'absent' ? colors.text.primary : colors.text.secondary },
               studentStatus === 'absent' && styles.selectedButtonText
             ]}>
               ✗
@@ -357,6 +358,7 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
           >
             <Text style={[
               styles.statusButtonText,
+              { color: studentStatus === 'present' ? colors.text.primary : colors.text.secondary },
               studentStatus === 'present' && styles.selectedButtonText
             ]}>
               ✓
@@ -369,8 +371,8 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
 
   if (!currentClass) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top + 20 }]}>
-        <Text style={styles.errorText}>لم يتم العثور على الفصل الدراسي</Text>
+      <View style={[styles.container, { paddingTop: insets.top + 20, backgroundColor: colors.background.primary }]}>
+        <Text style={[styles.errorText, { color: colors.text.primary }]}>لم يتم العثور على الفصل الدراسي</Text>
       </View>
     );
   }
@@ -388,8 +390,8 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
           <Text style={styles.headerTitle}>تسجيل الحضور</Text>
         </View>
         <View style={[styles.emptyState, { paddingBottom: Math.max(insets.bottom, 20) }]}>
-          <Text style={styles.emptyStateTitle}>لا يوجد طلاب</Text>
-          <Text style={styles.emptyStateSubtitle}>
+          <Text style={[styles.emptyStateTitle, { color: colors.text.primary }]}>لا يوجد طلاب</Text>
+          <Text style={[styles.emptyStateSubtitle, { color: colors.text.secondary }]}>
             يرجى إضافة طلاب إلى هذا الفصل أولاً
           </Text>
         </View>
@@ -398,30 +400,30 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
   }
 
   return (
-    <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Text style={styles.backButtonText}>← رجوع</Text>
-        </TouchableOpacity>
-        <View style={styles.headerInfo}>
-          <Text style={styles.headerTitle}>تسجيل الحضور</Text>
-          <Text style={styles.headerSubtitle}>
-            {currentClass.name} - شعبة {currentClass.section}
-          </Text>
+      <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 16), backgroundColor: colors.background.primary }]}>
+        <View style={[styles.header, { paddingTop: insets.top + 12, backgroundColor: colors.background.secondary, borderBottomColor: colors.border.light }]}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Text style={styles.backButtonText}>← رجوع</Text>
+          </TouchableOpacity>
+          <View style={styles.headerInfo}>
+            <Text style={[styles.headerTitle, { color: colors.text.primary }]}>تسجيل الحضور</Text>
+            <Text style={[styles.headerSubtitle, { color: colors.text.secondary }]}>
+              {currentClass.name} - شعبة {currentClass.section}
+            </Text>
+          </View>
         </View>
-      </View>
 
-      <View style={[styles.content, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+      <View style={[styles.content, { paddingBottom: Math.max(insets.bottom, 20), backgroundColor: colors.background.primary }]}>
         {!isSessionStarted ? (
           <View style={styles.startContainer}>
-            <Text style={styles.startTitle}>بدء تسجيل الحضور</Text>
-            <Text style={styles.startSubtitle}>
+            <Text style={[styles.startTitle, { color: colors.text.primary }]}>بدء تسجيل الحضور</Text>
+            <Text style={[styles.startSubtitle, { color: colors.text.secondary }]}>
               عدد الطلاب: {students.length}
             </Text>
-            <Text style={styles.startInstructions}>
+            <Text style={[styles.startInstructions, { color: colors.text.secondary }]}>
               اضغط على الأزرار لتسجيل حضور أو غياب الطلاب
             </Text>
             <TouchableOpacity
@@ -466,7 +468,7 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
               />
             </View>
 
-            <View style={[styles.submitContainer, { paddingBottom: insets.bottom + 8 }]}>
+            <View style={[styles.submitContainer, { paddingBottom: insets.bottom + 8, backgroundColor: colors.background.secondary, borderTopColor: colors.border.light }]}>
               <TouchableOpacity
                 style={[
                   styles.submitButton,
@@ -493,7 +495,6 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
     direction: 'rtl',
   },
   header: {
@@ -501,9 +502,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingBottom: 20,
-    backgroundColor: 'white',
     borderBottomWidth: 1,
-    borderBottomColor: '#e9ecef',
   },
   backButton: {
     marginRight: 16,
@@ -519,12 +518,10 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontFamily: fontFamilies.bold,
-    color: '#2c3e50',
   },
   headerSubtitle: {
     fontSize: 14,
     fontFamily: fontFamilies.regular,
-    color: '#6c757d',
     marginTop: 2,
   },
   content: {
@@ -540,19 +537,16 @@ const styles = StyleSheet.create({
   startTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#2c3e50',
     marginBottom: 16,
     textAlign: 'center',
   },
   startSubtitle: {
     fontSize: 18,
-    color: '#6c757d',
     marginBottom: 24,
     textAlign: 'center',
   },
   startInstructions: {
     fontSize: 16,
-    color: '#6c757d',
     textAlign: 'center',
     lineHeight: 24,
     marginBottom: 40,
@@ -603,7 +597,6 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   studentItem: {
-    backgroundColor: 'white',
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
@@ -641,8 +634,8 @@ const styles = StyleSheet.create({
   studentName: {
     fontSize: 16,
     fontFamily: fontFamilies.semibold,
-    color: '#2c3e50',
     flex: 1,
+    textAlign: 'right',
   },
   attendanceButtons: {
     flexDirection: 'row',
@@ -658,10 +651,10 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   absentButton: {
-    backgroundColor: '#f8f9fa',
+    backgroundColor: 'transparent',
   },
   presentButton: {
-    backgroundColor: '#f8f9fa',
+    backgroundColor: 'transparent',
   },
   selectedButton: {
     // سيتم تطبيق اللون ديناميكياً
@@ -669,7 +662,6 @@ const styles = StyleSheet.create({
   statusButtonText: {
     fontSize: 18,
     fontFamily: fontFamilies.bold,
-    color: '#6c757d',
   },
   selectedButtonText: {
     color: 'white',
@@ -685,9 +677,7 @@ const styles = StyleSheet.create({
   submitContainer: {
     paddingHorizontal: 20,
     paddingVertical: 16,
-    backgroundColor: 'white',
     borderTopWidth: 1,
-    borderTopColor: '#e9ecef',
   },
   submitButton: {
     paddingVertical: 16,
@@ -712,14 +702,12 @@ const styles = StyleSheet.create({
   emptyStateTitle: {
     fontSize: 20,
     fontFamily: fontFamilies.bold,
-    color: '#6c757d',
     marginBottom: 12,
     textAlign: 'center',
   },
   emptyStateSubtitle: {
     fontSize: 16,
     fontFamily: fontFamilies.regular,
-    color: '#6c757d',
     textAlign: 'center',
     lineHeight: 24,
   },

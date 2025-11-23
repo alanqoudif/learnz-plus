@@ -100,6 +100,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontFamily: fontFamilies.bold,
     marginBottom: spacing.sm,
+    textAlign: 'right',
   },
   subtitle: {
     fontSize: 16,

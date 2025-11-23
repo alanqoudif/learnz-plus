@@ -14,6 +14,7 @@ import {
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Clipboard from 'expo-clipboard';
+import QRCode from 'react-native-qrcode-svg';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
 import { fontFamilies, spacing, borderRadius, shadows } from '../utils/theme';
@@ -258,6 +259,16 @@ export default function LeaderAdminScreen({ navigation }: LeaderAdminScreenProps
           >
             <Text style={[styles.modalTitle, { color: themeColors.text.primary }]}>رمز المدرسة</Text>
             <Text style={[styles.inviteHint, { color: themeColors.text.secondary }]}>شارك هذا الرمز مع المعلمين الجدد لربطهم بمدرستك.</Text>
+            {invite && (
+              <View style={[styles.qrContainer, { backgroundColor: themeColors.background.secondary }]}>
+                <QRCode
+                  value={invite}
+                  size={200}
+                  color={themeColors.text.primary}
+                  backgroundColor={themeColors.background.secondary}
+                />
+              </View>
+            )}
             <View style={[styles.inviteBox, { borderColor: themeColors.border?.light || '#e5e5e5' }]}>
               <Text style={[styles.inviteCode, { color: themeColors.text.primary }]}>{invite || '------'}</Text>
             </View>
@@ -344,8 +355,9 @@ const styles = StyleSheet.create({
     flexBasis: '48%',
     borderRadius: borderRadius.xl,
     padding: spacing.lg,
-    flexDirection: 'row',
+    flexDirection: 'row-reverse',
     alignItems: 'center',
+    justifyContent: 'flex-start',
     gap: spacing.sm,
     ...shadows.sm,
   },
@@ -448,6 +460,12 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     alignItems: 'center',
     marginBottom: spacing.md,
+  },
+  qrContainer: {
+    alignItems: 'center',
+    marginBottom: spacing.md,
+    padding: spacing.md,
+    borderRadius: borderRadius.lg,
   },
   inviteCode: {
     fontFamily: fontFamilies.bold,

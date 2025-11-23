@@ -12,6 +12,7 @@ import { syncPendingAttendance } from '../services/syncService';
 import { networkService } from '../services/networkService';
 
 import { APP_ADMIN_EMAILS, DEFAULT_ACCOUNT_TIER, ADMIN_ACCOUNT_TIER } from '../config/appConfig';
+import { ensureUserCode } from '../services/schoolService';
 
 interface AppState {
   currentTeacher: Teacher | null;
@@ -260,15 +261,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             const data: any = snap.data();
             const tier = data.tier || (isAppAdmin ? ADMIN_ACCOUNT_TIER : DEFAULT_ACCOUNT_TIER);
             const role = data.role || (isAppAdmin ? 'leader' : 'member');
+            const schoolName = data.schoolName ?? null;
+            const userCode = data.userCode || await ensureUserCode(user.uid);
             const profile: UserProfile = {
               id: user.uid,
               email: data.email || normalizedEmail,
               name: data.name || user.displayName || 'معلم',
               schoolId: data.schoolId ?? null,
+              schoolName,
               role,
               createdAt: data.createdAt ? new Date(data.createdAt.seconds ? data.createdAt.seconds * 1000 : data.createdAt) : undefined,
               tier,
               isAppAdmin,
+              userCode,
             };
             dispatch({ type: 'SET_USER_PROFILE', payload: profile });
             await setDoc(userRef, {
@@ -277,6 +282,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               role: profile.role,
               tier: profile.tier,
               isAppAdmin: profile.isAppAdmin,
+              schoolName: profile.schoolName,
+              userCode: profile.userCode,
             }, { merge: true });
           } else {
             const tier = isAppAdmin ? ADMIN_ACCOUNT_TIER : DEFAULT_ACCOUNT_TIER;
@@ -285,12 +292,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               email: normalizedEmail,
               name: user.displayName || 'معلم',
               schoolId: null,
+              schoolName: null,
               role,
               tier,
               isAppAdmin,
             };
             await setDoc(userRef, basic, { merge: true });
-            dispatch({ type: 'SET_USER_PROFILE', payload: { id: user.uid, ...basic } as UserProfile });
+            const generatedCode = await ensureUserCode(user.uid);
+            dispatch({
+              type: 'SET_USER_PROFILE',
+              payload: { id: user.uid, ...basic, userCode: generatedCode } as UserProfile
+            });
           }
         } catch (e) {
           console.warn('Failed to load user profile', e);

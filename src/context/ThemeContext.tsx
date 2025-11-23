@@ -12,60 +12,82 @@ interface ThemeContextType {
 }
 
 const lightColors = {
-  primary: '#6366f1',
-  primaryLight: '#818cf8',
-  primaryDark: '#4f46e5',
-  secondary: '#64748b',
-  success: '#10b981',
-  danger: '#ef4444',
-  warning: '#f59e0b',
-  info: '#06b6d4',
-  text: {
-    primary: '#1e293b',
-    secondary: '#64748b',
-    tertiary: '#94a3b8',
-    light: '#ffffff',
-    dark: '#0f172a',
-  },
+  primary: '#007AFF', // iOS blue
+  primaryLight: '#33A1FF',
+  primaryDark: '#0055C9',
+  accent: '#0A84FF',
+  secondary: '#1C1C1E',
+  success: '#34C759',
+  danger: '#FF3B30',
+  warning: '#FFCC00',
+  info: '#64D2FF',
   background: {
-    primary: '#ffffff',
-    secondary: '#f8fafc',
-    tertiary: '#f1f5f9',
-    card: '#ffffff',
+    primary: '#F5F5F7',
+    secondary: '#FFFFFF',
+    tertiary: '#EBEBF0',
+    card: '#FFFFFF',
+    glass: 'rgba(255,255,255,0.9)',
+  },
+  text: {
+    primary: '#1C1C1E',
+    secondary: '#3A3A3C',
+    tertiary: '#6E6E73',
+    light: '#FFFFFF',
+    muted: '#8E8E93',
   },
   border: {
-    light: '#f1f5f9',
-    medium: '#e2e8f0',
-    dark: '#cbd5e1',
+    light: '#E5E5EA',
+    medium: '#D1D1D6',
+    dark: '#C7C7CC',
+  },
+  shadows: {
+    card: {
+      shadowColor: '#000000',
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.12,
+      shadowRadius: 20,
+      elevation: 12,
+    },
   },
 };
 
 const darkColors = {
-  primary: '#818cf8',
-  primaryLight: '#a5b4fc',
-  primaryDark: '#6366f1',
-  secondary: '#94a3b8',
-  success: '#34d399',
-  danger: '#f87171',
-  warning: '#fbbf24',
-  info: '#22d3ee',
-  text: {
-    primary: '#f1f5f9',
-    secondary: '#cbd5e1',
-    tertiary: '#94a3b8',
-    light: '#ffffff',
-    dark: '#0f172a',
-  },
+  primary: '#0A84FF',
+  primaryLight: '#33A1FF',
+  primaryDark: '#0060DF',
+  accent: '#64D2FF',
+  secondary: '#2C2C2E',
+  success: '#30D158',
+  danger: '#FF453A',
+  warning: '#FFD60A',
+  info: '#64D2FF',
   background: {
-    primary: '#0f172a',
-    secondary: '#1e293b',
-    tertiary: '#334155',
-    card: '#1e293b',
+    primary: '#0C0C0D',
+    secondary: '#1C1C1E',
+    tertiary: '#2C2C2E',
+    card: '#1C1C1E',
+    glass: 'rgba(28,28,30,0.92)',
+  },
+  text: {
+    primary: '#F5F5F7',
+    secondary: '#DADADA',
+    tertiary: '#8E8E93',
+    light: '#FFFFFF',
+    muted: '#AEAEB2',
   },
   border: {
-    light: '#334155',
-    medium: '#475569',
-    dark: '#64748b',
+    light: '#2C2C2E',
+    medium: '#3A3A3C',
+    dark: '#48484A',
+  },
+  shadows: {
+    card: {
+      shadowColor: '#000000',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.35,
+      shadowRadius: 16,
+      elevation: 14,
+    },
   },
 };
 
@@ -124,4 +146,3 @@ export function useTheme() {
   }
   return context;
 }
-

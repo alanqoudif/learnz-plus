@@ -2,21 +2,32 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { fontFamilies, colors } from '../utils/theme';
 import { useApp } from '../context/AppContext';
-import { communityService } from '../services/communityService';
+import { joinSchoolByTeacherCode } from '../services/schoolService';
 
 export default function JoinSchoolScreen({ navigation }: any) {
-  const { state } = useApp();
+  const { state, dispatch } = useApp();
   const [code, setCode] = useState('');
 
   const handleJoin = async () => {
-    if (!state.currentTeacher) return;
+    if (!state.userProfile?.id) return;
     const trimmed = code.trim().toUpperCase();
     if (!trimmed) {
       Alert.alert('خطأ', 'يرجى إدخال رمز الدعوة');
       return;
     }
     try {
-      await communityService.joinSchoolByCode(state.currentTeacher.id, trimmed);
+      const school = await joinSchoolByTeacherCode(state.userProfile.id, trimmed);
+      if ((state as any).userProfile) {
+        dispatch({
+          type: 'SET_USER_PROFILE',
+          payload: {
+            ...(state as any).userProfile,
+            schoolId: school.id,
+            schoolName: school.name,
+            role: 'member',
+          },
+        });
+      }
       Alert.alert('تم', 'تم الانضمام للمدرسة بنجاح');
       navigation.goBack();
     } catch (e: any) {
@@ -27,12 +38,12 @@ export default function JoinSchoolScreen({ navigation }: any) {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>الانضمام للمدرسة</Text>
-      <Text style={styles.subtitle}>أدخل رمز الدعوة الذي شاركه القائد</Text>
+      <Text style={styles.subtitle}>أدخل رمز المعلم الذي شاركه قائد المدرسة</Text>
       <TextInput
         style={styles.input}
         value={code}
         onChangeText={setCode}
-        placeholder="مثال: ABCD1234"
+        placeholder="مثال: AB23F9"
         placeholderTextColor="#999"
         autoCapitalize="characters"
         textAlign="center"
@@ -86,5 +97,3 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
 });
-
-

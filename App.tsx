@@ -3,13 +3,16 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StatusBar } from 'expo-status-bar';
-import { I18nManager, Text } from 'react-native';
+import { I18nManager } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { AppProvider, useApp } from './src/context/AppContext';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import LoginScreen from './src/screens/LoginScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
 import AddClassScreen from './src/screens/AddClassScreen';
 import StudentManagementScreen from './src/screens/StudentManagementScreen';
+import StudentsScreen from './src/screens/StudentsScreen';
 import AttendanceScreen from './src/screens/AttendanceScreen';
 import AttendanceHistoryScreen from './src/screens/AttendanceHistoryScreen';
 import CommunityScreen from './src/screens/CommunityScreen';
@@ -25,92 +28,68 @@ const Tab = createBottomTabNavigator();
 function MainTabs() {
   const { state } = useApp();
   const { colors } = useTheme();
-  const userProfile = (state as any)?.userProfile;
-  const isAppAdmin = !!userProfile?.isAppAdmin;
-  const canAccessCommunity = userProfile?.tier === 'plus' || isAppAdmin;
-  const isLeader = userProfile?.role === 'leader';
 
   return (
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.text.secondary,
+        tabBarInactiveTintColor: colors.text.muted || colors.text.secondary,
         tabBarStyle: {
           position: 'absolute',
-          bottom: 20,
-          left: 20,
-          right: 20,
-          backgroundColor: 'rgba(255, 255, 255, 0.9)',
-          borderRadius: 20,
-          height: 65,
-          paddingBottom: 8,
-          paddingTop: 8,
+          bottom: 18,
+          left: 24,
+          right: 24,
+          backgroundColor: colors.background.glass || 'rgba(255,255,255,0.9)',
+          borderRadius: 32,
+          height: 70,
+          paddingBottom: 10,
+          paddingTop: 10,
           borderTopWidth: 0,
           shadowColor: '#000',
           shadowOffset: {
             width: 0,
-            height: 4,
+            height: 10,
           },
-          shadowOpacity: 0.15,
-          shadowRadius: 12,
-          elevation: 8,
+          shadowOpacity: 0.12,
+          shadowRadius: 20,
+          elevation: 12,
         },
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '600',
+          marginBottom: 0,
+        },
+        tabBarHideOnKeyboard: true,
       }}
     >
       <Tab.Screen
-        name="Dashboard"
+        name="AttendanceHome"
         component={DashboardScreen}
         options={{
-          title: 'الرئيسية',
+          title: 'الحضور',
           tabBarIcon: ({ color, size }) => (
-            <Text style={{ fontSize: size, color }}>🏠</Text>
+            <Ionicons name="calendar-outline" size={size} color={color} />
           ),
         }}
       />
-      {canAccessCommunity && (
-        <Tab.Screen
-          name="Community"
-          component={CommunityScreen}
-          options={{
-            title: 'المجتمع',
-            tabBarIcon: ({ color, size }) => (
-              <Text style={{ fontSize: size, color }}>👥</Text>
-            ),
-          }}
-        />
-      )}
-      {isLeader && (
-        <Tab.Screen
-          name="LeaderAdmin"
-          component={LeaderAdminScreen}
-          options={{
-            title: 'إدارة المدرسة',
-            tabBarIcon: ({ color, size }) => (
-              <Text style={{ fontSize: size, color }}>🏫</Text>
-            ),
-          }}
-        />
-      )}
-      {isAppAdmin && (
-        <Tab.Screen
-          name="AppAdmin"
-          component={AppAdminScreen}
-          options={{
-            title: 'إدارة التطبيق',
-            tabBarIcon: ({ color, size }) => (
-              <Text style={{ fontSize: size, color }}>🛡️</Text>
-            ),
-          }}
-        />
-      )}
+      <Tab.Screen
+        name="Students"
+        component={StudentsScreen}
+        options={{
+          title: 'الطلاب',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="person-circle-outline" size={size} color={color} />
+          ),
+        }}
+      />
       <Tab.Screen
         name="Settings"
         component={SettingsScreen}
         options={{
           title: 'الإعدادات',
           tabBarIcon: ({ color, size }) => (
-            <Text style={{ fontSize: size, color }}>⚙️</Text>
+            <Ionicons name="settings" size={size} color={color} />
           ),
         }}
       />
@@ -172,10 +151,12 @@ export default function App() {
   }, []);
 
   return (
-    <ThemeProvider>
-      <AppProvider>
-        <ThemedAppNavigator />
-      </AppProvider>
-    </ThemeProvider>
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <AppProvider>
+          <ThemedAppNavigator />
+        </AppProvider>
+      </ThemeProvider>
+    </SafeAreaProvider>
   );
 }

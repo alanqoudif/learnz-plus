@@ -14,6 +14,7 @@ import { useApp } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
 import { Class } from '../types';
 import { fontFamilies, spacing, borderRadius, shadows } from '../utils/theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface AddClassScreenProps {
   navigation: any;
@@ -32,6 +33,7 @@ export default function AddClassScreen({ navigation, route }: AddClassScreenProp
   const [isLoading, setIsLoading] = useState(false);
   const { state, dispatch, createClass, updateClass } = useApp();
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
 
   // التحقق من وضع التعديل
   const editMode = route?.params?.editMode || false;
@@ -157,8 +159,8 @@ export default function AddClassScreen({ navigation, route }: AddClassScreenProp
       style={[styles.container, dynamicStyles.container]} 
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ScrollView contentContainerStyle={styles.scrollContainer}>
-        <View style={styles.content}>
+      <ScrollView contentContainerStyle={[styles.scrollContainer, { paddingBottom: insets.bottom + spacing['2xl'] }]}>
+        <View style={[styles.content, { paddingTop: insets.top + spacing.xl }]}>
           <View style={styles.header}>
             <Text style={[styles.title, dynamicStyles.title]}>
               {editMode ? 'تعديل الفصل الدراسي' : 'إضافة فصل دراسي جديد'}
@@ -261,7 +263,6 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: spacing.xl,
-    paddingTop: spacing.xl,
   },
   header: {
     alignItems: 'center',

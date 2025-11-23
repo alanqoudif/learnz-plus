@@ -1,5 +1,6 @@
 import React, { useCallback } from 'react';
 import { View, Text, TouchableOpacity, Animated } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Class } from '../types';
 import { fontFamilies, shadows, borderRadius, spacing } from '../utils/theme';
 import { useTheme } from '../context/ThemeContext';
@@ -97,39 +98,41 @@ const ClassCard: React.FC<ClassCardProps> = React.memo(({
             onPress={handleDelete}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Text style={{ fontSize: 18 }}>🗑️</Text>
+            <Ionicons name="trash-outline" size={18} color={colors.danger || '#FF3B30'} />
           </TouchableOpacity>
         </View>
 
         <View style={{ marginBottom: spacing.md }}>
-          <View style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            marginBottom: spacing.xs,
-            direction: 'rtl',
+        <View style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          marginBottom: spacing.xs,
+          direction: 'rtl',
+          gap: spacing.xs,
+        }}>
+          <Ionicons name="people-circle" size={18} color={colors.primary} />
+          <Text style={{
+            fontSize: 14,
+            fontFamily: fontFamilies.medium,
+            color: colors.text.primary,
+          }}>عدد الطلاب: {item.students.length}</Text>
+        </View>
+        <View style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          marginBottom: spacing.xs,
+          direction: 'rtl',
+          gap: spacing.xs,
+        }}>
+          <Ionicons name="calendar-outline" size={16} color={colors.text.secondary} />
+          <Text style={{
+            fontSize: 13,
+            fontFamily: fontFamilies.regular,
+            color: colors.text.secondary,
           }}>
-            <Text style={{ fontSize: 14, marginLeft: spacing.xs }}>👥</Text>
-            <Text style={{
-              fontSize: 14,
-              fontFamily: fontFamilies.medium,
-              color: colors.text.primary,
-            }}>عدد الطلاب: {item.students.length}</Text>
-          </View>
-          <View style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            marginBottom: spacing.xs,
-            direction: 'rtl',
-          }}>
-            <Text style={{ fontSize: 14, marginLeft: spacing.xs }}>📅</Text>
-            <Text style={{
-              fontSize: 13,
-              fontFamily: fontFamilies.regular,
-              color: colors.text.secondary,
-            }}>
-              {new Date(item.createdAt).toLocaleDateString('ar-SA')}
-            </Text>
-          </View>
+            {new Date(item.createdAt).toLocaleDateString('ar-SA')}
+          </Text>
+        </View>
         </View>
 
         <View style={{
@@ -181,20 +184,25 @@ const ClassCard: React.FC<ClassCardProps> = React.memo(({
 
         <TouchableOpacity
           style={{
-            backgroundColor: colors.info,
-            paddingVertical: spacing.sm,
-            borderRadius: borderRadius.lg,
+            flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'center',
+            backgroundColor: colors.background.secondary,
+            paddingVertical: spacing.sm,
+            borderRadius: borderRadius.lg,
+            gap: spacing.sm,
+            borderWidth: 1,
+            borderColor: colors.border.light,
           }}
           onPress={handleViewHistory}
           activeOpacity={0.8}
         >
+          <Ionicons name="stats-chart" size={16} color={colors.primary} />
           <Text style={{
-            color: colors.text.light,
+            color: colors.primary,
             fontFamily: fontFamilies.semibold,
             fontSize: 14,
-          }}>📊 عرض تاريخ الحضور</Text>
+          }}>عرض السجل</Text>
         </TouchableOpacity>
       </TouchableOpacity>
     </Animated.View>

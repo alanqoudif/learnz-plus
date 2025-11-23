@@ -10,6 +10,7 @@ import {
   FlatList,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // useApp already imported above
 import { AttendanceRecord, AttendanceSession } from '../types';
 import { showErrorAlert, showAttendanceCompleteAlert } from '../utils/notifications';
@@ -34,6 +35,7 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
   const { classId } = route.params;
   const { state, dispatch, createAttendanceSession, recordAttendance, refreshData } = useApp();
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const [attendanceRecords, setAttendanceRecords] = useState<{ [key: string]: 'present' | 'absent' }>({});
   const [isSessionStarted, setIsSessionStarted] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -367,7 +369,7 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
 
   if (!currentClass) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingTop: insets.top + 20 }]}>
         <Text style={styles.errorText}>لم يتم العثور على الفصل الدراسي</Text>
       </View>
     );
@@ -375,8 +377,8 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
 
   if (students.length === 0) {
     return (
-      <View style={styles.container}>
-        <View style={styles.header}>
+      <View style={[styles.container, { paddingTop: insets.top + 12 }]}>
+        <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => navigation.goBack()}
@@ -385,7 +387,7 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
           </TouchableOpacity>
           <Text style={styles.headerTitle}>تسجيل الحضور</Text>
         </View>
-        <View style={styles.emptyState}>
+        <View style={[styles.emptyState, { paddingBottom: Math.max(insets.bottom, 20) }]}>
           <Text style={styles.emptyStateTitle}>لا يوجد طلاب</Text>
           <Text style={styles.emptyStateSubtitle}>
             يرجى إضافة طلاب إلى هذا الفصل أولاً
@@ -396,8 +398,8 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
+    <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.goBack()}
@@ -412,7 +414,7 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
         </View>
       </View>
 
-      <View style={styles.content}>
+      <View style={[styles.content, { paddingBottom: Math.max(insets.bottom, 20) }]}>
         {!isSessionStarted ? (
           <View style={styles.startContainer}>
             <Text style={styles.startTitle}>بدء تسجيل الحضور</Text>
@@ -464,7 +466,7 @@ export default function AttendanceScreen({ navigation, route }: AttendanceScreen
               />
             </View>
 
-            <View style={styles.submitContainer}>
+      <View style={[styles.submitContainer, { paddingBottom: insets.bottom + 8 }]}>
               <TouchableOpacity
                 style={[
                   styles.submitButton,
@@ -498,7 +500,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 60,
     paddingBottom: 20,
     backgroundColor: 'white',
     borderBottomWidth: 1,

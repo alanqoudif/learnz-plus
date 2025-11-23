@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert, TextInput, Modal } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { fontFamilies, colors } from '../utils/theme';
-import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
-import { firestore, COLLECTIONS } from '../config/firebase';
 import { communityService } from '../services/communityService';
 import { adminService } from '../services/adminService';
+import { getSchoolMembers, updateMemberRole } from '../services/schoolService';
+import type { UserRole } from '../types';
 
 export default function LeaderAdminScreen() {
   const { state } = useApp();
@@ -18,6 +18,7 @@ export default function LeaderAdminScreen() {
   const [credVisible, setCredVisible] = useState(false);
   const [lastCred, setLastCred] = useState<{ email: string; password: string } | null>(null);
   const [seedLoading, setSeedLoading] = useState(false);
+  const [roleUpdatingId, setRoleUpdatingId] = useState<string | null>(null);
 
   const schoolId = user?.schoolId;
   const isLeader = user?.role === 'leader';
@@ -25,12 +26,7 @@ export default function LeaderAdminScreen() {
   useEffect(() => {
     const load = async () => {
       if (!schoolId || !isLeader) return;
-      const usersSnap = await getDocs(collection(firestore, COLLECTIONS.USERS));
-      const list: any[] = [];
-      usersSnap.forEach((u) => {
-        const d: any = u.data();
-        if (d.schoolId === schoolId) list.push({ id: u.id, ...d });
-      });
+      const list = await getSchoolMembers(schoolId);
       setMembers(list);
     };
     load();
@@ -56,20 +52,33 @@ export default function LeaderAdminScreen() {
       setCredVisible(true);
       setEmail('');
       setName('');
-      // refresh list
-      const usersSnap = await getDocs(collection(firestore, COLLECTIONS.USERS));
-      const list: any[] = [];
-      usersSnap.forEach((u) => {
-        const d: any = u.data();
-        if (d.schoolId === schoolId) list.push({ id: u.id, ...d });
-      });
-      setMembers(list);
+      if (schoolId) {
+        const list = await getSchoolMembers(schoolId);
+        setMembers(list);
+      }
     } catch (e: any) {
       Alert.alert('خطأ', e?.message || 'فشل إنشاء الحساب');
     } finally {
       setCreating(false);
     }
   };
+
+  const handleToggleRole = useCallback(async (memberId: string, currentRole: UserRole) => {
+    if (!isLeader || memberId === user?.id) return;
+    const nextRole: UserRole = currentRole === 'leader' ? 'member' : 'leader';
+    setRoleUpdatingId(memberId);
+    try {
+      await updateMemberRole(memberId, nextRole);
+      setMembers(prev => prev.map(member => member.id === memberId ? { ...member, role: nextRole } : member));
+      if (memberId === user?.id) {
+        Alert.alert('تنبيه', 'لقد غيرت دورك. أعد فتح الصفحة للتأكد من التحديث.');
+      }
+    } catch (e: any) {
+      Alert.alert('خطأ', e?.message || 'تعذر تحديث دور العضو');
+    } finally {
+      setRoleUpdatingId(null);
+    }
+  }, [isLeader, user?.id]);
 
   const handleSeedSchool = async () => {
     // Create school once for this leader if they don't have schoolId
@@ -139,8 +148,25 @@ schoolId: ${res.id}
         contentContainerStyle={{ padding: 16 }}
         renderItem={({ item }) => (
           <View style={styles.card}>
-            <Text style={styles.name}>{item.name} ({item.role})</Text>
+            <View style={styles.memberHeader}>
+              <Text style={styles.name}>{item.name}</Text>
+              <View style={[styles.roleBadge, item.role === 'leader' ? styles.leaderBadge : styles.memberBadge]}>
+                <Text style={styles.roleBadgeText}>{item.role === 'leader' ? 'قائد' : 'معلم'}</Text>
+              </View>
+            </View>
             <Text style={styles.email}>{item.email}</Text>
+            <Text style={styles.codeText}>رمز المعلم: {item.userCode || '------'}</Text>
+            {isLeader && item.id !== user?.id && (
+              <TouchableOpacity
+                style={[styles.roleButton, roleUpdatingId === item.id && { opacity: 0.6 }]}
+                onPress={() => handleToggleRole(item.id, item.role)}
+                disabled={roleUpdatingId === item.id}
+              >
+                <Text style={styles.roleButtonText}>
+                  {item.role === 'leader' ? 'إرجاع كمعلم' : 'منح صلاحية قائد'}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
       />
@@ -171,8 +197,16 @@ const styles = StyleSheet.create({
   createBtn: { backgroundColor: colors.primary, borderRadius: 8, paddingVertical: 12, alignItems: 'center' },
   createText: { color: '#fff', fontFamily: fontFamilies.semibold },
   card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#eee' },
+  memberHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
   name: { fontFamily: fontFamilies.semibold, color: '#2c3e50' },
+  roleBadge: { borderRadius: 16, paddingHorizontal: 12, paddingVertical: 4 },
+  leaderBadge: { backgroundColor: '#E6F4EA' },
+  memberBadge: { backgroundColor: '#E7E9F5' },
+  roleBadgeText: { fontFamily: fontFamilies.semibold, color: '#2c3e50', fontSize: 12 },
   email: { fontFamily: fontFamilies.regular, color: '#7f8c8d', marginTop: 6 },
+  codeText: { fontFamily: fontFamilies.semibold, color: '#2c3e50', marginTop: 8 },
+  roleButton: { marginTop: 12, borderRadius: 8, paddingVertical: 10, alignItems: 'center', backgroundColor: colors.primary },
+  roleButtonText: { color: '#fff', fontFamily: fontFamilies.semibold },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   note: { fontFamily: fontFamilies.regular, color: '#7f8c8d' },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
@@ -182,5 +216,3 @@ const styles = StyleSheet.create({
   modalBtn: { marginTop: 12, backgroundColor: colors.primary, borderRadius: 8, paddingVertical: 10, alignItems: 'center' },
   modalBtnText: { color: '#fff', fontFamily: fontFamilies.semibold },
 });
-
-

@@ -10,17 +10,18 @@ import {
   Modal,
   ActivityIndicator,
   ScrollView,
-  Image,
   RefreshControl,
 } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
 import { Student } from '../types';
-import { fontFamilies, shadows, borderRadius, spacing, colors } from '../utils/theme';
+import { fontFamilies, shadows, borderRadius, spacing, colors as baseColors } from '../utils/theme';
 import StudentItem from '../components/StudentItem';
 import { StudentListSkeleton } from '../components/SkeletonLoader';
 import { lightHaptic, mediumHaptic, successHaptic } from '../utils/haptics';
+import { ocrService } from '../services/ocrService';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface StudentManagementScreenProps {
   navigation: any;
@@ -33,14 +34,15 @@ interface StudentManagementScreenProps {
 
 export default function StudentManagementScreen({ navigation, route }: StudentManagementScreenProps) {
   const { classId } = route.params;
-  const { state, dispatch, createStudent, deleteStudent, refreshData } = useApp();
+  const { state, createStudent, deleteStudent, refreshData } = useApp();
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const [showAddModal, setShowAddModal] = useState(false);
   const [newStudentName, setNewStudentName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [showImageModal, setShowImageModal] = useState(false);
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [showExtractModal, setShowExtractModal] = useState(false);
+  const [selectedSheets, setSelectedSheets] = useState<string[]>([]);
   const [extractedStudents, setExtractedStudents] = useState<Array<{ number: string; name: string }>>([]);
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -48,6 +50,7 @@ export default function StudentManagementScreen({ navigation, route }: StudentMa
   // No need for additional listeners here
 
   const currentClass = state.classes.find(cls => cls.id === classId);
+  const userProfile = (state as any)?.userProfile;
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
@@ -132,208 +135,65 @@ export default function StudentManagementScreen({ navigation, route }: StudentMa
     );
   }, [deleteStudent]);
 
-  const pickImage = async () => {
+  const pickSheets = async () => {
     try {
-      // طلب صلاحية الوصول للصور
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['image/*'],
+        multiple: true,
+        copyToCacheDirectory: true,
+      });
 
-      if (status !== 'granted') {
-        Alert.alert('خطأ', 'نحتاج إلى صلاحية الوصول للصور');
+      if (result.canceled) return;
+
+      const assets = 'assets' in result && Array.isArray(result.assets)
+        ? result.assets
+        : (result as any).assets
+          ? (result as any).assets
+          : [(result as any)];
+
+      const uris = assets.map((item: any) => item.uri).filter(Boolean);
+      if (!uris.length) {
+        Alert.alert('خطأ', 'لم يتم اختيار أي ملف.');
         return;
       }
 
-      // اختيار الصورة
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: false,
-        quality: 1,
-        base64: true,
-      });
-
-      if (!result.canceled && result.assets[0]) {
-        setSelectedImage(result.assets[0].uri);
-        setIsProcessing(true);
-        await processImageWithOCR(result.assets[0].base64 || '');
-      }
+      setSelectedSheets(assets.map((item: any) => item.name || item.uri?.split('/').pop() || 'ملف بدون اسم'));
+      await processSheetsWithOCR(uris);
     } catch (error) {
-      console.error('Error picking image:', error);
-      Alert.alert('خطأ', 'حدث خطأ أثناء اختيار الصورة');
+      console.error('Error picking sheets:', error);
+      Alert.alert('خطأ', 'حدث خطأ أثناء اختيار الملفات');
     }
   };
 
-  const processImageWithOCR = async (base64Image: string) => {
+  const processSheetsWithOCR = async (uris: string[]) => {
     try {
-      // استخدام OpenAI GPT-4 Vision API لقراءة النص العربي بدقة عالية
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer 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',
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [
-            {
-              role: 'user',
-              content: [
-                {
-                  type: 'text',
-                  text: `هذه صورة تحتوي على قائمة بأسماء الطلاب مع أرقامهم. 
-                  
-يرجى استخراج الأسماء والأرقام بالتنسيق التالي بالضبط (كل سطر يحتوي على رقم ثم نقطة ثم اسم الطالب):
+      setIsProcessing(true);
+      const parsedStudents = await ocrService.processSheets(uris);
 
-مثال:
-1. أحمد محمد علي
-2. فاطمة حسن أحمد
-3. محمد علي حسين
-
-مهم جداً:
-- اكتب الأسماء كما هي في الصورة تماماً
-- كل طالب في سطر منفصل
-- ابدأ كل سطر بالرقم ثم نقطة ثم مسافة ثم الاسم
-- لا تضف أي تعليقات أو شروحات، فقط القائمة
-- إذا كانت الأرقام عربية (١، ٢، ٣) حولها إلى إنجليزية (1، 2، 3)
-- حافظ على ترتيب الأرقام كما هو في الصورة`
-                },
-                {
-                  type: 'image_url',
-                  image_url: {
-                    url: `data:image/jpeg;base64,${base64Image}`,
-                    detail: 'high'
-                  }
-                }
-              ]
-            }
-          ],
-          max_tokens: 2000,
-          temperature: 0.1
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`OpenAI API error: ${response.status}`);
-      }
-
-      const result = await response.json();
-
-      console.log('OpenAI Response:', JSON.stringify(result, null, 2));
-
-      if (result.choices && result.choices[0] && result.choices[0].message) {
-        const text = result.choices[0].message.content;
-        console.log('Extracted text:', text);
-
-        if (text && text.trim()) {
-          parseStudentsFromText(text);
-        } else {
-          // لم يتم العثور على نص
-          Alert.alert(
-            'لم يتم العثور على قائمة',
-            'لم نتمكن من العثور على قائمة طلاب في الصورة.\n\nتأكد من أن الصورة تحتوي على:\n• أرقام وأسماء واضحة\n• نص عربي مقروء\n• إضاءة جيدة وخط واضح',
-            [
-              {
-                text: 'إعادة المحاولة',
-                onPress: () => {
-                  setIsProcessing(false);
-                  pickImage();
-                }
-              },
-              {
-                text: 'حسناً',
-                onPress: () => setIsProcessing(false)
-              }
-            ]
-          );
-        }
-      } else {
-        // خطأ في الاستجابة
+      if (!parsedStudents.length) {
         Alert.alert(
-          'خطأ في قراءة الصورة',
-          'حدث خطأ غير متوقع أثناء معالجة الصورة. يرجى المحاولة مرة أخرى بصورة أوضح.',
-          [
-            {
-              text: 'حسناً',
-              onPress: () => setIsProcessing(false)
-            }
-          ]
+          'لم يتم اكتشاف طلاب',
+          'تأكد من أن الشيت يحتوي على أرقام وأسماء واضحة.'
         );
+        return;
       }
+
+      const formatted = parsedStudents.map((student, index) => ({
+        number: `${index + 1}`,
+        name: student.name.trim(),
+      }));
+
+      setExtractedStudents(formatted);
+      setShowExtractModal(true);
     } catch (error: any) {
-      console.error('Error processing image:', error);
-
-      let errorMessage = 'حدث خطأ أثناء معالجة الصورة.';
-
-      if (error.message?.includes('401')) {
-        errorMessage = 'خطأ في مفتاح API. يرجى التحقق من صلاحية المفتاح.';
-      } else if (error.message?.includes('429')) {
-        errorMessage = 'تم تجاوز حد الاستخدام. يرجى المحاولة لاحقاً.';
-      } else if (error.message?.includes('network') || error.message?.includes('fetch')) {
-        errorMessage = 'خطأ في الاتصال بالإنترنت. تحقق من اتصالك.';
-      }
-
+      console.error('Error processing roster image:', error);
       Alert.alert(
-        'خطأ في المعالجة',
-        errorMessage + '\n\nيرجى المحاولة مرة أخرى أو استخدام الإضافة اليدوية.',
-        [
-          {
-            text: 'حسناً',
-            onPress: () => setIsProcessing(false)
-          }
-        ]
+        'خطأ في معالجة الملفات',
+        error?.message || 'تأكد من وضوح الصور ثم حاول مرة أخرى.'
       );
-    }
-  };
-
-  const parseStudentsFromText = (text: string) => {
-    try {
-      // تقسيم النص إلى أسطر
-      const lines = text.split('\n').filter(line => line.trim());
-      const students: Array<{ number: string; name: string }> = [];
-
-      // البحث عن نمط: رقم متبوع باسم
-      // مثال: "1. أحمد محمد" أو "1 - أحمد محمد" أو "١. أحمد محمد"
-      lines.forEach((line) => {
-        // محاولة استخراج الرقم والاسم
-        // نمط 1: رقم. اسم
-        let match = line.match(/^(\d+|[٠-٩]+)[\.\-\s:)]+(.+)$/);
-
-        if (match) {
-          const number = convertArabicNumbersToEnglish(match[1].trim());
-          const name = match[2].trim();
-
-          if (name && name.length > 1) {
-            students.push({ number, name });
-          }
-        }
-      });
-
-      if (students.length > 0) {
-        // ترتيب الطلاب حسب الرقم
-        students.sort((a, b) => parseInt(a.number) - parseInt(b.number));
-        setExtractedStudents(students);
-        setShowImageModal(true);
-      } else {
-        Alert.alert(
-          'تنبيه',
-          'لم نتمكن من استخراج أسماء الطلاب تلقائياً. تأكد من أن الصورة تحتوي على قائمة بالأرقام والأسماء.'
-        );
-      }
-    } catch (error) {
-      console.error('Error parsing students:', error);
-      Alert.alert('خطأ', 'حدث خطأ أثناء تحليل البيانات');
     } finally {
       setIsProcessing(false);
     }
-  };
-
-  const convertArabicNumbersToEnglish = (num: string): string => {
-    const arabicNumbers = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
-    const englishNumbers = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
-
-    let result = num;
-    for (let i = 0; i < 10; i++) {
-      result = result.replace(new RegExp(arabicNumbers[i], 'g'), englishNumbers[i]);
-    }
-    return result;
   };
 
   const handleAddExtractedStudents = async () => {
@@ -366,8 +226,8 @@ export default function StudentManagementScreen({ navigation, route }: StudentMa
         }
       }
 
-      setShowImageModal(false);
-      setSelectedImage(null);
+      setShowExtractModal(false);
+      setSelectedSheets([]);
       setExtractedStudents([]);
 
       if (successCount > 0) {
@@ -411,7 +271,7 @@ export default function StudentManagementScreen({ navigation, route }: StudentMa
 
   if (!currentClass) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingTop: insets.top + 20 }]}>
         <Text style={styles.errorText}>لم يتم العثور على الفصل الدراسي</Text>
       </View>
     );
@@ -419,7 +279,7 @@ export default function StudentManagementScreen({ navigation, route }: StudentMa
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.goBack()}
@@ -434,21 +294,21 @@ export default function StudentManagementScreen({ navigation, route }: StudentMa
         </View>
       </View>
 
-      <View style={styles.content}>
+      <View style={[styles.content, { paddingBottom: Math.max(insets.bottom, 16) }]}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>
             قائمة الطلاب ({currentClass.students.length})
           </Text>
           <View style={styles.headerButtons}>
             <TouchableOpacity
-              style={styles.imageButton}
-              onPress={pickImage}
-              disabled={isProcessing}
-            >
-              <Text style={styles.imageButtonText}>
-                {isProcessing ? '⏳ جاري المعالجة...' : '📷 رفع صورة'}
-              </Text>
-            </TouchableOpacity>
+                style={styles.imageButton}
+                onPress={pickSheets}
+                disabled={isProcessing}
+              >
+                <Text style={styles.imageButtonText}>
+                  {isProcessing ? 'جاري المعالجة...' : 'رفع ملفات الطلاب (OCR)'}
+                </Text>
+              </TouchableOpacity>
             <TouchableOpacity
               style={styles.addButton}
               onPress={() => setShowAddModal(true)}
@@ -536,27 +396,29 @@ export default function StudentManagementScreen({ navigation, route }: StudentMa
         </View>
       </Modal>
 
-      {/* Modal للطلاب المستخرجين من الصورة */}
+      {/* Modal للطلاب المستخرجين من الملفات */}
       <Modal
-        visible={showImageModal}
+        visible={showExtractModal}
         transparent={true}
         animationType="slide"
         onRequestClose={() => {
-          setShowImageModal(false);
-          setSelectedImage(null);
+          setShowExtractModal(false);
+          setSelectedSheets([]);
           setExtractedStudents([]);
         }}
       >
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, styles.imageModalContent]}>
-            <Text style={styles.modalTitle}>الطلاب المستخرجين من الصورة</Text>
+            <Text style={styles.modalTitle}>الطلاب المستخرجين من الملفات</Text>
 
-            {selectedImage && (
-              <Image
-                source={{ uri: selectedImage }}
-                style={styles.previewImage}
-                resizeMode="contain"
-              />
+            {selectedSheets.length > 0 && (
+              <View style={styles.selectedSheetsList}>
+                {selectedSheets.map((file, idx) => (
+                  <Text key={`${file}-${idx}`} style={styles.fileLabel}>
+                    • {file}
+                  </Text>
+                ))}
+              </View>
             )}
 
             <Text style={styles.extractedCountText}>
@@ -584,8 +446,8 @@ export default function StudentManagementScreen({ navigation, route }: StudentMa
               <TouchableOpacity
                 style={styles.modalCancelButton}
                 onPress={() => {
-                  setShowImageModal(false);
-                  setSelectedImage(null);
+                  setShowExtractModal(false);
+                  setSelectedSheets([]);
                   setExtractedStudents([]);
                 }}
               >
@@ -619,7 +481,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 60,
     paddingBottom: 20,
     backgroundColor: 'white',
     borderBottomWidth: 1,
@@ -630,7 +491,7 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     fontSize: 16,
-    color: colors.primary,
+    color: baseColors.primary,
     fontWeight: '600',
   },
   headerInfo: {
@@ -668,7 +529,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   addButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: baseColors.primary,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 6,
@@ -679,7 +540,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   imageButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: baseColors.primary,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 6,
@@ -729,7 +590,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   deleteButton: {
-    backgroundColor: colors.danger,
+    backgroundColor: baseColors.danger,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 6,
@@ -814,7 +675,7 @@ const styles = StyleSheet.create({
   },
   modalCancelButton: {
     flex: 1,
-    backgroundColor: colors.text.secondary,
+    backgroundColor: baseColors.text.secondary,
     borderRadius: 8,
     paddingVertical: 12,
     alignItems: 'center',
@@ -826,14 +687,14 @@ const styles = StyleSheet.create({
   },
   modalAddButton: {
     flex: 1,
-    backgroundColor: colors.primary,
+    backgroundColor: baseColors.primary,
     borderRadius: 8,
     paddingVertical: 12,
     alignItems: 'center',
     marginLeft: 8,
   },
   modalAddButtonDisabled: {
-    backgroundColor: colors.text.secondary,
+    backgroundColor: baseColors.text.secondary,
   },
   modalAddButtonText: {
     color: 'white',
@@ -842,12 +703,14 @@ const styles = StyleSheet.create({
   imageModalContent: {
     maxHeight: '90%',
   },
-  previewImage: {
-    width: '100%',
-    height: 150,
-    borderRadius: 8,
-    marginBottom: 16,
-    backgroundColor: '#f0f0f0',
+  selectedSheetsList: {
+    marginBottom: 12,
+  },
+  fileLabel: {
+    fontFamily: fontFamilies.regular,
+    color: '#6c757d',
+    textAlign: 'right',
+    marginBottom: 4,
   },
   extractedCountText: {
     fontSize: 16,
@@ -878,7 +741,7 @@ const styles = StyleSheet.create({
   extractedStudentNumber: {
     fontSize: 16,
     fontFamily: fontFamilies.bold,
-    color: colors.primary,
+    color: baseColors.primary,
     marginRight: 12,
     minWidth: 30,
   },
@@ -889,7 +752,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   removeExtractedButton: {
-    backgroundColor: colors.danger,
+    backgroundColor: baseColors.danger,
     width: 28,
     height: 28,
     borderRadius: 14,

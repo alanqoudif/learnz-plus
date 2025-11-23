@@ -1,10 +1,11 @@
 import React, { useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, Animated } from 'react-native';
 import { Student } from '../types';
 import { fontFamilies, borderRadius, spacing } from '../utils/theme';
 import { useTheme } from '../context/ThemeContext';
 import { scaleButton } from '../utils/animations';
 import { lightHaptic } from '../utils/haptics';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 interface StudentItemProps {
   student: Student;
@@ -89,7 +90,7 @@ const StudentItem: React.FC<StudentItemProps> = React.memo(({
           onPress={handleDelete}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Text style={{ fontSize: 16 }}>🗑️</Text>
+          <Ionicons name="trash-outline" size={18} color={colors.danger || '#FF3B30'} />
         </TouchableOpacity>
       </View>
     </Animated.View>
@@ -106,4 +107,3 @@ const StudentItem: React.FC<StudentItemProps> = React.memo(({
 StudentItem.displayName = 'StudentItem';
 
 export default StudentItem;
-

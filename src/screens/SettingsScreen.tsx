@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -17,6 +17,8 @@ import { updateProfile } from 'firebase/auth';
 import { auth } from '../config/firebase';
 import { fontFamilies, spacing, borderRadius, shadows } from '../utils/theme';
 import { mediumHaptic, lightHaptic } from '../utils/haptics';
+import * as Clipboard from 'expo-clipboard';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface SettingsScreenProps {
   navigation: any;
@@ -25,10 +27,16 @@ interface SettingsScreenProps {
 export default function SettingsScreen({ navigation }: SettingsScreenProps) {
   const { state } = useApp();
   const { mode, setMode, colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const { userProfile, currentTeacher } = state as any;
   const [isEditingName, setIsEditingName] = useState(false);
   const [newName, setNewName] = useState(userProfile?.name || currentTeacher?.name || '');
   const [isUpdating, setIsUpdating] = useState(false);
+  const handleCopyCode = useCallback(async () => {
+    if (!userProfile?.userCode) return;
+    await Clipboard.setStringAsync(userProfile.userCode);
+    Alert.alert('تم النسخ', 'شارك هذا الرمز مع زملائك لربطهم بمدرستك.');
+  }, [userProfile?.userCode]);
 
   // حالة الأقسام المفتوحة/المغلقة
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
@@ -46,11 +54,7 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
           onPress: async () => {
             try {
               await authService.signOut();
-              // إعادة تعيين Navigation للتأكد من الرجوع لصفحة Login
-              navigation.reset({
-                index: 0,
-                routes: [{ name: 'Login' }],
-              });
+              // سيقوم AppProvider بإعادة التوجيه تلقائياً عند تغيير حالة المصادقة
             } catch (error) {
               console.error('Error signing out:', error);
               Alert.alert('خطأ', 'حدث خطأ أثناء تسجيل الخروج');
@@ -107,8 +111,11 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
   };
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: colors.background.secondary }]}>
-      <View style={styles.content}>
+    <ScrollView
+      style={[styles.container, { backgroundColor: colors.background.secondary }]}
+      contentContainerStyle={{ paddingBottom: insets.bottom + spacing['2xl'] }}
+    >
+      <View style={[styles.content, { paddingTop: insets.top + spacing.lg }]}>
         {/* Header */}
         <View style={[styles.header, { backgroundColor: colors.background.primary }]}>
           <Text style={[styles.headerTitle, { color: colors.text.primary }]}>الإعدادات</Text>
@@ -189,6 +196,37 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
                 </View>
               )}
             </View>
+            <View style={styles.infoRow}>
+              <Text style={[styles.infoLabel, { color: colors.text.secondary }]}>اسم المدرسة</Text>
+              <Text style={[styles.infoValue, { color: colors.text.primary }]}>
+                {userProfile?.schoolName || 'لم يتم التعيين بعد'}
+              </Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={[styles.infoLabel, { color: colors.text.secondary }]}>رمز المعلم الخاص بك</Text>
+              <View style={styles.codeRow}>
+                <Text style={[styles.codeValue, { color: colors.text.primary }]}>
+                  {userProfile?.userCode || '------'}
+                </Text>
+                <TouchableOpacity
+                  style={[styles.copyButton, { borderColor: colors.primary }]}
+                  onPress={handleCopyCode}
+                  disabled={!userProfile?.userCode}
+                >
+                  <Text style={[styles.copyButtonText, { color: colors.primary }]}>نسخ</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+            {!userProfile?.schoolId && (
+              <TouchableOpacity
+                style={[styles.joinSchoolButton, { borderColor: colors.primary }]}
+                onPress={() => navigation.navigate('JoinSchool')}
+              >
+                <Text style={[styles.joinSchoolText, { color: colors.primary }]}>
+                  انضم إلى مدرسة باستخدام رمز زميلك
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
@@ -293,7 +331,6 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: spacing.lg,
-    paddingTop: 60,
   },
   header: {
     padding: spacing.xl,
@@ -340,6 +377,36 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
+  },
+  codeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  codeValue: {
+    fontFamily: fontFamilies.bold,
+    fontSize: 18,
+    letterSpacing: 2,
+  },
+  copyButton: {
+    borderWidth: 1,
+    borderRadius: borderRadius.full,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  copyButtonText: {
+    fontFamily: fontFamilies.semibold,
+  },
+  joinSchoolButton: {
+    borderWidth: 1,
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    marginTop: spacing.md,
+  },
+  joinSchoolText: {
+    fontFamily: fontFamilies.semibold,
+    textAlign: 'center',
   },
   infoLabel: {
     fontSize: 16,

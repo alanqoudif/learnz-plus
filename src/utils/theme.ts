@@ -1,63 +1,57 @@
-// ألوان النظام - تصميم بنفسجي وأبيض نظيف
 export const lightColors = {
-  primary: '#7C3AED', // بنفسجي
-  secondary: '#8B5CF6', // بنفسجي فاتح
-  success: '#10B981', // أخضر للنجاح (مبقي عليه للحالات الضرورية)
-  danger: '#EF4444', // أحمر للخطر
-  warning: '#F59E0B',
-  info: '#7C3AED', // بنفسجي للمعلومات
-
+  primary: '#007AFF',
+  accent: '#0A84FF',
+  secondary: '#1C1C1E',
+  success: '#34C759',
+  danger: '#FF3B30',
+  warning: '#FFCC00',
+  info: '#64D2FF',
   background: {
-    primary: '#FFFFFF',
-    secondary: '#F9FAFB',
-    tertiary: '#F3F4F6',
+    primary: '#F5F5F7',
+    secondary: '#FFFFFF',
+    tertiary: '#EBEBF0',
     card: '#FFFFFF',
   },
-
   text: {
-    primary: '#111827',
-    secondary: '#6B7280',
-    tertiary: '#9CA3AF',
+    primary: '#1C1C1E',
+    secondary: '#3A3A3C',
+    tertiary: '#6E6E73',
     light: '#FFFFFF',
   },
-
   border: {
-    light: '#E5E7EB',
-    medium: '#D1D5DB',
-    dark: '#9CA3AF',
+    light: '#E5E5EA',
+    medium: '#D1D1D6',
+    dark: '#C7C7CC',
   },
 };
 
 export const darkColors = {
-  primary: '#8B5CF6', // بنفسجي للوضع الداكن
-  secondary: '#A78BFA',
-  success: '#34D399',
-  danger: '#F87171',
-  warning: '#FBBF24',
-  info: '#8B5CF6',
-
+  primary: '#0A84FF',
+  accent: '#64D2FF',
+  secondary: '#2C2C2E',
+  success: '#30D158',
+  danger: '#FF453A',
+  warning: '#FFD60A',
+  info: '#64D2FF',
   background: {
-    primary: '#1F2937',
-    secondary: '#111827',
-    tertiary: '#374151',
-    card: '#1F2937',
+    primary: '#0C0C0D',
+    secondary: '#1C1C1E',
+    tertiary: '#2C2C2E',
+    card: '#1C1C1E',
   },
-
   text: {
-    primary: '#F9FAFB',
-    secondary: '#D1D5DB',
-    tertiary: '#9CA3AF',
+    primary: '#F5F5F7',
+    secondary: '#DADADA',
+    tertiary: '#8E8E93',
     light: '#FFFFFF',
   },
-
   border: {
-    light: '#374151',
-    medium: '#4B5563',
-    dark: '#6B7280',
+    light: '#2C2C2E',
+    medium: '#3A3A3C',
+    dark: '#48484A',
   },
 };
 
-// تصدير الألوان الافتراضية
 export const colors = lightColors;
 
 // أحجام الخطوط

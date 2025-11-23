@@ -47,10 +47,12 @@ export interface UserProfile {
   email: string;
   name: string;
   schoolId: string | null;
+  schoolName?: string | null;
   role: UserRole;
   createdAt?: Date;
   tier: AccountTier;
   isAppAdmin?: boolean;
+  userCode?: string;
 }
 
 export interface School {

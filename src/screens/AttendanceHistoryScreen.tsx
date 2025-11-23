@@ -12,6 +12,7 @@ import { useApp } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
 import { AttendanceSession } from '../types';
 import { fontFamilies, shadows, borderRadius, spacing } from '../utils/theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // Real-time updates are handled by Firebase through AppContext
 
 interface AttendanceHistoryScreenProps {
@@ -27,6 +28,7 @@ export default function AttendanceHistoryScreen({ navigation, route }: Attendanc
   const { classId } = route.params;
   const { state, loadAttendanceSessions } = useApp();
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const [selectedSession, setSelectedSession] = useState<AttendanceSession | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -224,15 +226,15 @@ export default function AttendanceHistoryScreen({ navigation, route }: Attendanc
 
   if (!currentClass) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingTop: insets.top + 20 }]}>
         <Text style={styles.errorText}>لم يتم العثور على الفصل الدراسي</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
+    <View style={[styles.container, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => navigation.goBack()}
@@ -247,7 +249,7 @@ export default function AttendanceHistoryScreen({ navigation, route }: Attendanc
         </View>
       </View>
 
-      <View style={styles.content}>
+      <View style={[styles.content, { paddingBottom: Math.max(insets.bottom, 20) }]}>
         {classSessions.length === 0 ? (
           renderEmptyState()
         ) : (
@@ -256,7 +258,7 @@ export default function AttendanceHistoryScreen({ navigation, route }: Attendanc
             renderItem={renderSessionItem}
             keyExtractor={(item, index) => `session-${item.id}-${index}`}
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.sessionsList}
+            contentContainerStyle={[styles.sessionsList, { paddingBottom: 20 + insets.bottom }]}
             refreshControl={
               <RefreshControl
                 refreshing={isRefreshing}
@@ -327,7 +329,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 60,
     paddingBottom: 20,
     backgroundColor: 'white',
     borderBottomWidth: 1,

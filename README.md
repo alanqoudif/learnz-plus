@@ -72,7 +72,10 @@
 ```env
 EXPO_PUBLIC_SUPABASE_URL=your_project_url_here
 EXPO_PUBLIC_SUPABASE_ANON_KEY=your_anon_key_here
+EXPO_PUBLIC_OPENAI_API_KEY=your_openai_api_key_here
 ```
+
+**ملاحظة**: مفتاح OpenAI API مطلوب لاستخدام ميزة استخراج أسماء الطلاب من الصور (OCR). يمكنك الحصول على مفتاح من [OpenAI Platform](https://platform.openai.com/api-keys).
 
 ### 3. إنشاء قاعدة البيانات
 ```sql

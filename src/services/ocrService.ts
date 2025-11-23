@@ -242,9 +242,13 @@ async function extractRawTextFromImage(file: SheetFileInput): Promise<string> {
 }
 
 async function recognizeWithOpenAI(file: SheetFileInput) {
-  if (!OPENAI_API_KEY) {
-    throw new Error('لم يتم إعداد مفتاح OpenAI API.');
+  if (!OPENAI_API_KEY || OPENAI_API_KEY.trim() === '') {
+    console.error('❌ مفتاح OpenAI API غير موجود أو فارغ');
+    throw new Error('لم يتم إعداد مفتاح OpenAI API. يرجى إضافة EXPO_PUBLIC_OPENAI_API_KEY في ملف .env');
   }
+  
+  console.log(`🔑 استخدام مفتاح API: ${OPENAI_API_KEY.substring(0, 10)}...`);
+  console.log(`🤖 استخدام النموذج: ${OPENAI_VISION_MODEL}`);
 
   const localUri = await prepareLocalUri(file.uri);
   let base64 = '';
@@ -284,6 +288,8 @@ async function recognizeWithOpenAI(file: SheetFileInput) {
     temperature: 0.1, // تقليل temperature للحصول على نتائج أكثر دقة
   };
 
+  console.log(`📤 إرسال طلب إلى OpenAI (حجم الصورة: ${base64.length} حرف)`);
+  
   const response = await fetch(OPENAI_ENDPOINT, {
     method: 'POST',
     headers: {
@@ -296,12 +302,26 @@ async function recognizeWithOpenAI(file: SheetFileInput) {
   const data = await response.json();
   
   // 🔍 سجل كامل الاستجابة للتشخيص
+  console.log('📥 OpenAI Response Status:', response.status);
   console.log('📥 OpenAI Response:', JSON.stringify(data, null, 2));
   
   if (!response.ok || data?.error) {
     const message = data?.error?.message || 'تعذر الحصول على استجابة صالحة من OpenAI.';
-    console.error('❌ OpenAI API Error:', message, data);
-    throw new Error(message);
+    console.error('❌ OpenAI API Error:', message);
+    console.error('❌ Error Details:', data?.error);
+    
+    // رسائل خطأ أكثر وضوحاً
+    if (data?.error?.code === 'invalid_api_key' || message.includes('API key')) {
+      throw new Error('مفتاح OpenAI API غير صالح. يرجى التحقق من المفتاح في ملف .env');
+    } else if (data?.error?.code === 'insufficient_quota') {
+      throw new Error('تم تجاوز الحد المسموح به لـ OpenAI API. يرجى التحقق من رصيد حسابك');
+    } else if (response.status === 401) {
+      throw new Error('مفتاح OpenAI API غير صالح أو منتهي الصلاحية');
+    } else if (response.status === 429) {
+      throw new Error('تم تجاوز معدل الطلبات المسموح به. يرجى المحاولة لاحقاً');
+    }
+    
+    throw new Error(`خطأ من OpenAI: ${message}`);
   }
 
   const recognizedText = extractTextFromOpenAIResponse(data);
@@ -412,46 +432,71 @@ export const ocrService = {
 
     for (const file of files) {
       try {
+        console.log(`🔄 بدء معالجة الملف: ${file.name || file.uri}`);
         let text = '';
         try {
           text = await recognizeWithOpenAI(file);
-        } catch (openaiError) {
-          console.warn('فشل الاتصال بـ OpenAI Vision', openaiError);
-          throw openaiError;
+          console.log(`✅ تم استلام استجابة من OpenAI (${text.length} حرف)`);
+        } catch (openaiError: any) {
+          console.error('❌ فشل الاتصال بـ OpenAI Vision:', openaiError);
+          // إذا كان الخطأ متعلق بمفتاح API، ارمي الخطأ مباشرة
+          if (openaiError?.message?.includes('مفتاح OpenAI API') || 
+              openaiError?.message?.includes('API key') ||
+              !OPENAI_API_KEY) {
+            throw new Error('لم يتم إعداد مفتاح OpenAI API. يرجى إضافة EXPO_PUBLIC_OPENAI_API_KEY في ملف .env');
+          }
+          // للأخطاء الأخرى، حاول مرة أخرى مع استخراج النص الخام
+          console.log('🔄 محاولة استخراج النص الخام كبديل...');
+          try {
+            text = await extractRawTextFromImage(file);
+            console.log(`✅ تم استخراج النص الخام (${text.length} حرف)`);
+          } catch (fallbackError) {
+            console.error('❌ فشل استخراج النص الخام أيضاً:', fallbackError);
+            throw new Error(`فشل معالجة الصورة: ${openaiError?.message || 'خطأ غير معروف'}`);
+          }
         }
 
-        if (!text) {
-          console.warn('لم يتمكن OpenAI من استخراج نص واضح من الملف:', file.name || file.uri);
-          continue;
+        if (!text || text.trim().length === 0) {
+          console.warn('⚠️ OpenAI لم يعيد أي نص من الملف:', file.name || file.uri);
+          // حاول استخراج النص الخام كبديل
+          try {
+            text = await extractRawTextFromImage(file);
+            console.log(`✅ تم استخراج النص الخام كبديل (${text.length} حرف)`);
+          } catch (fallbackError) {
+            console.warn('⚠️ فشل استخراج النص الخام أيضاً');
+            continue;
+          }
         }
 
-        console.log(`📄 Raw text from OpenAI:`, text);
+        console.log(`📄 النص المستخرج من OpenAI (${text.length} حرف):`, text.substring(0, 200) + (text.length > 200 ? '...' : ''));
         
         const structuredNames = parseJsonNames(text);
         let names: string[] = [];
         
         if (structuredNames.length > 0) {
           names = structuredNames;
-          console.log(`✅ Found ${names.length} names from JSON structure`);
+          console.log(`✅ تم العثور على ${names.length} اسم من بنية JSON`);
         } else {
           // إذا كان JSON فارغ أو غير صالح، حاول استخراج الأسماء من النص مباشرة
           const isLikelyEmptyJson = /^\s*\{\s*"students"\s*:\s*\[\s*\]\s*\}\s*$/i.test(text.trim());
           
           if (isLikelyEmptyJson) {
-            console.warn('⚠️ OpenAI returned empty students array. The image might not contain readable names.');
+            console.warn('⚠️ OpenAI أعاد مصفوفة طلاب فارغة. محاولة استخراج النص الخام...');
             // إذا كان JSON فارغ، حاول مرة أخرى مع prompt مختلف يطلب استخراج النص الخام
             try {
               const rawText = await extractRawTextFromImage(file);
               if (rawText && rawText.trim().length > 0) {
                 names = extractNames(rawText);
-                console.log(`📝 Extracted ${names.length} names from raw text fallback`);
+                console.log(`📝 تم استخراج ${names.length} اسم من النص الخام`);
+              } else {
+                console.warn('⚠️ النص الخام أيضاً فارغ');
               }
             } catch (fallbackError) {
-              console.warn('Fallback text extraction failed:', fallbackError);
+              console.warn('⚠️ فشل استخراج النص الخام:', fallbackError);
             }
           } else {
             names = extractNames(text);
-            console.log(`📝 Extracted ${names.length} names from text parsing`);
+            console.log(`📝 تم استخراج ${names.length} اسم من تحليل النص`);
           }
         }
         
@@ -460,7 +505,7 @@ export const ocrService = {
           .map(name => cleanStudentName(name))
           .filter(name => name.length > 1); // إزالة الأسماء القصيرة جداً
         
-        console.log(`📋 Final extracted ${names.length} names from file:`, names);
+        console.log(`📋 العدد النهائي للأسماء المستخرجة: ${names.length}`, names);
 
         names.forEach((name) => {
           const key = name.toLowerCase();
@@ -472,13 +517,19 @@ export const ocrService = {
             });
           }
         });
-      } catch (error) {
-        console.warn('فشل التعرف على ملف مرفوع', file?.name || file?.uri, error);
+      } catch (error: any) {
+        console.error('❌ فشل التعرف على ملف مرفوع', file?.name || file?.uri, error);
+        // إذا كان الخطأ متعلق بمفتاح API، ارمي الخطأ مباشرة
+        if (error?.message?.includes('مفتاح OpenAI API') || error?.message?.includes('API key')) {
+          throw error;
+        }
+        // للأخطاء الأخرى، استمر في معالجة الملفات الأخرى
+        console.warn('⚠️ سيتم تخطي هذا الملف ومتابعة الملفات الأخرى');
       }
     }
 
     if (!students.length) {
-      throw new Error('لم نتمكن من قراءة أسماء واضحة من الملفات المرفوعة. تأكد من وضوح النص وحاول مرة أخرى.');
+      throw new Error('لم نتمكن من قراءة أسماء واضحة من الملفات المرفوعة. تأكد من:\n1. وضوح الصورة وجودتها\n2. وجود مفتاح OpenAI API في ملف .env\n3. اتصال الإنترنت يعمل بشكل صحيح');
     }
 
     return students;

@@ -278,9 +278,18 @@ export default function StudentManagementScreen({ navigation, route }: StudentMa
       setShowExtractModal(true);
     } catch (error: any) {
       console.error('Error processing roster image:', error);
+      let errorMessage = error?.message || 'تأكد من وضوح الصور ثم حاول مرة أخرى.';
+      
+      // رسائل خطأ أكثر وضوحاً
+      if (errorMessage.includes('مفتاح OpenAI API') || errorMessage.includes('API key')) {
+        errorMessage = 'لم يتم إعداد مفتاح OpenAI API.\n\nيرجى إضافة EXPO_PUBLIC_OPENAI_API_KEY في ملف .env ثم إعادة تشغيل التطبيق.';
+      } else if (errorMessage.includes('فشل معالجة الصورة')) {
+        errorMessage = 'فشل معالجة الصورة. تأكد من:\n• وضوح الصورة وجودتها\n• وجود نص قابل للقراءة في الصورة\n• اتصال الإنترنت يعمل';
+      }
+      
       Alert.alert(
         'خطأ في معالجة الملفات',
-        error?.message || 'تأكد من وضوح الصور ثم حاول مرة أخرى.'
+        errorMessage
       );
     } finally {
       setIsProcessing(false);

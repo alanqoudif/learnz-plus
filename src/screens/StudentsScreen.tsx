@@ -126,9 +126,18 @@ export default function StudentsScreen({ navigation }: any) {
       setOcrCandidates(formatted);
     } catch (error: any) {
       console.error('OpenAI OCR error', error);
+      let errorMessage = error?.message || 'تأكد من وضوح الملفات المختارة ثم حاول مرة أخرى.';
+      
+      // رسائل خطأ أكثر وضوحاً
+      if (errorMessage.includes('مفتاح OpenAI API') || errorMessage.includes('API key')) {
+        errorMessage = 'لم يتم إعداد مفتاح OpenAI API.\n\nيرجى إضافة EXPO_PUBLIC_OPENAI_API_KEY في ملف .env ثم إعادة تشغيل التطبيق.';
+      } else if (errorMessage.includes('فشل معالجة الصورة')) {
+        errorMessage = 'فشل معالجة الصورة. تأكد من:\n• وضوح الصورة وجودتها\n• وجود نص قابل للقراءة في الصورة\n• اتصال الإنترنت يعمل';
+      }
+      
       Alert.alert(
         'فشل قراءة الشيت',
-        error?.message || 'تأكد من وضوح الملفات المختارة ثم حاول مرة أخرى.'
+        errorMessage
       );
       setSheetStep('options');
     } finally {

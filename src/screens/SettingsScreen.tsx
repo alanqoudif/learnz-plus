@@ -18,13 +18,17 @@ import { fontFamilies, spacing, borderRadius, shadows } from '../utils/theme';
 import { mediumHaptic, lightHaptic } from '../utils/haptics';
 import * as Clipboard from 'expo-clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { leaveSchool } from '../services/schoolService';
 
 interface SettingsScreenProps {
   navigation: any;
 }
 
+type SectionKey = 'account' | 'school' | 'teacherCode' | 'appearance' | 'quickTour';
+
 export default function SettingsScreen({ navigation }: SettingsScreenProps) {
-  const { state, logout } = useApp();
+  const { state, logout, dispatch } = useApp();
   const { mode, isDark, setMode, colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { userProfile, currentTeacher, classes = [] } = state as any;
@@ -32,16 +36,71 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
   const [newName, setNewName] = useState(userProfile?.name || currentTeacher?.name || '');
   const [isUpdating, setIsUpdating] = useState(false);
   const [teacherCode, setTeacherCode] = useState(userProfile?.userCode || '');
+  const [isLeavingSchool, setIsLeavingSchool] = useState(false);
+  const [expandedSections, setExpandedSections] = useState<Record<SectionKey, boolean>>({
+    account: false,
+    school: false,
+    teacherCode: false,
+    appearance: false,
+    quickTour: false,
+  });
   const hasSchool = Boolean(userProfile?.schoolId);
   const isLeader = userProfile?.role === 'leader';
   const showQuickTour = !Array.isArray(classes) || classes.length === 0;
   const activeThemeMode = mode === 'auto' ? (isDark ? 'dark' : 'light') : mode;
+  const toggleSection = useCallback((section: SectionKey) => {
+    lightHaptic();
+    setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
+  }, []);
 
   const handleCopyCode = useCallback(async () => {
     if (!teacherCode) return;
     await Clipboard.setStringAsync(teacherCode);
     Alert.alert('تم النسخ', 'شارك هذا الرمز مع زملائك لربطهم بمدرستك.');
   }, [teacherCode]);
+
+  const handleLeaveSchool = useCallback(() => {
+    if (!currentTeacher?.id || !hasSchool) {
+      Alert.alert('تنبيه', 'أنت غير مرتبط بمدرسة حالياً.');
+      return;
+    }
+
+    mediumHaptic();
+    Alert.alert(
+      'مغادرة المدرسة',
+      'هل أنت متأكد من مغادرة المدرسة الحالية؟ يمكنك الانضمام لاحقاً باستخدام رمز جديد.',
+      [
+        { text: 'إلغاء', style: 'cancel' },
+        {
+          text: 'مغادرة',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setIsLeavingSchool(true);
+              await leaveSchool(currentTeacher.id);
+              if (userProfile) {
+                dispatch({
+                  type: 'SET_USER_PROFILE',
+                  payload: {
+                    ...userProfile,
+                    schoolId: null,
+                    schoolName: null,
+                    role: 'member',
+                  },
+                });
+              }
+              Alert.alert('تم بنجاح', 'تمت مغادرة المدرسة بنجاح.');
+            } catch (error: any) {
+              console.error('Error leaving school:', error);
+              Alert.alert('خطأ', error?.message || 'حدث خطأ أثناء مغادرة المدرسة');
+            } finally {
+              setIsLeavingSchool(false);
+            }
+          },
+        },
+      ]
+    );
+  }, [currentTeacher?.id, hasSchool, userProfile, dispatch]);
 
   useEffect(() => {
     setTeacherCode(userProfile?.userCode || '');
@@ -157,211 +216,304 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
         </View>
 
         <View style={[styles.sectionCard, { backgroundColor: colors.background.secondary, borderColor: colors.border.light }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>بيانات الحساب</Text>
-          <View style={[styles.sectionDivider, { backgroundColor: colors.border.light }]} />
-          <View style={styles.row}>
-            <View style={styles.rowTexts}>
-              <Text style={[styles.rowLabel, { color: colors.text.secondary }]}>البريد الإلكتروني</Text>
-              <Text style={[styles.rowValue, { color: colors.text.primary }]}>
-                {userProfile?.email || currentTeacher?.phoneNumber || 'غير متوفر'}
-              </Text>
-            </View>
-          </View>
-          <View style={styles.row}>
-            <View style={styles.rowTexts}>
-              <Text style={[styles.rowLabel, { color: colors.text.secondary }]}>الاسم</Text>
-              <Text style={[styles.rowValue, { color: colors.text.primary }]}>
-                {userProfile?.name || currentTeacher?.name || 'غير متوفر'}
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={[styles.chipButton, { backgroundColor: colors.background.tertiary, opacity: isEditingName ? 0.5 : 1 }]}
-              onPress={() => {
-                setIsEditingName(true);
-                lightHaptic();
-              }}
-              disabled={isEditingName}
-            >
-              <Text style={[styles.chipButtonText, { color: colors.text.primary }]}>تعديل</Text>
-            </TouchableOpacity>
-          </View>
-          {isEditingName && (
-            <View style={[styles.inlineCard, { backgroundColor: colors.background.primary, borderColor: colors.border.light }]}>
-              <Text style={[styles.inlineLabel, { color: colors.text.secondary }]}>الاسم الجديد</Text>
-              <TextInput
-                style={[
-                  styles.nameInput,
-                  {
-                    backgroundColor: colors.background.secondary,
-                    color: colors.text.primary,
-                    borderColor: colors.border.medium,
-                  },
-                ]}
-                value={newName}
-                onChangeText={setNewName}
-                placeholder="أدخل الاسم"
-                placeholderTextColor={colors.text.tertiary}
-                autoFocus
-              />
-              <View style={styles.editButtons}>
-                <TouchableOpacity
-                  style={[styles.cancelButton, { backgroundColor: colors.background.secondary, borderColor: colors.border.medium }]}
-                  onPress={() => {
-                    setNewName(userProfile?.name || currentTeacher?.name || '');
-                    setIsEditingName(false);
-                  }}
-                >
-                  <Text style={[styles.buttonText, { color: colors.text.primary }]}>إلغاء</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.saveButton, { backgroundColor: colors.primary }]}
-                  onPress={handleUpdateName}
-                  disabled={isUpdating}
-                >
-                  <Text style={[styles.buttonText, { color: colors.text.light }]}>
-                    {isUpdating ? 'جاري الحفظ...' : 'حفظ'}
+          <TouchableOpacity
+            activeOpacity={0.8}
+            style={styles.sectionHeaderRow}
+            onPress={() => toggleSection('account')}
+          >
+            <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>بيانات الحساب</Text>
+            <Ionicons
+              name={expandedSections.account ? 'chevron-up' : 'chevron-down'}
+              size={18}
+              color={colors.text.primary}
+            />
+          </TouchableOpacity>
+          {expandedSections.account && (
+            <>
+              <View style={[styles.sectionDivider, { backgroundColor: colors.border.light }]} />
+              <View style={styles.row}>
+                <View style={styles.rowTexts}>
+                  <Text style={[styles.rowLabel, { color: colors.text.secondary }]}>البريد الإلكتروني</Text>
+                  <Text style={[styles.rowValue, { color: colors.text.primary }]}>
+                    {userProfile?.email || currentTeacher?.phoneNumber || 'غير متوفر'}
                   </Text>
+                </View>
+              </View>
+              <View style={styles.row}>
+                <View style={styles.rowTexts}>
+                  <Text style={[styles.rowLabel, { color: colors.text.secondary }]}>الاسم</Text>
+                  <Text style={[styles.rowValue, { color: colors.text.primary }]}>
+                    {userProfile?.name || currentTeacher?.name || 'غير متوفر'}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={[styles.chipButton, { backgroundColor: colors.background.tertiary, opacity: isEditingName ? 0.5 : 1 }]}
+                  onPress={() => {
+                    setIsEditingName(true);
+                    lightHaptic();
+                  }}
+                  disabled={isEditingName}
+                >
+                  <Text style={[styles.chipButtonText, { color: colors.text.primary }]}>تعديل</Text>
                 </TouchableOpacity>
               </View>
+              {isEditingName && (
+                <View style={[styles.inlineCard, { backgroundColor: colors.background.primary, borderColor: colors.border.light }]}>
+                  <Text style={[styles.inlineLabel, { color: colors.text.secondary }]}>الاسم الجديد</Text>
+                  <TextInput
+                    style={[
+                      styles.nameInput,
+                      {
+                        backgroundColor: colors.background.secondary,
+                        color: colors.text.primary,
+                        borderColor: colors.border.medium,
+                      },
+                    ]}
+                    value={newName}
+                    onChangeText={setNewName}
+                    placeholder="أدخل الاسم"
+                    placeholderTextColor={colors.text.tertiary}
+                    autoFocus
+                  />
+                  <View style={styles.editButtons}>
+                    <TouchableOpacity
+                      style={[styles.cancelButton, { backgroundColor: colors.background.secondary, borderColor: colors.border.medium }]}
+                      onPress={() => {
+                        setNewName(userProfile?.name || currentTeacher?.name || '');
+                        setIsEditingName(false);
+                      }}
+                    >
+                      <Text style={[styles.buttonText, { color: colors.text.primary }]}>إلغاء</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.saveButton, { backgroundColor: colors.primary }]}
+                      onPress={handleUpdateName}
+                      disabled={isUpdating}
+                    >
+                      <Text style={[styles.buttonText, { color: colors.text.light }]}>
+                        {isUpdating ? 'جاري الحفظ...' : 'حفظ'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+            </>
+          )}
+        </View>
+
+        <View style={[styles.sectionCard, { backgroundColor: colors.background.secondary, borderColor: colors.border.light }]}>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            style={styles.sectionHeaderRow}
+            onPress={() => toggleSection('school')}
+          >
+            <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>مدرستي</Text>
+            <Ionicons
+              name={expandedSections.school ? 'chevron-up' : 'chevron-down'}
+              size={18}
+              color={colors.text.primary}
+            />
+          </TouchableOpacity>
+          {expandedSections.school && (
+            <>
+              <View style={[styles.sectionDivider, { backgroundColor: colors.border.light }]} />
+              <Text style={[styles.sectionHint, { color: colors.text.secondary }]}>
+                {hasSchool
+                  ? 'أنت مرتبط بالفعل بمدرسة ويمكنك مشاركة الرمز مع فريقك.'
+                  : 'اربط حسابك بمدرسة لعرض الفصول المشتركة والحصول على رمز مخصص.'}
+              </Text>
+              <View style={[styles.inlineCard, { backgroundColor: colors.background.primary, borderColor: colors.border.light }]}>
+                <Text style={[styles.inlineLabel, { color: colors.text.secondary }]}>اسم المدرسة</Text>
+                <Text style={[styles.inlineValue, { color: colors.text.primary }]}>
+                  {userProfile?.schoolName || 'لم يتم التعيين بعد'}
+                </Text>
+              </View>
+              {!hasSchool && (
+                <TouchableOpacity
+                  style={[styles.primaryOutlineButton, { borderColor: colors.primary }]}
+                  onPress={() => navigation.navigate('JoinSchool')}
+                >
+                  <Text style={[styles.primaryOutlineText, { color: colors.primary }]}>
+                    انضم إلى مدرسة باستخدام رمز زميلك
+                  </Text>
+                </TouchableOpacity>
+              )}
+              {hasSchool && (
+                <TouchableOpacity
+                  style={[
+                    styles.dangerOutlineButton,
+                    {
+                      borderColor: colors.danger,
+                      opacity: isLeavingSchool ? 0.6 : 1,
+                      backgroundColor: colors.background.primary,
+                    },
+                  ]}
+                  onPress={handleLeaveSchool}
+                  disabled={isLeavingSchool}
+                >
+                  <Text style={[styles.primaryOutlineText, { color: colors.danger }]}>
+                    {isLeavingSchool ? 'جاري المغادرة...' : 'مغادرة المدرسة'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+              <View style={[styles.infoCard, { backgroundColor: colors.background.primary, borderColor: colors.border.light }]}>
+                <Text style={[styles.infoTitle, { color: colors.text.primary }]}>المشاركة مع الفريق</Text>
+                <Text style={[styles.infoText, { color: colors.text.secondary }]}>
+                  شارك رمز المعلم مع زملائك للدخول إلى نفس المدرسة. بعد الربط ستظهر لهم الشُعب المتاحة ويمكنهم تسجيل حضورهم.
+                </Text>
+                {!teacherCode && (
+                  <Text style={[styles.infoText, { color: colors.text.secondary }]}>
+                    يتم إنشاء الرمز تلقائياً بعد إنشاء المدرسة بدقائق قليلة.
+                  </Text>
+                )}
+                {isLeader && (
+                  <Text style={[styles.infoText, { color: colors.text.secondary }]}>
+                    أداة "إدارة المدرسة" ستظهر في الشريط السفلي لمراجعة الفصول وتعيين الصلاحيات.
+                  </Text>
+                )}
+              </View>
+            </>
+          )}
+        </View>
+
+        <View style={[styles.sectionCard, { backgroundColor: colors.background.secondary, borderColor: colors.border.light }]}>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            style={styles.sectionHeaderRow}
+            onPress={() => toggleSection('teacherCode')}
+          >
+            <View style={styles.sectionHeaderContent}>
+              <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>رمز المعلم</Text>
+              {hasSchool && !!teacherCode && (
+                <Text style={[styles.badge, { color: colors.primary, borderColor: colors.primary }]}>جاهز للمشاركة</Text>
+              )}
             </View>
+            <Ionicons
+              name={expandedSections.teacherCode ? 'chevron-up' : 'chevron-down'}
+              size={18}
+              color={colors.text.primary}
+            />
+          </TouchableOpacity>
+          {expandedSections.teacherCode && (
+            <>
+              <View style={[styles.sectionDivider, { backgroundColor: colors.border.light }]} />
+              <View style={[styles.codeContainer, { backgroundColor: colors.background.primary, borderColor: colors.border.light }]}>
+                <Text style={[styles.codeValue, { color: colors.text.primary }]}>
+                  {hasSchool && teacherCode ? teacherCode : '------'}
+                </Text>
+                <TouchableOpacity
+                  style={[
+                    styles.copyButton,
+                    { backgroundColor: hasSchool && teacherCode ? colors.primary : colors.border.medium },
+                  ]}
+                  onPress={handleCopyCode}
+                  disabled={!hasSchool || !teacherCode}
+                >
+                  <Text
+                    style={[
+                      styles.copyButtonText,
+                      { color: hasSchool && teacherCode ? colors.text.light : colors.text.primary },
+                    ]}
+                  >
+                    نسخ الرمز
+                  </Text>
+                </TouchableOpacity>
+                {hasSchool && teacherCode ? (
+                  <Text style={[styles.sectionHint, { color: colors.text.secondary, marginTop: spacing.md }]}>
+                    شارك هذا الرمز مع زملائك ليربطوا حساباتهم بمدرستك.
+                  </Text>
+                ) : null}
+              </View>
+            </>
           )}
         </View>
 
         <View style={[styles.sectionCard, { backgroundColor: colors.background.secondary, borderColor: colors.border.light }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>مدرستي</Text>
-          <View style={[styles.sectionDivider, { backgroundColor: colors.border.light }]} />
-          <Text style={[styles.sectionHint, { color: colors.text.secondary }]}>
-            {hasSchool
-              ? 'أنت مرتبط بالفعل بمدرسة ويمكنك مشاركة الرمز مع فريقك.'
-              : 'اربط حسابك بمدرسة لعرض الفصول المشتركة والحصول على رمز مخصص.'}
-          </Text>
-          <View style={[styles.inlineCard, { backgroundColor: colors.background.primary, borderColor: colors.border.light }]}>
-            <Text style={[styles.inlineLabel, { color: colors.text.secondary }]}>اسم المدرسة</Text>
-            <Text style={[styles.inlineValue, { color: colors.text.primary }]}>
-              {userProfile?.schoolName || 'لم يتم التعيين بعد'}
-            </Text>
-          </View>
-          {!hasSchool && (
-            <TouchableOpacity
-              style={[styles.primaryOutlineButton, { borderColor: colors.primary }]}
-              onPress={() => navigation.navigate('JoinSchool')}
-            >
-              <Text style={[styles.primaryOutlineText, { color: colors.primary }]}>
-                انضم إلى مدرسة باستخدام رمز زميلك
+          <TouchableOpacity
+            activeOpacity={0.8}
+            style={styles.sectionHeaderRow}
+            onPress={() => toggleSection('appearance')}
+          >
+            <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>المظهر</Text>
+            <Ionicons
+              name={expandedSections.appearance ? 'chevron-up' : 'chevron-down'}
+              size={18}
+              color={colors.text.primary}
+            />
+          </TouchableOpacity>
+          {expandedSections.appearance && (
+            <>
+              <View style={[styles.sectionDivider, { backgroundColor: colors.border.light }]} />
+              <Text style={[styles.sectionHint, { color: colors.text.secondary }]}>
+                اختر النمط الذي يناسبك. يمكن تغيير الوضع في أي وقت.
               </Text>
-            </TouchableOpacity>
+              <View style={styles.themeRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.themeOption,
+                    {
+                      borderColor: activeThemeMode === 'light' ? colors.primary : colors.border.medium,
+                      backgroundColor: activeThemeMode === 'light' ? colors.background.primary : colors.background.tertiary,
+                    },
+                  ]}
+                  onPress={() => handleThemeChange('light')}
+                >
+                  <Text style={[styles.themeLabel, { color: colors.text.primary }]}>نهاري</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.themeOption,
+                    {
+                      borderColor: activeThemeMode === 'dark' ? colors.primary : colors.border.medium,
+                      backgroundColor: activeThemeMode === 'dark' ? colors.background.primary : colors.background.tertiary,
+                    },
+                  ]}
+                  onPress={() => handleThemeChange('dark')}
+                >
+                  <Text style={[styles.themeLabel, { color: colors.text.primary }]}>ليلي</Text>
+                </TouchableOpacity>
+              </View>
+            </>
           )}
-          <View style={[styles.infoCard, { backgroundColor: colors.background.primary, borderColor: colors.border.light }]}>
-            <Text style={[styles.infoTitle, { color: colors.text.primary }]}>المشاركة مع الفريق</Text>
-            <Text style={[styles.infoText, { color: colors.text.secondary }]}>
-              شارك رمز المعلم مع زملائك للدخول إلى نفس المدرسة. بعد الربط ستظهر لهم الشُعب المتاحة ويمكنهم تسجيل حضورهم.
-            </Text>
-            {!teacherCode && (
-              <Text style={[styles.infoText, { color: colors.text.secondary }]}>
-                يتم إنشاء الرمز تلقائياً بعد إنشاء المدرسة بدقائق قليلة.
-              </Text>
-            )}
-            {isLeader && (
-              <Text style={[styles.infoText, { color: colors.text.secondary }]}>
-                أداة "إدارة المدرسة" ستظهر في الشريط السفلي لمراجعة الفصول وتعيين الصلاحيات.
-              </Text>
-            )}
-          </View>
-        </View>
-
-        <View style={[styles.sectionCard, { backgroundColor: colors.background.secondary, borderColor: colors.border.light }]}>
-          <View style={styles.rowBetween}>
-            <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>رمز المعلم</Text>
-            {!!teacherCode && (
-              <Text style={[styles.badge, { color: colors.primary, borderColor: colors.primary }]}>جاهز للمشاركة</Text>
-            )}
-          </View>
-          <View style={[styles.sectionDivider, { backgroundColor: colors.border.light }]} />
-          <View style={[styles.codeContainer, { backgroundColor: colors.background.primary, borderColor: colors.border.light }]}>
-            <Text style={[styles.codeValue, { color: colors.text.primary }]}>
-              {teacherCode || '------'}
-            </Text>
-            <TouchableOpacity
-              style={[
-                styles.copyButton,
-                { backgroundColor: teacherCode ? colors.primary : colors.border.medium },
-              ]}
-              onPress={handleCopyCode}
-              disabled={!teacherCode}
-            >
-              <Text
-                style={[
-                  styles.copyButtonText,
-                  { color: teacherCode ? colors.text.light : colors.text.primary },
-                ]}
-              >
-                نسخ الرمز
-              </Text>
-            </TouchableOpacity>
-            {teacherCode ? (
-              <Text style={[styles.sectionHint, { color: colors.text.secondary, marginTop: spacing.md }]}>
-                شارك هذا الرمز مع زملائك ليربطوا حساباتهم بمدرستك.
-              </Text>
-            ) : null}
-          </View>
-        </View>
-
-        <View style={[styles.sectionCard, { backgroundColor: colors.background.secondary, borderColor: colors.border.light }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>المظهر</Text>
-          <View style={[styles.sectionDivider, { backgroundColor: colors.border.light }]} />
-          <Text style={[styles.sectionHint, { color: colors.text.secondary }]}>
-            اختر النمط الذي يناسبك. يمكن تغيير الوضع في أي وقت.
-          </Text>
-          <View style={styles.themeRow}>
-            <TouchableOpacity
-              style={[
-                styles.themeOption,
-                {
-                  borderColor: activeThemeMode === 'light' ? colors.primary : colors.border.medium,
-                  backgroundColor: activeThemeMode === 'light' ? colors.background.primary : colors.background.tertiary,
-                },
-              ]}
-              onPress={() => handleThemeChange('light')}
-            >
-              <Text style={[styles.themeLabel, { color: colors.text.primary }]}>نهاري</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.themeOption,
-                {
-                  borderColor: activeThemeMode === 'dark' ? colors.primary : colors.border.medium,
-                  backgroundColor: activeThemeMode === 'dark' ? colors.background.primary : colors.background.tertiary,
-                },
-              ]}
-              onPress={() => handleThemeChange('dark')}
-            >
-              <Text style={[styles.themeLabel, { color: colors.text.primary }]}>ليلي</Text>
-            </TouchableOpacity>
-          </View>
         </View>
 
         {showQuickTour && (
           <View style={[styles.sectionCard, { backgroundColor: colors.background.secondary, borderColor: colors.border.light }]}>
-            <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>جولة سريعة</Text>
-            <View style={[styles.sectionDivider, { backgroundColor: colors.border.light }]} />
-            <View style={styles.bulletRow}>
-              <Text style={[styles.bulletNumber, { color: colors.primary }]}>١</Text>
-              <Text style={[styles.bulletText, { color: colors.text.primary }]}>
-                من تبويب الحضور أنشئ أول فصل واضغط عليه لبدء تسجيل الحضور.
-              </Text>
-            </View>
-            <View style={styles.bulletRow}>
-              <Text style={[styles.bulletNumber, { color: colors.primary }]}>٢</Text>
-              <Text style={[styles.bulletText, { color: colors.text.primary }]}>
-                زر الطلاب يسمح لك بضبط بيانات الطلبة ومتابعة التقدم الأكاديمي.
-              </Text>
-            </View>
-            <View style={styles.bulletRow}>
-              <Text style={[styles.bulletNumber, { color: colors.primary }]}>٣</Text>
-              <Text style={[styles.bulletText, { color: colors.text.primary }]}>
-                شارك الرمز مع زملائك ثم استخدم إدارة المدرسة لمراقبة الحضور الكامل.
-              </Text>
-            </View>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              style={styles.sectionHeaderRow}
+              onPress={() => toggleSection('quickTour')}
+            >
+              <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>جولة سريعة</Text>
+              <Ionicons
+                name={expandedSections.quickTour ? 'chevron-up' : 'chevron-down'}
+                size={18}
+                color={colors.text.primary}
+              />
+            </TouchableOpacity>
+            {expandedSections.quickTour && (
+              <>
+                <View style={[styles.sectionDivider, { backgroundColor: colors.border.light }]} />
+                <View style={styles.bulletRow}>
+                  <Text style={[styles.bulletNumber, { color: colors.primary }]}>١</Text>
+                  <Text style={[styles.bulletText, { color: colors.text.primary }]}>
+                    من تبويب الحضور أنشئ أول فصل واضغط عليه لبدء تسجيل الحضور.
+                  </Text>
+                </View>
+                <View style={styles.bulletRow}>
+                  <Text style={[styles.bulletNumber, { color: colors.primary }]}>٢</Text>
+                  <Text style={[styles.bulletText, { color: colors.text.primary }]}>
+                    زر الطلاب يسمح لك بضبط بيانات الطلبة ومتابعة التقدم الأكاديمي.
+                  </Text>
+                </View>
+                <View style={styles.bulletRow}>
+                  <Text style={[styles.bulletNumber, { color: colors.primary }]}>٣</Text>
+                  <Text style={[styles.bulletText, { color: colors.text.primary }]}>
+                    شارك الرمز مع زملائك ثم استخدم إدارة المدرسة لمراقبة الحضور الكامل.
+                  </Text>
+                </View>
+              </>
+            )}
           </View>
         )}
 
@@ -453,6 +605,17 @@ const styles = StyleSheet.create({
     width: '100%',
     marginVertical: spacing.lg,
     opacity: 0.1,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  sectionHeaderContent: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    gap: spacing.sm,
   },
   sectionHint: {
     fontSize: 14,
@@ -554,6 +717,14 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.xl,
     padding: spacing.lg,
     marginTop: spacing.lg,
+  },
+  dangerOutlineButton: {
+    borderWidth: 1,
+    borderRadius: borderRadius.full,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    alignItems: 'center',
   },
   infoTitle: {
     fontSize: 16,

@@ -285,6 +285,26 @@ export async function getSchoolMembers(schoolId: string): Promise<UserProfile[]>
   });
 }
 
+export async function leaveSchool(userId: string): Promise<void> {
+  if (!userId) {
+    throw new Error('يجب تسجيل الدخول قبل مغادرة المدرسة');
+  }
+
+  const userRef = doc(firestore, COLLECTIONS.USERS, userId);
+  await updateDoc(userRef, {
+    schoolId: null,
+    schoolName: null,
+    role: 'member',
+  });
+
+  const teacherCodeRef = doc(firestore, COLLECTIONS.TEACHER_CODES, userId);
+  await setDoc(teacherCodeRef, {
+    schoolId: null,
+    schoolName: null,
+    updatedAt: serverTimestamp(),
+  }, { merge: true });
+}
+
 export async function getSchoolById(schoolId: string): Promise<School | null> {
   const ref = doc(firestore, COLLECTIONS.SCHOOLS, schoolId);
   const snap = await getDoc(ref);

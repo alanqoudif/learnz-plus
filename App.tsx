@@ -41,10 +41,9 @@ function MainTabs() {
         tabBarInactiveTintColor: colors.text.muted || colors.text.secondary,
         tabBarStyle: {
           position: 'absolute',
+          left: 16,
+          right: 16,
           bottom: 16,
-          alignSelf: 'center',
-          width: '92%',
-          maxWidth: 420,
           backgroundColor: colors.background.glass || 'rgba(255,255,255,0.9)',
           borderRadius: 28,
           height: 64,

@@ -16,6 +16,7 @@ import {
 } from 'firebase/firestore';
 import { firestore, COLLECTIONS } from '../config/firebase';
 import { CommunityPost, School, UserProfile, UserRole } from '../types';
+import { ensureUserCode } from './schoolService';
 
 const tsToDate = (v: any): Date => (v?.toDate ? v.toDate() : v?.seconds ? new Date(v.seconds * 1000) : v ? new Date(v) : new Date());
 
@@ -109,6 +110,7 @@ export const communityService = {
       schoolId: schoolDoc.id,
       role: 'member'
     });
+    await ensureUserCode(userId, { schoolId: schoolDoc.id, schoolName: data.name });
 
     return {
       id: schoolDoc.id,
@@ -137,6 +139,7 @@ export const communityService = {
       schoolId: docRef.id,
       role: 'leader'
     }, { merge: true });
+    await ensureUserCode(leaderUserId, { schoolId: docRef.id, schoolName: name });
 
     return {
       id: docRef.id,
@@ -171,5 +174,4 @@ export const communityService = {
     };
   },
 };
-
 

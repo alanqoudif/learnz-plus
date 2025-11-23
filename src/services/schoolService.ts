@@ -10,6 +10,7 @@ import {
   updateDoc,
   serverTimestamp,
   Timestamp,
+  limit,
 } from 'firebase/firestore';
 import { firestore, COLLECTIONS } from '../config/firebase';
 import { School, UserProfile, UserRole } from '../types';
@@ -34,11 +35,58 @@ async function isCodeUnique(code: string): Promise<boolean> {
   return snapshot.empty;
 }
 
-export async function ensureUserCode(userId: string): Promise<string> {
+async function saveTeacherCodeRecord(
+  userId: string,
+  code: string,
+  metadata?: {
+    name?: string | null;
+    phoneNumber?: string | null;
+    schoolId?: string | null;
+    schoolName?: string | null;
+  }
+) {
+  const normalizedCode = code.trim().toUpperCase();
+  const codeRef = doc(firestore, COLLECTIONS.TEACHER_CODES, userId);
+  const existing = await getDoc(codeRef);
+  const payload: any = {
+    teacherId: userId,
+    code: normalizedCode,
+    normalizedCode,
+    teacherName: metadata?.name ?? null,
+    phoneNumber: metadata?.phoneNumber ?? null,
+    schoolId: metadata?.schoolId ?? null,
+    schoolName: metadata?.schoolName ?? null,
+    updatedAt: serverTimestamp(),
+  };
+  if (!existing.exists()) {
+    payload.createdAt = serverTimestamp();
+  }
+  await setDoc(codeRef, payload, { merge: true });
+}
+
+export async function ensureUserCode(
+  userId: string,
+  metadata?: {
+    name?: string | null;
+    phoneNumber?: string | null;
+    schoolId?: string | null;
+    schoolName?: string | null;
+  }
+): Promise<string> {
   const userRef = doc(firestore, COLLECTIONS.USERS, userId);
   const userSnap = await getDoc(userRef);
-  const existingCode = userSnap.data()?.userCode;
-  if (existingCode) return existingCode;
+  const userData = userSnap.data() || {};
+  const resolvedMetadata = {
+    name: metadata?.name ?? userData.name ?? null,
+    phoneNumber: metadata?.phoneNumber ?? userData.phoneNumber ?? null,
+    schoolId: metadata?.schoolId ?? userData.schoolId ?? null,
+    schoolName: metadata?.schoolName ?? userData.schoolName ?? null,
+  };
+  const existingCode = userData?.userCode;
+  if (existingCode) {
+    await saveTeacherCodeRecord(userId, existingCode, resolvedMetadata);
+    return existingCode;
+  }
 
   let newCode = generateCode();
   while (!(await isCodeUnique(newCode))) {
@@ -46,6 +94,7 @@ export async function ensureUserCode(userId: string): Promise<string> {
   }
 
   await setDoc(userRef, { userCode: newCode }, { merge: true });
+  await saveTeacherCodeRecord(userId, newCode, resolvedMetadata);
   return newCode;
 }
 
@@ -66,6 +115,7 @@ export async function createSchoolForUser(name: string, leaderUserId: string): P
     schoolName: name.trim(),
     role: 'leader',
   }, { merge: true });
+  await ensureUserCode(leaderUserId, { schoolId: schoolRef.id, schoolName: name.trim() });
 
   return {
     id: schoolRef.id,
@@ -82,32 +132,67 @@ export async function joinSchoolByTeacherCode(joinerId: string, teacherCode: str
     throw new Error('يرجى إدخال رمز صحيح');
   }
 
-  const usersQuery = query(
-    collection(firestore, COLLECTIONS.USERS),
-    where('userCode', '==', normalized)
+  let teacherId: string | null = null;
+  let teacherCodeData: any = null;
+
+  const codeQuery = query(
+    collection(firestore, COLLECTIONS.TEACHER_CODES),
+    where('normalizedCode', '==', normalized),
+    limit(1)
   );
-  const snapshot = await getDocs(usersQuery);
-  if (snapshot.empty) {
+  const codeSnapshot = await getDocs(codeQuery);
+  if (!codeSnapshot.empty) {
+    teacherId = codeSnapshot.docs[0].id;
+    teacherCodeData = codeSnapshot.docs[0].data();
+  } else {
+    const usersQuery = query(
+      collection(firestore, COLLECTIONS.USERS),
+      where('userCode', '==', normalized),
+      limit(1)
+    );
+    const snapshot = await getDocs(usersQuery);
+    if (!snapshot.empty) {
+      teacherId = snapshot.docs[0].id;
+      teacherCodeData = snapshot.docs[0].data();
+    }
+  }
+
+  if (!teacherId) {
     throw new Error('لم يتم العثور على معلم بهذا الرمز');
   }
 
-  const teacherDoc = snapshot.docs[0];
-  const teacherData: any = teacherDoc.data();
-  if (!teacherData.schoolId) {
+  const teacherRef = doc(firestore, COLLECTIONS.USERS, teacherId);
+  const teacherSnap = await getDoc(teacherRef);
+  const teacherData: any = teacherSnap.exists() ? teacherSnap.data() : {};
+  const teacherSchoolId = teacherCodeData?.schoolId || teacherData?.schoolId;
+
+  if (!teacherSchoolId) {
     throw new Error('هذا المعلم لم يربط حسابه بمدرسة بعد');
   }
 
-  const schoolRef = doc(firestore, COLLECTIONS.SCHOOLS, teacherData.schoolId);
+  const schoolRef = doc(firestore, COLLECTIONS.SCHOOLS, teacherSchoolId);
   const schoolSnap = await getDoc(schoolRef);
   if (!schoolSnap.exists()) {
     throw new Error('لم يتم العثور على المدرسة المرتبطة بهذا المعلم');
   }
 
+  const schoolName = teacherCodeData?.schoolName || teacherData?.schoolName || schoolSnap.data()?.name || null;
+
   await setDoc(doc(firestore, COLLECTIONS.USERS, joinerId), {
-    schoolId: teacherData.schoolId,
-    schoolName: teacherData.schoolName || schoolSnap.data()?.name || null,
+    schoolId: teacherSchoolId,
+    schoolName,
     role: 'member',
   }, { merge: true });
+  await ensureUserCode(teacherId, {
+    name: teacherData?.name ?? teacherCodeData?.teacherName ?? null,
+    phoneNumber: teacherData?.phoneNumber ?? teacherCodeData?.phoneNumber ?? null,
+    schoolId: teacherSchoolId,
+    schoolName,
+  });
+  await ensureUserCode(joinerId, {
+    schoolId: teacherSchoolId,
+    schoolName,
+  });
 
   const schoolData: any = schoolSnap.data();
   return {
@@ -133,6 +218,19 @@ export async function getSchoolMembers(schoolId: string): Promise<UserProfile[]>
     where('schoolId', '==', schoolId)
   );
   const snapshot = await getDocs(membersQuery);
+  const codesSnapshot = await getDocs(
+    query(
+      collection(firestore, COLLECTIONS.TEACHER_CODES),
+      where('schoolId', '==', schoolId)
+    )
+  );
+  const codesMap = new Map<string, string>();
+  codesSnapshot.forEach(docSnap => {
+    const data: any = docSnap.data();
+    if (data?.code) {
+      codesMap.set(docSnap.id, data.code);
+    }
+  });
   return snapshot.docs.map(docSnap => {
     const data: any = docSnap.data();
     return {
@@ -143,7 +241,7 @@ export async function getSchoolMembers(schoolId: string): Promise<UserProfile[]>
       schoolName: data.schoolName,
       role: data.role || 'member',
       tier: data.tier || 'free',
-      userCode: data.userCode,
+      userCode: data.userCode || codesMap.get(docSnap.id),
     };
   });
 }

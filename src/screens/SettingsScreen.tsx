@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,9 +10,8 @@ import {
 } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
-import { smartAuthService as authService } from '../services/smartService';
 import { firestore, COLLECTIONS } from '../config/firebase';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { updateProfile } from 'firebase/auth';
 import { auth } from '../config/firebase';
 import { fontFamilies, spacing, borderRadius, shadows } from '../utils/theme';
@@ -25,18 +24,35 @@ interface SettingsScreenProps {
 }
 
 export default function SettingsScreen({ navigation }: SettingsScreenProps) {
-  const { state } = useApp();
+  const { state, logout } = useApp();
   const { mode, setMode, colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { userProfile, currentTeacher } = state as any;
   const [isEditingName, setIsEditingName] = useState(false);
   const [newName, setNewName] = useState(userProfile?.name || currentTeacher?.name || '');
   const [isUpdating, setIsUpdating] = useState(false);
+  const [teacherCode, setTeacherCode] = useState(userProfile?.userCode || '');
   const handleCopyCode = useCallback(async () => {
-    if (!userProfile?.userCode) return;
-    await Clipboard.setStringAsync(userProfile.userCode);
+    if (!teacherCode) return;
+    await Clipboard.setStringAsync(teacherCode);
     Alert.alert('تم النسخ', 'شارك هذا الرمز مع زملائك لربطهم بمدرستك.');
+  }, [teacherCode]);
+
+  useEffect(() => {
+    setTeacherCode(userProfile?.userCode || '');
   }, [userProfile?.userCode]);
+
+  useEffect(() => {
+    if (!currentTeacher?.id) return;
+    const codeRef = doc(firestore, COLLECTIONS.TEACHER_CODES, currentTeacher.id);
+    const unsubscribe = onSnapshot(codeRef, (snap) => {
+      const data: any = snap.data();
+      if (data?.code) {
+        setTeacherCode(data.code);
+      }
+    });
+    return () => unsubscribe();
+  }, [currentTeacher?.id]);
 
   // حالة الأقسام المفتوحة/المغلقة
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
@@ -53,8 +69,7 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
           style: 'destructive',
           onPress: async () => {
             try {
-              await authService.signOut();
-              // سيقوم AppProvider بإعادة التوجيه تلقائياً عند تغيير حالة المصادقة
+              await logout();
             } catch (error) {
               console.error('Error signing out:', error);
               Alert.alert('خطأ', 'حدث خطأ أثناء تسجيل الخروج');
@@ -206,12 +221,12 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
               <Text style={[styles.infoLabel, { color: colors.text.secondary }]}>رمز المعلم الخاص بك</Text>
               <View style={styles.codeRow}>
                 <Text style={[styles.codeValue, { color: colors.text.primary }]}>
-                  {userProfile?.userCode || '------'}
+                  {teacherCode || '------'}
                 </Text>
                 <TouchableOpacity
                   style={[styles.copyButton, { borderColor: colors.primary }]}
                   onPress={handleCopyCode}
-                  disabled={!userProfile?.userCode}
+                  disabled={!teacherCode}
                 >
                   <Text style={[styles.copyButtonText, { color: colors.primary }]}>نسخ</Text>
                 </TouchableOpacity>

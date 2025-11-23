@@ -177,6 +177,7 @@ interface AppContextType {
   recordAttendance: (record: Omit<AttendanceRecord, 'id' | 'createdAt'>) => Promise<AttendanceRecord>;
   refreshData: () => Promise<void>;
   loadAttendanceSessions: (classId: string, limit?: number) => Promise<AttendanceSession[]>;
+  logout: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | null>(null);
@@ -262,7 +263,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             const tier = data.tier || (isAppAdmin ? ADMIN_ACCOUNT_TIER : DEFAULT_ACCOUNT_TIER);
             const role = data.role || (isAppAdmin ? 'leader' : 'member');
             const schoolName = data.schoolName ?? null;
-            const userCode = data.userCode || await ensureUserCode(user.uid);
+            const userCode = data.userCode || await ensureUserCode(user.uid, {
+              name: data.name || user.displayName || 'معلم',
+              phoneNumber: data.phoneNumber || user.phoneNumber || user.email || null,
+              schoolId: data.schoolId ?? null,
+              schoolName,
+            });
             const profile: UserProfile = {
               id: user.uid,
               email: data.email || normalizedEmail,
@@ -298,7 +304,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               isAppAdmin,
             };
             await setDoc(userRef, basic, { merge: true });
-            const generatedCode = await ensureUserCode(user.uid);
+            const generatedCode = await ensureUserCode(user.uid, {
+              name: basic.name,
+              phoneNumber: user.phoneNumber || user.email || null,
+              schoolId: basic.schoolId,
+              schoolName: basic.schoolName,
+            });
             dispatch({
               type: 'SET_USER_PROFILE',
               payload: { id: user.uid, ...basic, userCode: generatedCode } as UserProfile
@@ -741,6 +752,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const logout = async () => {
+    try {
+      await authService.signOut();
+    } catch (error) {
+      console.error('Error during logout', error);
+      throw error;
+    } finally {
+      dispatch({ type: 'SET_TEACHER', payload: null });
+      dispatch({ type: 'SET_CLASSES', payload: [] });
+      dispatch({ type: 'SET_ATTENDANCE_SESSIONS', payload: [] });
+      dispatch({ type: 'SET_USER_PROFILE', payload: null });
+      dispatch({ type: 'SET_PENDING_ACTIONS', payload: [] });
+      dispatch({ type: 'SET_OFFLINE', payload: false });
+      dispatch({ type: 'SET_LOADING', payload: false });
+
+      await offlineStorage.saveTeacher(null);
+      await offlineStorage.saveClasses([]);
+      await offlineStorage.saveSessions([]);
+      await offlineStorage.replacePendingActions([]);
+    }
+  };
+
   return (
     <AppContext.Provider value={{
       state,
@@ -755,7 +788,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       createAttendanceSession,
       recordAttendance,
       refreshData,
-      loadAttendanceSessions
+      loadAttendanceSessions,
+      logout,
     }}>
       {children}
     </AppContext.Provider>

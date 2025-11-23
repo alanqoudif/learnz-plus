@@ -17,6 +17,13 @@ service cloud.firestore {
       allow update, delete: if isSelf(teacherId);
     }
 
+    // Teacher codes: readable for authenticated users, writable by owner
+    match /teacher_codes/{teacherId} {
+      allow read: if isSignedIn();
+      allow create: if isSelf(teacherId);
+      allow update: if isSelf(teacherId);
+    }
+
     // Classes: teachers can create/read/update/delete their own classes
     match /classes/{classId} {
       allow read: if isSignedIn();

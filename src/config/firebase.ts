@@ -13,7 +13,8 @@ const firebaseConfig = {
   storageBucket: "learnzplus.firebasestorage.app",
   messagingSenderId: "435695202976",
   appId: "1:435695202976:web:2e8a4bedfa5516f8860fc5",
-  measurementId: "G-F3JNG5XVE6"
+  measurementId: "G-F3JNG5XVE6",
+  databaseURL: "https://learnzplus-default-rtdb.firebaseio.com/"
 };
 
 // Initialize Firebase
@@ -37,7 +38,8 @@ export const COLLECTIONS = {
   ATTENDANCE_SESSIONS: 'attendance_sessions',
   ATTENDANCE_RECORDS: 'attendance_records',
   USERS: 'users',
-  SCHOOLS: 'schools'
+  SCHOOLS: 'schools',
+  TEACHER_CODES: 'teacher_codes'
 } as const;
 
 // Realtime Database paths

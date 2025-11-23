@@ -23,7 +23,12 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.maanstuden.app",
       "buildNumber": "8",
-      "displayName": "Learnz Plus"
+      "displayName": "Learnz Plus",
+      "infoPlist": {
+        "NSCameraUsageDescription": "نستخدم الكاميرا لمسح رموز QR للانضمام إلى المدارس",
+        "NSPhotoLibraryUsageDescription": "نستخدم معرض الصور لاستيراد قوائم الطلاب من الصور",
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {

@@ -201,6 +201,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         dispatch({ type: 'SET_LOADING', payload: false });
       }
       dispatch({ type: 'SET_PENDING_ACTIONS', payload: cached.pendingActions });
+      // تحميل ملف المستخدم من الكاش أيضاً
+      if (cached.userProfile) {
+        dispatch({ type: 'SET_USER_PROFILE', payload: cached.userProfile });
+      }
     })();
   }, []);
 
@@ -252,7 +256,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         dispatch({ type: 'SET_TEACHER', payload: teacherRecord });
         await offlineStorage.saveTeacher(teacherRecord);
 
-        // تحميل بروفايل المستخدم من users/{uid}
+        // تحميل بروفايل المستخدم - Cache-First Strategy
+        // 1. تحميل من الكاش أولاً (سريع)
+        const cachedProfile = await offlineStorage.getUserProfile();
+        if (cachedProfile && cachedProfile.id === user.uid) {
+          console.log('✅ تحميل ملف المستخدم من الكاش');
+          dispatch({ type: 'SET_USER_PROFILE', payload: cachedProfile });
+        }
+
+        // 2. تحديث من Firestore في الخلفية
         try {
           const userRef = doc(firestore, COLLECTIONS.USERS, user.uid);
           const snap = await getDoc(userRef);
@@ -282,6 +294,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               userCode,
             };
             dispatch({ type: 'SET_USER_PROFILE', payload: profile });
+            await offlineStorage.saveUserProfile(profile);
             await setDoc(userRef, {
               email: profile.email,
               name: profile.name,
@@ -310,14 +323,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               schoolId: basic.schoolId,
               schoolName: basic.schoolName,
             });
-            dispatch({
-              type: 'SET_USER_PROFILE',
-              payload: { id: user.uid, ...basic, userCode: generatedCode } as UserProfile
-            });
+            const profile: UserProfile = { id: user.uid, ...basic, userCode: generatedCode };
+            dispatch({ type: 'SET_USER_PROFILE', payload: profile });
+            await offlineStorage.saveUserProfile(profile);
           }
         } catch (e) {
-          console.warn('Failed to load user profile', e);
-          dispatch({ type: 'SET_USER_PROFILE', payload: null });
+          console.warn('Failed to load user profile from Firestore', e);
+          // إذا فشل التحميل من Firestore ولم يكن هناك كاش، نستخدم القيم الافتراضية
+          if (!cachedProfile) {
+            const normalizedEmail = (user.email || '').toLowerCase();
+            const isAppAdmin = APP_ADMIN_EMAILS.includes(normalizedEmail);
+            const defaultProfile: UserProfile = {
+              id: user.uid,
+              email: normalizedEmail,
+              name: user.displayName || 'معلم',
+              schoolId: null,
+              schoolName: null,
+              role: isAppAdmin ? 'leader' : 'member',
+              tier: isAppAdmin ? ADMIN_ACCOUNT_TIER : DEFAULT_ACCOUNT_TIER,
+              isAppAdmin,
+            };
+            dispatch({ type: 'SET_USER_PROFILE', payload: defaultProfile });
+          }
         }
 
         loadData();
@@ -330,6 +357,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         dispatch({ type: 'SET_CLASSES', payload: [] });
         dispatch({ type: 'SET_LOADING', payload: false });
         dispatch({ type: 'SET_USER_PROFILE', payload: null });
+        await offlineStorage.saveUserProfile(null);
         console.log('✅ State cleared - user should see Login screen');
       }
     });
@@ -390,74 +418,108 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
   }, [state.currentTeacher?.id]); // Only depend on teacher ID, not the entire classes array
 
+  // Debounce helper for loadData
+  let loadDataTimeout: NodeJS.Timeout | null = null;
   const loadData = async () => {
-    try {
-      const user = auth.currentUser;
-
-      if (!user) {
-        dispatch({ type: 'SET_LOADING', payload: false });
-        return;
-      }
-
-      const teacher: Teacher = {
-        id: user.uid,
-        name: user.displayName || 'معلم',
-        phoneNumber: user.email || '',
-        createdAt: new Date(user.metadata.creationTime || Date.now()),
-      };
-
-      if (state.isOffline) {
-        await offlineStorage.saveTeacher(teacher);
-        dispatch({
-          type: 'LOAD_DATA',
-          payload: {
-            teacher,
-            classes: state.classes,
-            sessions: state.attendanceSessions,
-          },
-        });
-        const pending = await offlineStorage.getPendingActions();
-        dispatch({ type: 'SET_PENDING_ACTIONS', payload: pending });
-        return;
-      }
-
-      const classes = await classService.getClassesByTeacher(teacher.id);
-
-      console.log('✅ تحميل سريع - الفصول فقط:', {
-        teacherId: teacher.id,
-        classesCount: classes.length,
-        message: 'الجلسات سيتم تحميلها عند الحاجة'
-      });
-
-      await offlineStorage.saveTeacher(teacher);
-      await offlineStorage.saveClasses(classes);
-      if (state.attendanceSessions.length) {
-        await offlineStorage.saveSessions(state.attendanceSessions);
-      }
-
-      dispatch({
-        type: 'LOAD_DATA',
-        payload: { teacher, classes, sessions: state.attendanceSessions },
-      });
-      const pending = await offlineStorage.getPendingActions();
-      dispatch({ type: 'SET_PENDING_ACTIONS', payload: pending });
-    } catch (error) {
-      console.error('Error loading data:', error);
-      const cached = await offlineStorage.loadCachedState();
-      if (cached.classes.length || cached.sessions.length || cached.teacher) {
-        dispatch({
-          type: 'LOAD_DATA',
-          payload: {
-            teacher: cached.teacher,
-            classes: cached.classes,
-            sessions: cached.sessions,
-          },
-        });
-        dispatch({ type: 'SET_PENDING_ACTIONS', payload: cached.pendingActions });
-      } else {
-        dispatch({ type: 'SET_LOADING', payload: false });
-      }
+    // إلغاء الاستدعاء السابق إذا كان موجوداً
+    if (loadDataTimeout) {
+      clearTimeout(loadDataTimeout);
     }
+
+    // تأخير بسيط لتجميع الاستدعاءات المتعددة
+    return new Promise<void>((resolve) => {
+      loadDataTimeout = setTimeout(async () => {
+        try {
+          const user = auth.currentUser;
+
+          if (!user) {
+            dispatch({ type: 'SET_LOADING', payload: false });
+            resolve();
+            return;
+          }
+
+          const teacher: Teacher = {
+            id: user.uid,
+            name: user.displayName || 'معلم',
+            phoneNumber: user.email || '',
+            createdAt: new Date(user.metadata.creationTime || Date.now()),
+          };
+
+          if (state.isOffline) {
+            await offlineStorage.saveTeacher(teacher);
+            dispatch({
+              type: 'LOAD_DATA',
+              payload: {
+                teacher,
+                classes: state.classes,
+                sessions: state.attendanceSessions,
+              },
+            });
+            const pending = await offlineStorage.getPendingActions();
+            dispatch({ type: 'SET_PENDING_ACTIONS', payload: pending });
+            resolve();
+            return;
+          }
+
+          // تحميل من الكاش أولاً إذا كان موجوداً
+          const cached = await offlineStorage.loadCachedState();
+          if (cached.classes.length > 0 && cached.teacher) {
+            console.log('✅ تحميل سريع من الكاش:', {
+              classesCount: cached.classes.length,
+              message: 'سيتم التحديث في الخلفية'
+            });
+            dispatch({
+              type: 'LOAD_DATA',
+              payload: {
+                teacher: cached.teacher,
+                classes: cached.classes,
+                sessions: cached.sessions,
+              },
+            });
+          }
+
+          // تحديث من Firebase في الخلفية
+          const classes = await classService.getClassesByTeacher(teacher.id);
+
+          console.log('✅ تحديث من Firebase:', {
+            teacherId: teacher.id,
+            classesCount: classes.length,
+            message: 'الجلسات سيتم تحميلها عند الحاجة'
+          });
+
+          await offlineStorage.saveTeacher(teacher);
+          await offlineStorage.saveClasses(classes);
+          if (state.attendanceSessions.length) {
+            await offlineStorage.saveSessions(state.attendanceSessions);
+          }
+
+          dispatch({
+            type: 'LOAD_DATA',
+            payload: { teacher, classes, sessions: state.attendanceSessions },
+          });
+          const pending = await offlineStorage.getPendingActions();
+          dispatch({ type: 'SET_PENDING_ACTIONS', payload: pending });
+          resolve();
+        } catch (error) {
+          console.error('Error loading data:', error);
+          const cached = await offlineStorage.loadCachedState();
+          if (cached.classes.length || cached.sessions.length || cached.teacher) {
+            dispatch({
+              type: 'LOAD_DATA',
+              payload: {
+                teacher: cached.teacher,
+                classes: cached.classes,
+                sessions: cached.sessions,
+              },
+            });
+            dispatch({ type: 'SET_PENDING_ACTIONS', payload: cached.pendingActions });
+          } else {
+            dispatch({ type: 'SET_LOADING', payload: false });
+          }
+          resolve();
+        }
+      }, 100); // تأخير 100ms لتجميع الاستدعاءات
+    });
   };
 
   // دوال Firebase
@@ -830,42 +892,49 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       dispatch({ type: 'SET_LOADING', payload: true });
       const user = auth.currentUser;
       if (user) {
-        try {
-          const userRef = doc(firestore, COLLECTIONS.USERS, user.uid);
-          const snap = await getDoc(userRef);
-          const normalizedEmail = (user.email || '').toLowerCase();
-          const isAppAdmin = APP_ADMIN_EMAILS.includes(normalizedEmail);
-          if (snap.exists()) {
-            const data: any = snap.data();
-            const tier = data.tier || (isAppAdmin ? ADMIN_ACCOUNT_TIER : DEFAULT_ACCOUNT_TIER);
-            const role = data.role || (isAppAdmin ? 'leader' : 'member');
-            const schoolName = data.schoolName ?? null;
-            const resolvedName = data.name || user.displayName || 'معلم';
-            const userCode = data.userCode || await ensureUserCode(user.uid, {
-              name: resolvedName,
-              phoneNumber: data.phoneNumber || user.phoneNumber || user.email || null,
-              schoolId: data.schoolId ?? null,
-              schoolName,
-            });
-            dispatch({
-              type: 'SET_USER_PROFILE', payload: {
-                id: user.uid,
-                email: data.email || normalizedEmail,
-                name: resolvedName,
-                schoolId: data.schoolId ?? null,
-                schoolName,
-                userCode,
-                role,
-                createdAt: data.createdAt ? new Date(data.createdAt.seconds ? data.createdAt.seconds * 1000 : data.createdAt) : undefined,
-                tier,
-                isAppAdmin,
-              }
-            });
-            await setDoc(userRef, { tier, isAppAdmin, role, schoolName, userCode }, { merge: true });
-          }
-        } catch (e) {
-          console.warn('Failed to refresh user profile', e);
+      try {
+        // تحميل من الكاش أولاً
+        const cachedProfile = await offlineStorage.getUserProfile();
+        if (cachedProfile && cachedProfile.id === user.uid) {
+          dispatch({ type: 'SET_USER_PROFILE', payload: cachedProfile });
         }
+
+        // تحديث من Firestore
+        const userRef = doc(firestore, COLLECTIONS.USERS, user.uid);
+        const snap = await getDoc(userRef);
+        const normalizedEmail = (user.email || '').toLowerCase();
+        const isAppAdmin = APP_ADMIN_EMAILS.includes(normalizedEmail);
+        if (snap.exists()) {
+          const data: any = snap.data();
+          const tier = data.tier || (isAppAdmin ? ADMIN_ACCOUNT_TIER : DEFAULT_ACCOUNT_TIER);
+          const role = data.role || (isAppAdmin ? 'leader' : 'member');
+          const schoolName = data.schoolName ?? null;
+          const resolvedName = data.name || user.displayName || 'معلم';
+          const userCode = data.userCode || await ensureUserCode(user.uid, {
+            name: resolvedName,
+            phoneNumber: data.phoneNumber || user.phoneNumber || user.email || null,
+            schoolId: data.schoolId ?? null,
+            schoolName,
+          });
+          const profile: UserProfile = {
+            id: user.uid,
+            email: data.email || normalizedEmail,
+            name: resolvedName,
+            schoolId: data.schoolId ?? null,
+            schoolName,
+            userCode,
+            role,
+            createdAt: data.createdAt ? new Date(data.createdAt.seconds ? data.createdAt.seconds * 1000 : data.createdAt) : undefined,
+            tier,
+            isAppAdmin,
+          };
+          dispatch({ type: 'SET_USER_PROFILE', payload: profile });
+          await offlineStorage.saveUserProfile(profile);
+          await setDoc(userRef, { tier, isAppAdmin, role, schoolName, userCode }, { merge: true });
+        }
+      } catch (e) {
+        console.warn('Failed to refresh user profile', e);
+      }
       }
       await loadData();
     } finally {
@@ -933,6 +1002,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       await offlineStorage.saveClasses([]);
       await offlineStorage.saveSessions([]);
       await offlineStorage.replacePendingActions([]);
+      await offlineStorage.saveUserProfile(null);
     }
   };
 

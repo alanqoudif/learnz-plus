@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { AttendanceRecord, AttendanceSession, Class, Teacher } from '../types';
+import { AttendanceRecord, AttendanceSession, Class, Teacher, UserProfile } from '../types';
 
 export type PendingActionType = 'CREATE_SESSION' | 'RECORD_ATTENDANCE' | 'CREATE_STUDENT' | 'UPDATE_STUDENT' | 'DELETE_STUDENT';
 
@@ -55,11 +55,26 @@ interface SerializableAttendanceSession {
   };
 }
 
+interface SerializableUserProfile {
+  id: string;
+  email: string;
+  name: string;
+  schoolId: string | null;
+  schoolName: string | null;
+  role: string;
+  tier: string;
+  isAppAdmin: boolean;
+  userCode: string;
+  createdAt?: string;
+  lastUpdated?: string;
+}
+
 interface CachedState {
   teacher: Teacher | null;
   classes: Class[];
   sessions: AttendanceSession[];
   pendingActions: PendingAction[];
+  userProfile: UserProfile | null;
 }
 
 const STORAGE_KEYS = {
@@ -67,6 +82,7 @@ const STORAGE_KEYS = {
   CLASSES: 'learnz_offline_classes',
   SESSIONS: 'learnz_offline_sessions',
   PENDING: 'learnz_offline_pending',
+  USER_PROFILE: 'learnz_offline_user_profile',
 };
 
 const randomId = () => `offline-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`;
@@ -149,6 +165,33 @@ const deserializeSession = (session: SerializableAttendanceSession): AttendanceS
   records: session.records.map(deserializeRecord),
 });
 
+const serializeUserProfile = (profile: UserProfile): SerializableUserProfile => ({
+  id: profile.id,
+  email: profile.email,
+  name: profile.name,
+  schoolId: profile.schoolId,
+  schoolName: profile.schoolName,
+  role: profile.role,
+  tier: profile.tier,
+  isAppAdmin: profile.isAppAdmin,
+  userCode: profile.userCode,
+  createdAt: profile.createdAt?.toISOString(),
+  lastUpdated: new Date().toISOString(),
+});
+
+const deserializeUserProfile = (data: SerializableUserProfile): UserProfile => ({
+  id: data.id,
+  email: data.email,
+  name: data.name,
+  schoolId: data.schoolId,
+  schoolName: data.schoolName,
+  role: data.role as any,
+  tier: data.tier as any,
+  isAppAdmin: data.isAppAdmin,
+  userCode: data.userCode,
+  createdAt: data.createdAt ? new Date(data.createdAt) : undefined,
+});
+
 async function getJson<T>(key: string): Promise<T | null> {
   const raw = await AsyncStorage.getItem(key);
   if (!raw) return null;
@@ -170,11 +213,12 @@ async function setJson(key: string, value: any) {
 
 export const offlineStorage = {
   async loadCachedState(): Promise<CachedState> {
-    const [teacherRaw, classesRaw, sessionsRaw, pendingRaw] = await Promise.all([
+    const [teacherRaw, classesRaw, sessionsRaw, pendingRaw, userProfileRaw] = await Promise.all([
       getJson<SerializableTeacher | null>(STORAGE_KEYS.TEACHER),
       getJson<SerializableClass[] | null>(STORAGE_KEYS.CLASSES),
       getJson<SerializableAttendanceSession[] | null>(STORAGE_KEYS.SESSIONS),
       getJson<PendingAction[] | null>(STORAGE_KEYS.PENDING),
+      getJson<SerializableUserProfile | null>(STORAGE_KEYS.USER_PROFILE),
     ]);
 
     return {
@@ -182,6 +226,7 @@ export const offlineStorage = {
       classes: classesRaw ? classesRaw.map(deserializeClass) : [],
       sessions: sessionsRaw ? sessionsRaw.map(deserializeSession) : [],
       pendingActions: pendingRaw || [],
+      userProfile: userProfileRaw ? deserializeUserProfile(userProfileRaw) : null,
     };
   },
 
@@ -277,6 +322,19 @@ export const offlineStorage = {
   },
 
   generateTempId: randomId,
+
+  async saveUserProfile(profile: UserProfile | null) {
+    if (!profile) {
+      await AsyncStorage.removeItem(STORAGE_KEYS.USER_PROFILE);
+      return;
+    }
+    await setJson(STORAGE_KEYS.USER_PROFILE, serializeUserProfile(profile));
+  },
+
+  async getUserProfile(): Promise<UserProfile | null> {
+    const raw = await getJson<SerializableUserProfile | null>(STORAGE_KEYS.USER_PROFILE);
+    return raw ? deserializeUserProfile(raw) : null;
+  },
 };
 
 export type OfflineCachedState = CachedState;

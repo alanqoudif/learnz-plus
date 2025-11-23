@@ -232,7 +232,7 @@ export const classService = {
     }
   },
 
-  // جلب جميع فصول المعلم
+  // جلب جميع فصول المعلم مع تحسين الأداء - تجميع استعلامات الطلاب
   async getClassesByTeacher(teacherId: string): Promise<Class[]> {
     try {
       console.log('🔄 Getting classes from Firebase for teacher:', teacherId);
@@ -245,17 +245,28 @@ export const classService = {
       const querySnapshot = await getDocs(q);
       const classes: Class[] = [];
 
-      for (const classDoc of querySnapshot.docs) {
-        const classData = classDoc.data();
-        
-        // جلب الطلاب لهذا الفصل
+      if (querySnapshot.empty) {
+        console.log('✅ No classes found');
+        return [];
+      }
+
+      // تجميع جميع classIds في مصفوفة واحدة
+      const classIds = querySnapshot.docs.map(doc => doc.id);
+      
+      // جلب جميع الطلاب لجميع الفصول في استعلام واحد (إذا كان عدد الفصول معقول)
+      // Firestore 'in' query supports up to 10 items, so we batch if needed
+      const BATCH_SIZE = 10;
+      const allStudents: Student[] = [];
+      
+      for (let i = 0; i < classIds.length; i += BATCH_SIZE) {
+        const batch = classIds.slice(i, i + BATCH_SIZE);
         const studentsQuery = query(
           collection(firestore, COLLECTIONS.STUDENTS),
-          where('classId', '==', classDoc.id)
+          where('classId', 'in', batch)
         );
         
         const studentsSnapshot = await getDocs(studentsQuery);
-        const students: Student[] = studentsSnapshot.docs.map(studentDoc => {
+        const batchStudents = studentsSnapshot.docs.map(studentDoc => {
           const studentData = studentDoc.data();
           return {
             id: studentDoc.id,
@@ -264,13 +275,30 @@ export const classService = {
             createdAt: timestampToDate(studentData.createdAt)
           };
         });
+        allStudents.push(...batchStudents);
+      }
+
+      // تجميع الطلاب حسب classId
+      const studentsByClassId = new Map<string, Student[]>();
+      allStudents.forEach(student => {
+        if (!studentsByClassId.has(student.classId)) {
+          studentsByClassId.set(student.classId, []);
+        }
+        studentsByClassId.get(student.classId)!.push(student);
+      });
+
+      // بناء الفصول مع طلابها
+      for (const classDoc of querySnapshot.docs) {
+        const classData = classDoc.data();
+        const classStudents = (studentsByClassId.get(classDoc.id) || [])
+          .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 
         classes.push({
           id: classDoc.id,
           name: classData.name,
           section: classData.section,
           teacherId: classData.teacherId,
-          students: students.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()), // ترتيب الطلاب محلياً
+          students: classStudents,
           createdAt: timestampToDate(classData.createdAt)
         });
       }

@@ -11,8 +11,11 @@ import {
   ActivityIndicator,
   ScrollView,
   RefreshControl,
+  ActionSheetIOS,
+  Platform,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
 import { Student } from '../types';
@@ -62,7 +65,8 @@ export default function StudentManagementScreen({ navigation, route }: StudentMa
 
   const handleAddStudent = useCallback(async () => {
     if (!newStudentName.trim()) {
-      Alert.alert('خطأ', 'يرجى إدخال اسم الطالب');
+      lightHaptic();
+      Alert.alert('يرجى إدخال اسم الطالب', '', [{ text: 'حسناً' }]);
       return;
     }
 
@@ -77,11 +81,13 @@ export default function StudentManagementScreen({ navigation, route }: StudentMa
     );
 
     if (existingStudent) {
-      Alert.alert('خطأ', 'يوجد بالفعل طالب بنفس الاسم');
+      lightHaptic();
+      Alert.alert('يوجد بالفعل طالب بنفس الاسم', '', [{ text: 'حسناً' }]);
       return;
     }
 
     setIsLoading(true);
+    lightHaptic();
 
     try {
       console.log('🔄 محاولة إضافة طالب جديد:', newStudentName.trim());
@@ -92,9 +98,13 @@ export default function StudentManagementScreen({ navigation, route }: StudentMa
 
       console.log('✅ تم إضافة الطالب بنجاح:', newStudent.id);
       successHaptic();
+      const addedName = newStudentName.trim();
       setNewStudentName('');
       setShowAddModal(false);
-      Alert.alert('تم بنجاح', 'تم إضافة الطالب بنجاح');
+      // إظهار رسالة نجاح بسيطة بدون Alert
+      setTimeout(() => {
+        // يمكن إضافة toast message هنا لاحقاً
+      }, 100);
     } catch (error: any) {
       console.error('❌ خطأ في إضافة الطالب:', error);
       let errorMessage = 'حدث خطأ أثناء إضافة الطالب';
@@ -137,11 +147,28 @@ export default function StudentManagementScreen({ navigation, route }: StudentMa
   }, [deleteStudent]);
 
   const pickSheets = async () => {
-    try {
-      // عرض خيارات المصدر
+    lightHaptic();
+    
+    if (Platform.OS === 'ios') {
+      // استخدام ActionSheet على iOS لتجربة أفضل
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: ['إلغاء', 'الكاميرا', 'الألبوم'],
+          cancelButtonIndex: 0,
+        },
+        async (buttonIndex) => {
+          if (buttonIndex === 1) {
+            await handleCameraPick();
+          } else if (buttonIndex === 2) {
+            await handleGalleryPick();
+          }
+        }
+      );
+    } else {
+      // استخدام Alert على Android
       Alert.alert(
         'اختر المصدر',
-        'من أين تريد اختيار الصورة؟',
+        '',
         [
           {
             text: 'إلغاء',
@@ -149,76 +176,77 @@ export default function StudentManagementScreen({ navigation, route }: StudentMa
           },
           {
             text: 'الكاميرا',
-            onPress: async () => {
-              try {
-                const permission = await ImagePicker.requestCameraPermissionsAsync();
-                if (!permission.granted) {
-                  Alert.alert('صلاحيات مطلوبة', 'يرجى منح إذن الوصول للكاميرا لالتقاط صورة كشف الحضور.');
-                  return;
-                }
-
-                const result = await ImagePicker.launchCameraAsync({
-                  mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                  quality: 1,
-                  allowsEditing: false,
-                });
-
-                if (result.canceled) {
-                  return;
-                }
-
-                const files = buildSheetFilesFromAssets(result.assets || []);
-                if (!files.length) {
-                  Alert.alert('خطأ', 'لم يتم التقاط أي صورة.');
-                  return;
-                }
-
-                await processSheetsWithOCR(files);
-              } catch (error) {
-                console.error('Error taking photo with camera:', error);
-                Alert.alert('خطأ', 'حدث خطأ أثناء التقاط الصورة بالكاميرا.');
-              }
-            },
+            onPress: handleCameraPick,
           },
           {
             text: 'الألبوم',
-            onPress: async () => {
-              try {
-                const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-                if (!permission.granted) {
-                  Alert.alert('صلاحيات مطلوبة', 'يرجى منح إذن الوصول إلى ألبوم الصور لاختيار الكشف.');
-                  return;
-                }
-
-                const result = await ImagePicker.launchImageLibraryAsync({
-                  allowsMultipleSelection: true,
-                  mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                  selectionLimit: 10,
-                  quality: 1,
-                });
-
-                if (result.canceled) {
-                  return;
-                }
-
-                const files = buildSheetFilesFromAssets(result.assets || []);
-                if (!files.length) {
-                  Alert.alert('خطأ', 'لم يتم اختيار أي صورة من الألبوم.');
-                  return;
-                }
-
-                await processSheetsWithOCR(files);
-              } catch (error) {
-                console.error('Error picking images from gallery:', error);
-                Alert.alert('خطأ', 'حدث خطأ أثناء اختيار الصور من ألبوم الجهاز.');
-              }
-            },
+            onPress: handleGalleryPick,
           },
         ]
       );
+    }
+  };
+
+  const handleCameraPick = async () => {
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('صلاحيات مطلوبة', 'يرجى منح إذن الوصول للكاميرا لالتقاط صورة كشف الحضور.');
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.8, // تقليل الجودة قليلاً لتسريع المعالجة
+        allowsEditing: false,
+      });
+
+      if (result.canceled) {
+        return;
+      }
+
+      const files = buildSheetFilesFromAssets(result.assets || []);
+      if (!files.length) {
+        Alert.alert('خطأ', 'لم يتم التقاط أي صورة.');
+        return;
+      }
+
+      await processSheetsWithOCR(files);
     } catch (error) {
-      console.error('Error in pickSheets:', error);
-      Alert.alert('خطأ', 'حدث خطأ أثناء اختيار المصدر.');
+      console.error('Error taking photo with camera:', error);
+      Alert.alert('خطأ', 'حدث خطأ أثناء التقاط الصورة بالكاميرا.');
+    }
+  };
+
+  const handleGalleryPick = async () => {
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('صلاحيات مطلوبة', 'يرجى منح إذن الوصول إلى ألبوم الصور لاختيار الكشف.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        allowsMultipleSelection: true,
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        selectionLimit: 10,
+        quality: 0.8, // تقليل الجودة قليلاً لتسريع المعالجة
+      });
+
+      if (result.canceled) {
+        return;
+      }
+
+      const files = buildSheetFilesFromAssets(result.assets || []);
+      if (!files.length) {
+        Alert.alert('خطأ', 'لم يتم اختيار أي صورة من الألبوم.');
+        return;
+      }
+
+      await processSheetsWithOCR(files);
+    } catch (error) {
+      console.error('Error picking images from gallery:', error);
+      Alert.alert('خطأ', 'حدث خطأ أثناء اختيار الصور من ألبوم الجهاز.');
     }
   };
 
@@ -362,23 +390,36 @@ export default function StudentManagementScreen({ navigation, route }: StudentMa
           <Text style={styles.sectionTitle}>
             قائمة الطلاب ({currentClass.students.length})
           </Text>
-          <View style={styles.headerButtons}>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.imageButton]}
-              onPress={pickSheets}
-              disabled={isProcessing}
-            >
-              <Text style={styles.imageButtonText}>
-                {isProcessing ? 'جاري المعالجة...' : 'رفع صورة الكشف'}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.addButton]}
-              onPress={() => setShowAddModal(true)}
-            >
-              <Text style={styles.addButtonText}>+ إضافة طالب</Text>
-            </TouchableOpacity>
-          </View>
+        </View>
+        
+        <View style={styles.actionButtonsContainer}>
+          <TouchableOpacity
+            style={[styles.actionButton, styles.addButton]}
+            onPress={() => {
+              lightHaptic();
+              setShowAddModal(true);
+            }}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="person-add-outline" size={20} color="white" />
+            <Text style={styles.addButtonText}>إضافة طالب</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[styles.actionButton, styles.imageButton]}
+            onPress={pickSheets}
+            disabled={isProcessing}
+            activeOpacity={0.7}
+          >
+            {isProcessing ? (
+              <ActivityIndicator size="small" color="white" />
+            ) : (
+              <Ionicons name="document-text-outline" size={20} color="white" />
+            )}
+            <Text style={styles.imageButtonText}>
+              {isProcessing ? 'جاري المعالجة...' : 'قراءة من الشيت'}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {state.isLoading ? (
@@ -410,53 +451,74 @@ export default function StudentManagementScreen({ navigation, route }: StudentMa
         )}
       </View>
 
-      {/* Modal لإضافة طالب جديد */}
+      {/* Modal لإضافة طالب جديد - محسّن */}
       <Modal
         visible={showAddModal}
         transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowAddModal(false)}
+        animationType="fade"
+        onRequestClose={() => {
+          setShowAddModal(false);
+          setNewStudentName('');
+        }}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>إضافة طالب جديد</Text>
-
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>اسم الطالب</Text>
-              <TextInput
-                style={styles.input}
-                value={newStudentName}
-                onChangeText={setNewStudentName}
-                placeholder="أدخل اسم الطالب"
-                placeholderTextColor="#999"
-                textAlign="right"
-                autoCapitalize="words"
-              />
-            </View>
-
-            <View style={styles.modalButtons}>
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => {
+            setShowAddModal(false);
+            setNewStudentName('');
+          }}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+            style={styles.modalContent}
+          >
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>إضافة طالب جديد</Text>
               <TouchableOpacity
-                style={styles.modalCancelButton}
+                style={styles.modalCloseButton}
                 onPress={() => {
                   setShowAddModal(false);
                   setNewStudentName('');
                 }}
               >
-                <Text style={styles.modalCancelButtonText}>إلغاء</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.modalAddButton, isLoading && styles.modalAddButtonDisabled]}
-                onPress={handleAddStudent}
-                disabled={isLoading}
-              >
-                <Text style={styles.modalAddButtonText}>
-                  {isLoading ? 'جاري الإضافة...' : 'إضافة'}
-                </Text>
+                <Ionicons name="close" size={24} color={colors.text?.secondary || '#6c757d'} />
               </TouchableOpacity>
             </View>
-          </View>
-        </View>
+
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={[styles.input, { borderColor: colors.border?.light || '#e0e0e0', backgroundColor: colors.background?.secondary || '#f8f9fa', color: colors.text?.primary || '#2c3e50' }]}
+                value={newStudentName}
+                onChangeText={setNewStudentName}
+                placeholder="أدخل اسم الطالب"
+                placeholderTextColor={colors.text?.tertiary || '#999'}
+                textAlign="right"
+                autoCapitalize="words"
+                autoFocus={true}
+                returnKeyType="done"
+                onSubmitEditing={handleAddStudent}
+              />
+            </View>
+
+            <TouchableOpacity
+              style={[styles.modalAddButton, (isLoading || !newStudentName.trim()) && styles.modalAddButtonDisabled]}
+              onPress={handleAddStudent}
+              disabled={isLoading || !newStudentName.trim()}
+              activeOpacity={0.8}
+            >
+              {isLoading ? (
+                <ActivityIndicator size="small" color="white" />
+              ) : (
+                <>
+                  <Ionicons name="checkmark-circle" size={20} color="white" />
+                  <Text style={styles.modalAddButtonText}>إضافة</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
 
       {/* Modal للطلاب المستخرجين من الملفات */}
@@ -590,29 +652,28 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginTop: 20,
-    marginBottom: 16,
+    marginBottom: 12,
   },
   sectionTitle: {
     fontSize: 18,
     fontFamily: fontFamilies.bold,
     color: '#2c3e50',
   },
-  headerButtons: {
+  actionButtonsContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-    flexWrap: 'wrap',
-    gap: 8,
+    gap: 12,
+    marginBottom: 16,
   },
   actionButton: {
-    minWidth: 130,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 10,
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginHorizontal: 4,
-    marginBottom: 8,
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    ...shadows.sm,
   },
   addButton: {
     backgroundColor: '#1d72e5',
@@ -620,7 +681,7 @@ const styles = StyleSheet.create({
   addButtonText: {
     color: 'white',
     fontFamily: fontFamilies.semibold,
-    fontSize: 14,
+    fontSize: 15,
   },
   imageButton: {
     backgroundColor: baseColors.primary,
@@ -628,7 +689,7 @@ const styles = StyleSheet.create({
   imageButtonText: {
     color: 'white',
     fontFamily: fontFamilies.semibold,
-    fontSize: 14,
+    fontSize: 15,
   },
   studentsList: {
     paddingBottom: 20,
@@ -715,70 +776,61 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     backgroundColor: 'white',
-    borderRadius: 12,
+    borderRadius: 24,
     padding: 24,
     width: '90%',
     maxWidth: 400,
+    ...shadows.lg,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontFamily: fontFamilies.bold,
     color: '#2c3e50',
-    textAlign: 'center',
-    marginBottom: 20,
+    flex: 1,
+  },
+  modalCloseButton: {
+    padding: 4,
   },
   inputContainer: {
-    marginBottom: 20,
-  },
-  inputLabel: {
-    fontSize: 16,
-    fontFamily: fontFamilies.semibold,
-    color: '#2c3e50',
-    marginBottom: 8,
-    textAlign: 'right',
+    marginBottom: 24,
   },
   input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 16,
+    borderWidth: 2,
+    borderColor: '#e0e0e0',
+    borderRadius: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    fontSize: 18,
     fontFamily: fontFamilies.regular,
     backgroundColor: '#f8f9fa',
     color: '#2c3e50',
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    direction: 'rtl',
-  },
-  modalCancelButton: {
-    flex: 1,
-    backgroundColor: baseColors.text.secondary,
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: 'center',
-    marginRight: 8,
-  },
-  modalCancelButtonText: {
-    color: 'white',
-    fontFamily: fontFamilies.semibold,
+    textAlign: 'right',
+    minHeight: 56,
   },
   modalAddButton: {
-    flex: 1,
-    backgroundColor: baseColors.primary,
-    borderRadius: 8,
-    paddingVertical: 12,
+    flexDirection: 'row',
     alignItems: 'center',
-    marginLeft: 8,
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: baseColors.primary,
+    borderRadius: 16,
+    paddingVertical: 16,
+    ...shadows.sm,
   },
   modalAddButtonDisabled: {
-    backgroundColor: baseColors.text.secondary,
+    backgroundColor: '#c0c0c0',
+    opacity: 0.6,
   },
   modalAddButtonText: {
     color: 'white',
-    fontFamily: fontFamilies.semibold,
+    fontFamily: fontFamilies.bold,
+    fontSize: 16,
   },
   imageModalContent: {
     maxHeight: '90%',

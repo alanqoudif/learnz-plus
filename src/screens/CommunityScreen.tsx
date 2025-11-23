@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, FlatList, StyleSheet, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Keyboard, TouchableWithoutFeedback } from 'react-native';
-import { fontFamilies, colors } from '../utils/theme';
+import { fontFamilies, spacing, borderRadius } from '../utils/theme';
+import { useTheme } from '../context/ThemeContext';
 import { useApp } from '../context/AppContext';
 import { firestore, COLLECTIONS } from '../config/firebase';
 import { CommunityPost } from '../types';
@@ -8,6 +9,7 @@ import { communityService } from '../services/communityService';
 
 export default function CommunityScreen() {
   const { state } = useApp();
+  const { colors } = useTheme();
   const userProfile = (state as any).userProfile;
   const hasCommunityAccess = userProfile?.tier === 'plus' || userProfile?.isAppAdmin;
   const schoolId = userProfile?.schoolId || null;
@@ -98,7 +100,11 @@ export default function CommunityScreen() {
               returnKeyType="send"
               onSubmitEditing={() => { if (canSend) { Keyboard.dismiss(); onSend(); } }}
             />
-            <TouchableOpacity disabled={!canSend} onPress={() => { Keyboard.dismiss(); onSend(); }} style={[styles.sendBtn, !canSend && { opacity: 0.5 }]}>
+            <TouchableOpacity 
+              disabled={!canSend} 
+              onPress={() => { Keyboard.dismiss(); onSend(); }} 
+              style={[styles.sendBtn, { backgroundColor: colors.primary }, !canSend && { opacity: 0.5 }]}
+            >
               <Text style={styles.sendText}>{sending ? 'جاري الإرسال...' : 'إرسال'}</Text>
             </TouchableOpacity>
           </View>
@@ -123,12 +129,13 @@ const styles = StyleSheet.create({
   composer: { padding: 12, borderTopWidth: 1, borderColor: '#eee', backgroundColor: '#fff' },
   input: { backgroundColor: '#f4f6f7', borderRadius: 10, padding: 12, fontFamily: fontFamilies.regular, color: '#2c3e50', marginBottom: 8 },
   multi: { minHeight: 60, textAlignVertical: 'top' },
-  sendBtn: { backgroundColor: colors.primary, borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
+  sendBtn: { borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
   sendText: { color: '#fff', fontFamily: fontFamilies.semibold },
 });
 
 function JoinByCode() {
   const { state, refreshData } = useApp();
+  const { colors } = useTheme();
   const userId = state.currentTeacher?.id || '';
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);

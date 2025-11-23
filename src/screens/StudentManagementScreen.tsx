@@ -491,7 +491,6 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     fontSize: 16,
-    color: baseColors.primary,
     fontWeight: '600',
   },
   headerInfo: {

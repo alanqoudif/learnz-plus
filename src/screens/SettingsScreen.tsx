@@ -7,7 +7,6 @@ import {
   ScrollView,
   TextInput,
   Alert,
-  Modal,
 } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
@@ -19,7 +18,6 @@ import { fontFamilies, spacing, borderRadius, shadows } from '../utils/theme';
 import { mediumHaptic, lightHaptic } from '../utils/haptics';
 import * as Clipboard from 'expo-clipboard';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import QRCode from 'react-native-qrcode-svg';
 
 interface SettingsScreenProps {
   navigation: any;
@@ -34,7 +32,6 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
   const [newName, setNewName] = useState(userProfile?.name || currentTeacher?.name || '');
   const [isUpdating, setIsUpdating] = useState(false);
   const [teacherCode, setTeacherCode] = useState(userProfile?.userCode || '');
-  const [showQrModal, setShowQrModal] = useState(false);
   const hasSchool = Boolean(userProfile?.schoolId);
   const isLeader = userProfile?.role === 'leader';
   const showQuickTour = !Array.isArray(classes) || classes.length === 0;
@@ -302,12 +299,9 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
               </Text>
             </TouchableOpacity>
             {teacherCode ? (
-              <TouchableOpacity
-                style={[styles.qrLink, { borderColor: colors.border.light }]}
-                onPress={() => setShowQrModal(true)}
-              >
-                <Text style={[styles.qrLinkText, { color: colors.text.primary }]}>عرض رمز QR</Text>
-              </TouchableOpacity>
+              <Text style={[styles.sectionHint, { color: colors.text.secondary, marginTop: spacing.md }]}>
+                شارك هذا الرمز مع زملائك ليربطوا حساباتهم بمدرستك.
+              </Text>
             ) : null}
           </View>
         </View>
@@ -381,25 +375,6 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
         </TouchableOpacity>
         </View>
       </ScrollView>
-      <Modal visible={showQrModal} transparent animationType="fade">
-        <View style={styles.qrModalBackdrop}>
-          <View style={[styles.qrModalCard, { backgroundColor: colors.background.card }]}>
-            <Text style={[styles.qrModalTitle, { color: colors.text.primary }]}>شارك رمزك</Text>
-            <Text style={[styles.qrModalSubtitle, { color: colors.text.secondary }]}>يمكن لزملائك مسح هذا الرمز أو إدخال الرمز النصي للانضمام إلى مدرستك.</Text>
-            <View style={[styles.qrCodeWrapper, { borderColor: colors.border.light }]}>
-              {teacherCode ? (
-                <QRCode value={teacherCode} size={220} color={colors.text.primary} backgroundColor="transparent" />
-              ) : null}
-            </View>
-            <TouchableOpacity
-              style={[styles.qrCloseButton, { backgroundColor: colors.primary }]}
-              onPress={() => setShowQrModal(false)}
-            >
-              <Text style={styles.qrCloseText}>إغلاق</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </>
   );
 }

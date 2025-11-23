@@ -14,7 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 // useApp already imported above
 import { AttendanceRecord, AttendanceSession } from '../types';
 import { showErrorAlert, showAttendanceCompleteAlert } from '../utils/notifications';
-import { fontFamilies, shadows, borderRadius, spacing, colors } from '../utils/theme';
+import { fontFamilies, shadows, borderRadius, spacing } from '../utils/theme';
 import { fadeIn, fadeOut, scaleButton } from '../utils/animations';
 import { lightHaptic, successHaptic, errorHaptic } from '../utils/haptics';
 import { useApp } from '../context/AppContext';

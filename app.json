@@ -39,6 +39,10 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
+    "plugins": [
+      "expo-camera",
+      "expo-mlkit-ocr"
+    ],
     "extra": {
       "eas": {
         "projectId": "4a98ba10-3b11-4a92-b6d3-61f32b90a031"

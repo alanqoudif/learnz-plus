@@ -1,10 +1,11 @@
 import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-import { getAuth } from "firebase/auth";
+import { getAnalytics, isSupported as isAnalyticsSupported } from "firebase/analytics";
+import { initializeAuth, getReactNativePersistence } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getFunctions } from "firebase/functions";
 import { getDatabase } from "firebase/database";
 import { getStorage } from "firebase/storage";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const firebaseConfig = {
   apiKey: "AIzaSyAo41EStVdJUwca8arKh0AWJyFx2AcAmco",
@@ -20,13 +21,29 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
+// Initialize Firebase Auth with React Native persistence
+export const auth = initializeAuth(app, {
+  persistence: getReactNativePersistence(AsyncStorage)
+});
+
 // Initialize Firebase services
-export const auth = getAuth(app);
 export const firestore = getFirestore(app);
 export const database = getDatabase(app);
-export const analytics = getAnalytics(app);
 export const cloudFunctions = getFunctions(app);
 export const storage = getStorage(app);
+
+// Initialize Analytics only if supported (web environment with cookies/IndexedDB)
+let analyticsInstance: ReturnType<typeof getAnalytics> | null = null;
+isAnalyticsSupported().then((supported) => {
+  if (supported) {
+    analyticsInstance = getAnalytics(app);
+  }
+}).catch(() => {
+  // Analytics not supported in this environment
+  console.log('Firebase Analytics is not supported in this environment');
+});
+
+export const analytics = analyticsInstance;
 
 export default app;
 

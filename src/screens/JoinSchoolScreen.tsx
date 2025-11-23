@@ -10,7 +10,7 @@ import {
   ActivityIndicator,
   SafeAreaView,
 } from 'react-native';
-import { BarCodeScanner } from 'expo-barcode-scanner';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { fontFamilies, spacing, borderRadius, shadows } from '../utils/theme';
 import { useTheme } from '../context/ThemeContext';
@@ -25,7 +25,7 @@ export default function JoinSchoolScreen({ navigation }: any) {
   const [code, setCode] = useState('');
   const [isJoining, setIsJoining] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [permission, requestPermission] = useCameraPermissions();
 
   const handleJoin = async (joinCode?: string) => {
     if (!state.userProfile?.id) return;
@@ -59,14 +59,24 @@ export default function JoinSchoolScreen({ navigation }: any) {
   };
 
   const requestCameraPermission = useCallback(async () => {
-    const { status } = await BarCodeScanner.requestPermissionsAsync();
-    setHasPermission(status === 'granted');
-    if (status === 'granted') {
+    if (!permission) {
+      const result = await requestPermission();
+      if (result.granted) {
+        setShowScanner(true);
+      } else {
+        Alert.alert('صلاحيات مطلوبة', 'يرجى منح إذن الوصول للكاميرا لمسح QR Code');
+      }
+    } else if (permission.granted) {
       setShowScanner(true);
     } else {
-      Alert.alert('صلاحيات مطلوبة', 'يرجى منح إذن الوصول للكاميرا لمسح QR Code');
+      const result = await requestPermission();
+      if (result.granted) {
+        setShowScanner(true);
+      } else {
+        Alert.alert('صلاحيات مطلوبة', 'يرجى منح إذن الوصول للكاميرا لمسح QR Code');
+      }
     }
-  }, []);
+  }, [permission, requestPermission]);
 
   const handleBarCodeScanned = useCallback(({ data }: { data: string }) => {
     // استخراج الرمز من QR Code
@@ -77,7 +87,7 @@ export default function JoinSchoolScreen({ navigation }: any) {
       // AutoFill والانضمام تلقائياً
       handleJoin(scannedCode);
     }
-  }, []);
+  }, [handleJoin]);
 
 
   const dynamicStyles = useMemo(() => ({
@@ -139,10 +149,14 @@ export default function JoinSchoolScreen({ navigation }: any) {
             <Text style={styles.scannerTitle}>امسح QR Code</Text>
             <View style={{ width: 28 }} />
           </View>
-          {hasPermission && (
-            <BarCodeScanner
-              onBarCodeScanned={showScanner ? handleBarCodeScanned : undefined}
+          {permission?.granted && (
+            <CameraView
               style={styles.scanner}
+              facing="back"
+              onBarcodeScanned={showScanner ? handleBarCodeScanned : undefined}
+              barcodeScannerSettings={{
+                barcodeTypes: ['qr'],
+              }}
             />
           )}
           <View style={styles.scannerOverlay}>

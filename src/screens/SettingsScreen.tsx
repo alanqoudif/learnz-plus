@@ -525,6 +525,15 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
             تسجيل الخروج
           </Text>
         </TouchableOpacity>
+
+        <View style={styles.sloganContainer}>
+          <Text style={[styles.sloganText, { color: colors.text.secondary }]}>
+            تعليم أفضل، حضور أذكى
+          </Text>
+          <Text style={[styles.sloganSubtext, { color: colors.text.tertiary }]}>
+            Learnz Plus
+          </Text>
+        </View>
         </View>
       </ScrollView>
     </>
@@ -874,5 +883,24 @@ const styles = StyleSheet.create({
   logoutButtonText: {
     fontSize: 16,
     fontFamily: fontFamilies.bold,
+  },
+  sloganContainer: {
+    marginTop: spacing['3xl'],
+    marginBottom: spacing.xl,
+    alignItems: 'center',
+    paddingVertical: spacing.xl,
+  },
+  sloganText: {
+    fontSize: 18,
+    fontFamily: fontFamilies.bold,
+    textAlign: 'center',
+    marginBottom: spacing.xs,
+    letterSpacing: 0.5,
+  },
+  sloganSubtext: {
+    fontSize: 14,
+    fontFamily: fontFamilies.medium,
+    textAlign: 'center',
+    opacity: 0.7,
   },
 });

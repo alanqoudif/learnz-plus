@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
 import { fontFamilies, spacing, borderRadius, shadows } from '../utils/theme';
@@ -162,7 +162,7 @@ export default function SchoolReportsScreen() {
     ]
   ), [overview]);
 
-  const generateReportContent = useCallback((format: 'text' | 'pdf' | 'word') => {
+  const generateReportContent = useCallback((format: 'text' | 'pdf') => {
     if (!overview) return '';
     
     const date = new Date().toLocaleDateString('ar-SA', { 
@@ -259,7 +259,7 @@ export default function SchoolReportsScreen() {
     }
   }, [overview, user?.schoolName]);
 
-  const handleExport = useCallback(async (format: 'text' | 'pdf' | 'word' = 'text') => {
+  const handleExport = useCallback(async (format: 'text' | 'pdf' = 'text') => {
     if (!overview) return;
     try {
       setExporting(true);
@@ -268,24 +268,23 @@ export default function SchoolReportsScreen() {
         const content = generateReportContent('text');
         await Share.share({ message: content });
       } else {
-        // For PDF/Word, create HTML file and share it
-        const htmlContent = generateReportContent(format);
-        const fileName = `تقرير_المدرسة_${Date.now()}.${format === 'pdf' ? 'html' : 'doc'}`;
+        // For PDF, create HTML file and share it
+        const htmlContent = generateReportContent('pdf');
+        const fileName = `تقرير_المدرسة_${Date.now()}.html`;
         const fileUri = `${FileSystem.documentDirectory}${fileName}`;
         
-        await FileSystem.writeAsStringAsync(fileUri, htmlContent, {
-          encoding: FileSystem.EncodingType.UTF8,
-        });
+        // استخدام legacy API لكتابة الملف
+        await FileSystem.writeAsStringAsync(fileUri, htmlContent);
         
-        // Share the file - users can open it in Word/PDF viewers
+        // Share the file - users can open it in PDF viewers or convert to PDF
         await Share.share({
           url: fileUri,
-          message: `تقرير المدرسة - ${user?.schoolName || ''}\n\nيمكنك فتح هذا الملف في Word أو أي برنامج عرض PDF`,
+          message: `تقرير المدرسة - ${user?.schoolName || ''}\n\nيمكنك فتح هذا الملف في أي متصفح أو برنامج عرض PDF`,
         });
       }
     } catch (error) {
       console.error('Export error:', error);
-      Alert.alert('خطأ', 'تعذر مشاركة التقرير');
+      Alert.alert('خطأ', 'تعذر مشاركة التقرير. حاول مرة أخرى.');
     } finally {
       setExporting(false);
     }
@@ -333,10 +332,10 @@ export default function SchoolReportsScreen() {
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.exportButton, styles.exportButtonSecondary, { backgroundColor: colors.background.secondary, borderColor: colors.primary, opacity: exporting ? 0.6 : 1 }]}
-            onPress={() => handleExport('word')}
+            onPress={() => handleExport('pdf')}
             disabled={!overview || exporting}
           >
-            <Text style={[styles.exportText, { color: colors.primary }]}>{exporting ? '...جارٍ التصدير' : 'تصدير كملف Word'}</Text>
+            <Text style={[styles.exportText, { color: colors.primary }]}>{exporting ? '...جارٍ التصدير' : 'تصدير كملف PDF'}</Text>
           </TouchableOpacity>
         </View>
 

@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useMemo } from 'react';
+import React, { useCallback, useState, useMemo, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,41 +8,47 @@ import {
   Alert,
   Modal,
   ActivityIndicator,
-  SafeAreaView,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { fontFamilies, spacing, borderRadius, shadows } from '../utils/theme';
+import { fontFamilies, spacing, borderRadius } from '../utils/theme';
 import { useTheme } from '../context/ThemeContext';
 import { useApp } from '../context/AppContext';
 import { joinSchoolByTeacherCode } from '../services/schoolService';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function JoinSchoolScreen({ navigation }: any) {
   const { state, dispatch } = useApp();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const userProfile = (state as any)?.userProfile;
   const [code, setCode] = useState('');
   const [isJoining, setIsJoining] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
   const [permission, requestPermission] = useCameraPermissions();
+  const joiningRef = useRef(false);
+  const hasScannedRef = useRef(false);
 
-  const handleJoin = async (joinCode?: string) => {
-    if (!state.userProfile?.id) return;
+  const handleJoin = useCallback(async (joinCode?: string) => {
+    if (!userProfile?.id) return;
     const trimmed = (joinCode || code).trim().toUpperCase();
     if (!trimmed) {
       Alert.alert('خطأ', 'يرجى إدخال رمز الدعوة');
       return;
     }
+    if (joiningRef.current) {
+      return;
+    }
+    joiningRef.current = true;
     setIsJoining(true);
     setShowScanner(false);
     try {
-      const school = await joinSchoolByTeacherCode(state.userProfile.id, trimmed);
-      if ((state as any).userProfile) {
+      const school = await joinSchoolByTeacherCode(userProfile.id, trimmed);
+      if (userProfile) {
         dispatch({
           type: 'SET_USER_PROFILE',
           payload: {
-            ...(state as any).userProfile,
+            ...userProfile,
             schoolId: school.id,
             schoolName: school.name,
             role: 'member',
@@ -55,22 +61,26 @@ export default function JoinSchoolScreen({ navigation }: any) {
       Alert.alert('خطأ', e?.message || 'تعذر الانضمام');
     } finally {
       setIsJoining(false);
+      joiningRef.current = false;
     }
-  };
+  }, [code, dispatch, navigation, userProfile]);
 
   const requestCameraPermission = useCallback(async () => {
     if (!permission) {
       const result = await requestPermission();
       if (result.granted) {
+        hasScannedRef.current = false;
         setShowScanner(true);
       } else {
         Alert.alert('صلاحيات مطلوبة', 'يرجى منح إذن الوصول للكاميرا لمسح QR Code');
       }
     } else if (permission.granted) {
+      hasScannedRef.current = false;
       setShowScanner(true);
     } else {
       const result = await requestPermission();
       if (result.granted) {
+        hasScannedRef.current = false;
         setShowScanner(true);
       } else {
         Alert.alert('صلاحيات مطلوبة', 'يرجى منح إذن الوصول للكاميرا لمسح QR Code');
@@ -78,15 +88,25 @@ export default function JoinSchoolScreen({ navigation }: any) {
     }
   }, [permission, requestPermission]);
 
-  const handleBarCodeScanned = useCallback(({ data }: { data: string }) => {
-    // استخراج الرمز من QR Code
-    const scannedCode = data.trim().toUpperCase();
-    if (scannedCode) {
-      setCode(scannedCode);
-      setShowScanner(false);
-      // AutoFill والانضمام تلقائياً
-      handleJoin(scannedCode);
+  useEffect(() => {
+    if (showScanner) {
+      hasScannedRef.current = false;
     }
+  }, [showScanner]);
+
+  const handleBarCodeScanned = useCallback(({ data }: { data: string }) => {
+    if (hasScannedRef.current || joiningRef.current) {
+      return;
+    }
+    const scannedCode = data.trim().toUpperCase();
+    if (!scannedCode) {
+      return;
+    }
+    hasScannedRef.current = true;
+    setCode(scannedCode);
+    setShowScanner(false);
+    // AutoFill والانضمام تلقائياً
+    handleJoin(scannedCode);
   }, [handleJoin]);
 
 

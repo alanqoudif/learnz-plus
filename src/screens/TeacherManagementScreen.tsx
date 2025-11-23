@@ -133,7 +133,6 @@ export default function TeacherManagementScreen() {
                 </View>
               </View>
               <Text style={[styles.memberMeta, { color: colors.text.secondary }]}>رمز المعلم: {member.userCode || '------'}</Text>
-              <Text style={[styles.memberMeta, { color: colors.text.secondary }]}>المعرف: {member.id}</Text>
               {member.id !== user?.id && (
                 <TouchableOpacity
                   style={[styles.roleButton, { backgroundColor: colors.primary, opacity: roleUpdatingId === member.id ? 0.6 : 1 }]}

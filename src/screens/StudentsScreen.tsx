@@ -232,11 +232,19 @@ export default function StudentsScreen({ navigation }: any) {
     }
   }, [selectedClass, ocrCandidates, closeSheet, createStudent]);
 
-  const renderStudentCircle = (name: string, index: number) => (
-    <View key={`${name}-${index}`} style={[styles.avatar, { backgroundColor: colors.background.secondary }]}>
-      <Text style={styles.avatarText}>{name.slice(0, 2)}</Text>
-    </View>
-  );
+  const renderStudentCircle = (name: string, index: number) => {
+    // استخراج أول كلمة من الاسم (الاسم الأول)
+    const firstName = name.trim().split(/\s+/)[0] || name.trim();
+    // إذا كان الاسم طويل جداً، نختصره
+    const displayName = firstName.length > 8 ? firstName.slice(0, 7) + '...' : firstName;
+    return (
+      <View key={`${name}-${index}`} style={[styles.avatar, { backgroundColor: colors.background.secondary, borderWidth: 1, borderColor: colors.border.light }]}>
+        <Text style={[styles.avatarText, { color: colors.text.primary }]} numberOfLines={1} adjustsFontSizeToFit>
+          {displayName}
+        </Text>
+      </View>
+    );
+  };
 
   const renderClassCard = ({ item }: { item: Class }) => (
     <View style={[styles.classCard, { backgroundColor: colors.background.card }]}>
@@ -257,10 +265,12 @@ export default function StudentsScreen({ navigation }: any) {
       </View>
 
       <View style={styles.studentRow}>
-        {item.students.slice(0, 4).map((student, index) => renderStudentCircle(student.name, index))}
-        {item.students.length > 4 && (
-          <View style={[styles.avatar, { backgroundColor: colors.background.secondary }]}>
-            <Text style={styles.avatarText}>+{item.students.length - 4}</Text>
+        {item.students.slice(0, 3).map((student, index) => renderStudentCircle(student.name, index))}
+        {item.students.length > 3 && (
+          <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
+            <Text style={[styles.avatarText, { color: '#fff', fontSize: 12, fontFamily: fontFamilies.bold }]}>
+              +{item.students.length - 3}
+            </Text>
           </View>
         )}
       </View>
@@ -552,15 +562,20 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   avatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    minWidth: 60,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
   },
   avatarText: {
     fontFamily: fontFamilies.semibold,
     color: '#1C1C1E',
+    fontSize: 12,
+    textAlign: 'center',
+    includeFontPadding: false,
   },
   cardActions: {
     flexDirection: 'row',

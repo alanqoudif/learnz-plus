@@ -173,12 +173,14 @@ export default function LeaderAdminScreen({ navigation }: LeaderAdminScreenProps
     <SafeAreaView style={[styles.safeArea, { backgroundColor: themeColors.background.primary }]}> 
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + spacing['2xl'], paddingHorizontal: spacing.lg, paddingTop: insets.top + spacing.lg }}>
         <View style={[styles.hero, { backgroundColor: themeColors.background.secondary, shadowColor: themeColors.shadow ?? '#000' }]}>
-          <View>
+          <View style={styles.heroContent}>
             <Text style={[styles.heroLabel, { color: themeColors.text.secondary }]}>إدارة المدرسة</Text>
             <Text style={[styles.heroTitle, { color: themeColors.text.primary }]}>{user?.schoolName || 'مدرستي'}</Text>
             <Text style={[styles.heroSubtitle, { color: themeColors.text.secondary }]}>نفّذ العمليات الإدارية، شارك الرموز، وتابع أداء المدرسة من مكان واحد.</Text>
           </View>
-          <Ionicons name="school-outline" size={32} color={themeColors.primary} />
+          <View style={styles.heroIcon}>
+            <Ionicons name="school-outline" size={32} color={themeColors.primary} />
+          </View>
         </View>
 
         <View style={styles.quickGrid}>
@@ -328,7 +330,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    overflow: 'hidden',
     ...shadows.sm,
+  },
+  heroContent: {
+    flex: 1,
+    marginRight: spacing.md,
+  },
+  heroIcon: {
+    width: 48,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
   heroLabel: {
     fontFamily: fontFamilies.semibold,

@@ -12,7 +12,7 @@ import {
   ScrollView,
   RefreshControl,
 } from 'react-native';
-import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
 import { Student } from '../types';
@@ -20,8 +20,9 @@ import { fontFamilies, shadows, borderRadius, spacing, colors as baseColors } fr
 import StudentItem from '../components/StudentItem';
 import { StudentListSkeleton } from '../components/SkeletonLoader';
 import { lightHaptic, mediumHaptic, successHaptic } from '../utils/haptics';
-import { ocrService } from '../services/ocrService';
+import { ocrService, type SheetFileInput } from '../services/ocrService';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { buildSheetFilesFromAssets, fallbackNameFromUri } from '../utils/sheetUpload';
 
 interface StudentManagementScreenProps {
   navigation: any;
@@ -137,38 +138,46 @@ export default function StudentManagementScreen({ navigation, route }: StudentMa
 
   const pickSheets = async () => {
     try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ['image/*'],
-        multiple: true,
-        copyToCacheDirectory: true,
-      });
-
-      if (result.canceled) return;
-
-      const assets = 'assets' in result && Array.isArray(result.assets)
-        ? result.assets
-        : (result as any).assets
-          ? (result as any).assets
-          : [(result as any)];
-
-      const uris = assets.map((item: any) => item.uri).filter(Boolean);
-      if (!uris.length) {
-        Alert.alert('خطأ', 'لم يتم اختيار أي ملف.');
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('صلاحيات مطلوبة', 'يرجى منح إذن الوصول إلى ألبوم الصور لاختيار الكشف.');
         return;
       }
 
-      setSelectedSheets(assets.map((item: any) => item.name || item.uri?.split('/').pop() || 'ملف بدون اسم'));
-      await processSheetsWithOCR(uris);
+      const result = await ImagePicker.launchImageLibraryAsync({
+        allowsMultipleSelection: true,
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        selectionLimit: 10,
+        quality: 1,
+      });
+
+      if (result.canceled) {
+        return;
+      }
+
+      const files = buildSheetFilesFromAssets(result.assets || []);
+      if (!files.length) {
+        Alert.alert('خطأ', 'لم يتم اختيار أي صورة من الألبوم.');
+        return;
+      }
+
+      await processSheetsWithOCR(files);
     } catch (error) {
-      console.error('Error picking sheets:', error);
-      Alert.alert('خطأ', 'حدث خطأ أثناء اختيار الملفات');
+      console.error('Error picking images from gallery:', error);
+      Alert.alert('خطأ', 'حدث خطأ أثناء اختيار الصور من ألبوم الجهاز.');
     }
   };
 
-  const processSheetsWithOCR = async (uris: string[]) => {
+  const processSheetsWithOCR = async (files: SheetFileInput[]) => {
+    if (!files.length) {
+      Alert.alert('خطأ', 'لم يتم اختيار أي ملف.');
+      return;
+    }
+
+    setSelectedSheets(files.map(file => file.name || fallbackNameFromUri(file.uri)));
     try {
       setIsProcessing(true);
-      const parsedStudents = await ocrService.processSheets(uris);
+      const parsedStudents = await ocrService.processSheets(files);
 
       if (!parsedStudents.length) {
         Alert.alert(
@@ -301,16 +310,16 @@ export default function StudentManagementScreen({ navigation, route }: StudentMa
           </Text>
           <View style={styles.headerButtons}>
             <TouchableOpacity
-                style={styles.imageButton}
-                onPress={pickSheets}
-                disabled={isProcessing}
-              >
-                <Text style={styles.imageButtonText}>
-                  {isProcessing ? 'جاري المعالجة...' : 'رفع ملفات الطلاب (OCR)'}
-                </Text>
-              </TouchableOpacity>
+              style={[styles.actionButton, styles.imageButton]}
+              onPress={pickSheets}
+              disabled={isProcessing}
+            >
+              <Text style={styles.imageButtonText}>
+                {isProcessing ? 'جاري المعالجة...' : 'رفع صورة الكشف'}
+              </Text>
+            </TouchableOpacity>
             <TouchableOpacity
-              style={styles.addButton}
+              style={[styles.actionButton, styles.addButton]}
               onPress={() => setShowAddModal(true)}
             >
               <Text style={styles.addButtonText}>+ إضافة طالب</Text>
@@ -525,13 +534,23 @@ const styles = StyleSheet.create({
   },
   headerButtons: {
     flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    flexWrap: 'wrap',
     gap: 8,
   },
+  actionButton: {
+    minWidth: 130,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 4,
+    marginBottom: 8,
+  },
   addButton: {
-    backgroundColor: baseColors.primary,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
+    backgroundColor: '#1d72e5',
   },
   addButtonText: {
     color: 'white',
@@ -540,9 +559,6 @@ const styles = StyleSheet.create({
   },
   imageButton: {
     backgroundColor: baseColors.primary,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
   },
   imageButtonText: {
     color: 'white',

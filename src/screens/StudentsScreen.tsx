@@ -10,7 +10,7 @@ import {
   Alert,
   ScrollView,
 } from 'react-native';
-import * as DocumentPicker from 'expo-document-picker';
+import * as ImagePicker from 'expo-image-picker';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
@@ -19,6 +19,7 @@ import { fontFamilies, spacing, borderRadius } from '../utils/theme';
 import { ocrService } from '../services/ocrService';
 import { lightHaptic, successHaptic } from '../utils/haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { buildSheetFilesFromAssets, fallbackNameFromUri } from '../utils/sheetUpload';
 
 type SheetStep = 'options' | 'manual' | 'ocr';
 
@@ -109,26 +110,25 @@ export default function StudentsScreen({ navigation }: any) {
       return;
     }
 
-    const result = await DocumentPicker.getDocumentAsync({
-      type: ['image/*'],
-      multiple: true,
-      copyToCacheDirectory: true,
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('صلاحيات مطلوبة', 'يرجى منح إذن الوصول لألبوم الصور لقراءة كشف الطلاب.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      allowsMultipleSelection: true,
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      selectionLimit: 10,
+      quality: 1,
     });
 
     if (result.canceled) return;
 
-    const assets = 'assets' in result && Array.isArray(result.assets)
-      ? result.assets
-      : (result as any).assets
-        ? (result as any).assets
-        : [(result as any)];
+    const files = buildSheetFilesFromAssets(result.assets || []);
 
-    const uris = assets
-      .map((item: any) => item.uri)
-      .filter(Boolean);
-
-    if (!uris.length) {
-      Alert.alert('لم يتم تحديد ملفات', 'اختر ملفاً واحداً على الأقل.');
+    if (!files.length) {
+      Alert.alert('لم يتم تحديد صور', 'اختر صورة واحدة على الأقل من الألبوم.');
       return;
     }
 
@@ -136,9 +136,9 @@ export default function StudentsScreen({ navigation }: any) {
       setIsOcrLoading(true);
       setSheetStep('ocr');
       setSelectedRosterFiles(
-        assets.map((item: any) => item.name || item.uri?.split('/').pop() || 'ملف بدون اسم')
+        files.map(file => file.name || fallbackNameFromUri(file.uri))
       );
-      const parsed = await ocrService.processSheets(uris);
+      const parsed = await ocrService.processSheets(files);
       const formatted = parsed.map((student, index) => ({
         id: `${Date.now()}-${index}`,
         name: student.name.trim(),
@@ -146,7 +146,7 @@ export default function StudentsScreen({ navigation }: any) {
       }));
       setOcrCandidates(formatted);
     } catch (error: any) {
-      console.error('OCR error', error);
+      console.error('Gemini OCR error', error);
       Alert.alert(
         'فشل قراءة الشيت',
         error?.message || 'تأكد من وضوح الملفات المختارة ثم حاول مرة أخرى.'
@@ -296,7 +296,7 @@ export default function StudentsScreen({ navigation }: any) {
             {isOcrLoading ? 'جارٍ قراءة الشيت...' : `مراجعة ${ocrCandidates.length} طالب`}
           </Text>
           {isOcrLoading ? (
-            <Text style={styles.loadingText}>جارٍ استخراج الأسماء باستخدام Tesseract OCR...</Text>
+            <Text style={styles.loadingText}>جارٍ استخراج الأسماء باستخدام Gemini Vision...</Text>
           ) : (
             <>
               {selectedRosterFiles.length > 0 && (
@@ -371,7 +371,7 @@ export default function StudentsScreen({ navigation }: any) {
         >
           <Ionicons name="scan-outline" size={20} color={colors.primary} />
           <View>
-            <Text style={[styles.optionTitle, { color: colors.text.primary }]}>مسح الشيت (OCR)</Text>
+            <Text style={[styles.optionTitle, { color: colors.text.primary }]}>مسح الشيت (Gemini)</Text>
             <Text style={[styles.optionSubtitle, { color: colors.text.secondary }]}>
               رفع صورة وتحويلها إلى أسماء تلقائياً
             </Text>

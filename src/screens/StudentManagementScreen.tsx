@@ -196,7 +196,7 @@ export default function StudentManagementScreen({ navigation, route }: StudentMa
       }
 
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaType.Images,
+        mediaTypes: 'images',
         quality: 0.8, // تقليل الجودة قليلاً لتسريع المعالجة
         allowsEditing: false,
       });
@@ -228,7 +228,7 @@ export default function StudentManagementScreen({ navigation, route }: StudentMa
 
       const result = await ImagePicker.launchImageLibraryAsync({
         allowsMultipleSelection: true,
-        mediaTypes: ImagePicker.MediaType.Images,
+        mediaTypes: 'images',
         selectionLimit: 10,
         quality: 0.8, // تقليل الجودة قليلاً لتسريع المعالجة
       });

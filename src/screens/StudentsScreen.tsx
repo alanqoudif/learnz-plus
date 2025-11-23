@@ -161,7 +161,7 @@ export default function StudentsScreen({ navigation }: any) {
             }
 
             const result = await ImagePicker.launchCameraAsync({
-              mediaTypes: ImagePicker.MediaType.Images,
+              mediaTypes: 'images',
               quality: 1,
               allowsEditing: false,
             });
@@ -183,7 +183,7 @@ export default function StudentsScreen({ navigation }: any) {
 
             const result = await ImagePicker.launchImageLibraryAsync({
               allowsMultipleSelection: true,
-              mediaTypes: ImagePicker.MediaType.Images,
+              mediaTypes: 'images',
               selectionLimit: 10,
               quality: 1,
             });

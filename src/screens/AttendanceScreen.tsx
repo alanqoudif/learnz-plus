@@ -13,7 +13,7 @@ import { useFocusEffect } from '@react-navigation/native';
 // useApp already imported above
 import { AttendanceRecord, AttendanceSession } from '../types';
 import { showErrorAlert, showAttendanceCompleteAlert } from '../utils/notifications';
-import { fontFamilies, shadows, borderRadius, spacing } from '../utils/theme';
+import { fontFamilies, shadows, borderRadius, spacing, colors } from '../utils/theme';
 import { fadeIn, fadeOut, scaleButton } from '../utils/animations';
 import { lightHaptic, successHaptic, errorHaptic } from '../utils/haptics';
 import { useApp } from '../context/AppContext';
@@ -605,6 +605,33 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderRadius: 12,
     padding: 16,
+    marginBottom: 12,
+    marginHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  studentInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  studentNumber: {
+    backgroundColor: colors.primary,
+    borderRadius: 16,
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
   },
   studentNumberText: {
     color: 'white',

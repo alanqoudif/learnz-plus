@@ -81,7 +81,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
       if (mode === 'login') {
         const user = await authService.signInWithEmail(normalizedEmail, password);
         console.log('✅ تم تسجيل الدخول بنجاح:', user.uid);
-        
+
         // حفظ بيانات المستخدم في Firestore
         try {
           await setDoc(
@@ -101,7 +101,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
       } else {
         const user = await authService.createAccount(normalizedEmail, password, formattedName || 'معلم');
         console.log('✅ تم إنشاء الحساب بنجاح:', user.uid);
-        
+
         // حفظ بيانات المستخدم في Firestore
         try {
           await setDoc(
@@ -127,7 +127,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
     } catch (error: any) {
       console.error('❌ خطأ في المصادقة:', error);
       let message = error?.message || 'حدث خطأ أثناء تنفيذ الطلب';
-      
+
       // ترجمة رسائل الخطأ
       if (error?.code) {
         switch (error.code) {
@@ -151,7 +151,7 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
             break;
         }
       }
-      
+
       Alert.alert('خطأ', message);
     } finally {
       setIsLoading(false);
@@ -168,20 +168,20 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
     modeButtonTextActive: { color: colors.text.primary },
     form: { backgroundColor: colors.background.primary },
     label: { color: colors.text.primary },
-    input: { 
+    input: {
       backgroundColor: colors.background.secondary,
       color: colors.text.primary
     },
     adminHint: { backgroundColor: colors.info + '20' },
     adminHintText: { color: colors.info },
-    submitButton: { backgroundColor: colors.success },
+    submitButton: { backgroundColor: colors.primary },
     submitButtonDisabled: { opacity: 0.6 },
     footerText: { color: colors.text.secondary },
   }), [colors]);
 
   return (
-    <KeyboardAvoidingView 
-      style={[styles.container, dynamicStyles.container]} 
+    <KeyboardAvoidingView
+      style={[styles.container, dynamicStyles.container]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
@@ -194,14 +194,14 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
           <View style={[styles.modeSwitch, dynamicStyles.modeSwitch]}>
             <TouchableOpacity
               style={[
-                styles.modeButton, 
+                styles.modeButton,
                 mode === 'login' && [styles.modeButtonActive, dynamicStyles.modeButtonActive]
               ]}
               onPress={() => setMode('login')}
               disabled={isLoading}
             >
               <Text style={[
-                styles.modeButtonText, 
+                styles.modeButtonText,
                 mode === 'login' ? dynamicStyles.modeButtonTextActive : dynamicStyles.modeButtonText
               ]}>
                 تسجيل الدخول
@@ -209,14 +209,14 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
             </TouchableOpacity>
             <TouchableOpacity
               style={[
-                styles.modeButton, 
+                styles.modeButton,
                 mode === 'register' && [styles.modeButtonActive, dynamicStyles.modeButtonActive]
               ]}
               onPress={() => setMode('register')}
               disabled={isLoading}
             >
               <Text style={[
-                styles.modeButtonText, 
+                styles.modeButtonText,
                 mode === 'register' ? dynamicStyles.modeButtonTextActive : dynamicStyles.modeButtonText
               ]}>
                 إنشاء حساب
@@ -283,8 +283,8 @@ export default function LoginScreen({ navigation }: LoginScreenProps) {
 
             <TouchableOpacity
               style={[
-                styles.submitButton, 
-                dynamicStyles.submitButton, 
+                styles.submitButton,
+                dynamicStyles.submitButton,
                 isLoading && dynamicStyles.submitButtonDisabled
               ]}
               onPress={handleSubmit}

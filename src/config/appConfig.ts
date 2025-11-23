@@ -8,4 +8,4 @@ export const GEMINI_VISION_MODEL = 'gemini-1.5-flash';
 
 // OpenAI Configuration
 export const OPENAI_API_KEY = process.env.EXPO_PUBLIC_OPENAI_API_KEY || '';
-export const OPENAI_VISION_MODEL = 'gpt-4.1-nano-2025-04-14';
+export const OPENAI_VISION_MODEL = 'gpt-4o'; // Using GPT-4o for vision tasks (latest and most capable)

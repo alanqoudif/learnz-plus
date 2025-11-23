@@ -170,14 +170,24 @@ export default function StudentsScreen({ navigation }: any) {
             }
 
             const result = await ImagePicker.launchCameraAsync({
-              mediaTypes: 'images',
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
               quality: 1,
               allowsEditing: false,
             });
 
-            if (result.canceled) return;
+            if (!result || result.canceled) return;
 
-            const files = buildSheetFilesFromAssets(result.assets || []);
+            if (!result.assets || !Array.isArray(result.assets) || result.assets.length === 0) {
+              Alert.alert('خطأ', 'لم يتم التقاط أي صورة.');
+              return;
+            }
+
+            const files = buildSheetFilesFromAssets(result.assets);
+            if (!files.length) {
+              Alert.alert('خطأ', 'لم يتم التقاط أي صورة صالحة.');
+              return;
+            }
+
             await processImageFiles(files);
           },
         },
@@ -192,14 +202,24 @@ export default function StudentsScreen({ navigation }: any) {
 
             const result = await ImagePicker.launchImageLibraryAsync({
               allowsMultipleSelection: true,
-              mediaTypes: 'images',
+              mediaTypes: ImagePicker.MediaTypeOptions.Images,
               selectionLimit: 10,
               quality: 1,
             });
 
-            if (result.canceled) return;
+            if (!result || result.canceled) return;
 
-            const files = buildSheetFilesFromAssets(result.assets || []);
+            if (!result.assets || !Array.isArray(result.assets) || result.assets.length === 0) {
+              Alert.alert('خطأ', 'لم يتم اختيار أي صورة من الألبوم.');
+              return;
+            }
+
+            const files = buildSheetFilesFromAssets(result.assets);
+            if (!files.length) {
+              Alert.alert('خطأ', 'لم يتم اختيار أي صورة صالحة من الألبوم.');
+              return;
+            }
+
             await processImageFiles(files);
           },
         },

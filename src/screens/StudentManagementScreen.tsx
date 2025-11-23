@@ -196,25 +196,31 @@ export default function StudentManagementScreen({ navigation, route }: StudentMa
       }
 
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: 'images',
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
         quality: 0.8, // تقليل الجودة قليلاً لتسريع المعالجة
         allowsEditing: false,
       });
 
-      if (result.canceled) {
+      if (!result || result.canceled) {
         return;
       }
 
-      const files = buildSheetFilesFromAssets(result.assets || []);
-      if (!files.length) {
+      if (!result.assets || !Array.isArray(result.assets) || result.assets.length === 0) {
         Alert.alert('خطأ', 'لم يتم التقاط أي صورة.');
         return;
       }
 
+      const files = buildSheetFilesFromAssets(result.assets);
+      if (!files.length) {
+        Alert.alert('خطأ', 'لم يتم التقاط أي صورة صالحة.');
+        return;
+      }
+
       await processSheetsWithOCR(files);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error taking photo with camera:', error);
-      Alert.alert('خطأ', 'حدث خطأ أثناء التقاط الصورة بالكاميرا.');
+      const errorMessage = error?.message || 'حدث خطأ أثناء التقاط الصورة بالكاميرا.';
+      Alert.alert('خطأ', errorMessage);
     }
   };
 
@@ -228,25 +234,31 @@ export default function StudentManagementScreen({ navigation, route }: StudentMa
 
       const result = await ImagePicker.launchImageLibraryAsync({
         allowsMultipleSelection: true,
-        mediaTypes: 'images',
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
         selectionLimit: 10,
         quality: 0.8, // تقليل الجودة قليلاً لتسريع المعالجة
       });
 
-      if (result.canceled) {
+      if (!result || result.canceled) {
         return;
       }
 
-      const files = buildSheetFilesFromAssets(result.assets || []);
-      if (!files.length) {
+      if (!result.assets || !Array.isArray(result.assets) || result.assets.length === 0) {
         Alert.alert('خطأ', 'لم يتم اختيار أي صورة من الألبوم.');
         return;
       }
 
+      const files = buildSheetFilesFromAssets(result.assets);
+      if (!files.length) {
+        Alert.alert('خطأ', 'لم يتم اختيار أي صورة صالحة من الألبوم.');
+        return;
+      }
+
       await processSheetsWithOCR(files);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error picking images from gallery:', error);
-      Alert.alert('خطأ', 'حدث خطأ أثناء اختيار الصور من ألبوم الجهاز.');
+      const errorMessage = error?.message || 'حدث خطأ أثناء اختيار الصور من ألبوم الجهاز.';
+      Alert.alert('خطأ', errorMessage);
     }
   };
 

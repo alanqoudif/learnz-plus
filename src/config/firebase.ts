@@ -10,12 +10,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const firebaseConfig = {
   apiKey: "AIzaSyAo41EStVdJUwca8arKh0AWJyFx2AcAmco",
   authDomain: "learnzplus.firebaseapp.com",
+  databaseURL: "https://learnzplus-default-rtdb.firebaseio.com",
   projectId: "learnzplus",
   storageBucket: "learnzplus.firebasestorage.app",
   messagingSenderId: "435695202976",
   appId: "1:435695202976:web:2e8a4bedfa5516f8860fc5",
-  measurementId: "G-F3JNG5XVE6",
-  databaseURL: "https://learnzplus-default-rtdb.firebaseio.com/"
+  measurementId: "G-F3JNG5XVE6"
 };
 
 // Initialize Firebase

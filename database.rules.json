@@ -1,5 +1,13 @@
 {
   "rules": {
+    "attendance_updates": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "notifications": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
     ".read": "auth != null",
     ".write": "auth != null"
   }

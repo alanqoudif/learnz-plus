@@ -1,13 +1,19 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function isSignedIn() { return request.auth != null; }
-    function isSelf(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function isSignedIn() { 
+      return request.auth != null; 
+    }
+    
+    function isSelf(userId) { 
+      return isSignedIn() && request.auth.uid == userId; 
+    }
 
     // Users: each user can read/write own profile
     match /users/{userId} {
-      allow read: if isSelf(userId);
-      allow write: if isSelf(userId);
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isSelf(userId) || isSignedIn();
     }
 
     // Teachers: each teacher can read/write own data
@@ -15,14 +21,14 @@ service cloud.firestore {
     match /teachers/{teacherId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();
-      allow update, delete: if isSelf(teacherId);
+      allow update, delete: if isSignedIn();
     }
 
     // Teacher codes: readable for authenticated users, writable by owner
     match /teacher_codes/{teacherId} {
       allow read: if isSignedIn();
-      allow create: if isSelf(teacherId);
-      allow update: if isSelf(teacherId);
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn();
     }
 
     // Classes: teachers can create/read/update/delete their own classes
@@ -56,24 +62,15 @@ service cloud.firestore {
     // Schools: readable to members; writable by leader
     match /schools/{schoolId} {
       allow read: if isSignedIn();
-      allow update: if isLeader(schoolId);
       allow create: if isSignedIn();
+      allow update, delete: if isSignedIn();
 
       // community posts under school
       match /community/{postId} {
-        allow read: if isMember(schoolId);
-        allow create: if isMember(schoolId);
-        allow update, delete: if isLeader(schoolId);
+        allow read: if isSignedIn();
+        allow create: if isSignedIn();
+        allow update, delete: if isSignedIn();
       }
-    }
-
-    // Helper: fetch leader from school doc and compare
-    function isLeader(schoolId) {
-      return isSignedIn() && get(/databases/$(database)/documents/schools/$(schoolId)).data.leaderUserId == request.auth.uid;
-    }
-
-    function isMember(schoolId) {
-      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.schoolId == schoolId;
     }
   }
 }

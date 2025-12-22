@@ -171,7 +171,13 @@ export default function LeaderAdminScreen({ navigation }: LeaderAdminScreenProps
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: themeColors.background.primary }]}> 
       <ScrollView contentContainerStyle={{ paddingBottom: insets.bottom + spacing['2xl'], paddingHorizontal: spacing.lg, paddingTop: insets.top + spacing.lg }}>
-        <View style={[styles.hero, { backgroundColor: themeColors.background.secondary, shadowColor: themeColors.shadow ?? '#000' }]}>
+        <View style={[
+          styles.hero,
+          {
+            backgroundColor: themeColors.background.secondary,
+            shadowColor: themeColors.shadows?.card?.shadowColor ?? '#000',
+          }
+        ]}>
           <View style={styles.heroContent}>
             <Text style={[styles.heroLabel, { color: themeColors.text.secondary }]}>إدارة المدرسة</Text>
             <Text style={[styles.heroTitle, { color: themeColors.text.primary }]}>{user?.schoolName || 'مدرستي'}</Text>

@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAnalytics, isSupported as isAnalyticsSupported } from "firebase/analytics";
-import { initializeAuth, getReactNativePersistence } from "firebase/auth";
+import { initializeAuth, getAuth, getReactNativePersistence } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getFunctions } from "firebase/functions";
 import { getDatabase } from "firebase/database";
@@ -22,9 +22,21 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 
 // Initialize Firebase Auth with React Native persistence
-export const auth = initializeAuth(app, {
-  persistence: getReactNativePersistence(AsyncStorage)
-});
+let auth;
+try {
+  auth = initializeAuth(app, {
+    persistence: getReactNativePersistence(AsyncStorage),
+  });
+} catch (error: any) {
+  if (error?.code === 'auth/already-initialized') {
+    auth = getAuth(app);
+  } else {
+    console.warn('Failed to initialize auth with persistence, using getAuth (no persistence):', error?.message ?? error);
+    auth = getAuth(app);
+  }
+}
+
+export { auth };
 
 // Initialize Firebase services
 export const firestore = getFirestore(app);

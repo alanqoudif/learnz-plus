@@ -876,6 +876,28 @@ const styles = StyleSheet.create({
     maxHeight: 250,
     marginBottom: 16,
   },
+  modalButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginTop: spacing.md,
+  },
+  modalCancelButton: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#dee2e6',
+    borderRadius: 16,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+  },
+  modalCancelButtonText: {
+    fontFamily: fontFamilies.semibold,
+    fontSize: 16,
+    color: '#2c3e50',
+  },
   extractedStudentItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',

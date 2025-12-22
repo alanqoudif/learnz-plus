@@ -11,6 +11,7 @@ service cloud.firestore {
     }
 
     // Teachers: each teacher can read/write own data
+    // Simplified: allow create/read for signed-in users, update/delete only for owner
     match /teachers/{teacherId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn();

@@ -2,6 +2,7 @@ import {
   collection, 
   doc, 
   addDoc, 
+  setDoc,
   updateDoc, 
   deleteDoc, 
   getDoc, 
@@ -89,52 +90,43 @@ export const teacherService = {
     try {
       console.log('🔄 إنشاء/تحديث معلم من Firebase Auth:', user.uid);
       
+      // استخدام UID المستخدم كمعرف الوثيقة لضمان تطابق مع قواعد الأمان
+      const teacherRef = doc(firestore, COLLECTIONS.TEACHERS, user.uid);
+      const teacherSnap = await getDoc(teacherRef);
+      
       const teacherData = {
         name: user.displayName || 'معلم',
         email: user.email,
         phoneNumber: user.email, // استخدام البريد الإلكتروني كمعرف
-        createdAt: serverTimestamp(),
         lastLogin: serverTimestamp()
       };
 
-      // البحث عن المعلم الموجود
-      const q = query(
-        collection(firestore, COLLECTIONS.TEACHERS),
-        where('email', '==', user.email)
-      );
-      
-      const querySnapshot = await getDocs(q);
-      
-      if (!querySnapshot.empty) {
+      if (teacherSnap.exists()) {
         // تحديث المعلم الموجود
-        const doc = querySnapshot.docs[0];
-        await updateDoc(doc.ref, {
+        await updateDoc(teacherRef, {
           name: teacherData.name,
-          lastLogin: serverTimestamp()
+          lastLogin: teacherData.lastLogin
         });
         
-        const data = doc.data();
+        const data = teacherSnap.data();
         return {
-          id: doc.id,
-          name: data.name,
-          phoneNumber: data.email,
+          id: user.uid,
+          name: teacherData.name,
+          phoneNumber: data.email || user.email,
           createdAt: timestampToDate(data.createdAt)
         };
       } else {
-        // إنشاء معلم جديد
-        const docRef = await addDoc(collection(firestore, COLLECTIONS.TEACHERS), teacherData);
-        const docSnap = await getDoc(docRef);
+        // إنشاء معلم جديد باستخدام UID كمعرف الوثيقة
+        await setDoc(teacherRef, {
+          ...teacherData,
+          createdAt: serverTimestamp()
+        });
         
-        if (!docSnap.exists()) {
-          throw new Error('فشل في إنشاء المعلم');
-        }
-
-        const data = docSnap.data();
         return {
-          id: docRef.id,
-          name: data.name,
-          phoneNumber: data.email,
-          createdAt: timestampToDate(data.createdAt)
+          id: user.uid,
+          name: teacherData.name,
+          phoneNumber: user.email,
+          createdAt: new Date()
         };
       }
     } catch (error: any) {

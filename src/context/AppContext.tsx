@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
-import { Teacher, Class, Student, AttendanceRecord, AttendanceSession, UserProfile } from '../types';
+import { Teacher, Class, Student, AttendanceRecord, AttendanceSession, UserProfile, UserRole, AccountTier } from '../types';
 import { smartClassService as classService, smartStudentService as studentService, smartAttendanceService as attendanceService, smartAuthService as authService } from '../services/smartService';
 import { teacherService } from '../services/firebaseService';
 import { FirebaseRealtimeService } from '../services/firebaseRealtimeService';
@@ -50,6 +50,23 @@ const initialState: AppState = {
   userProfile: null,
   isOffline: false,
   pendingActions: [],
+};
+
+const resolveRole = (value: string | undefined, isAdmin: boolean): UserRole => {
+  if (value === 'leader') {
+    return 'leader';
+  }
+  if (value === 'member') {
+    return 'member';
+  }
+  return isAdmin ? 'leader' : 'member';
+};
+
+const resolveTier = (value: string | undefined, isAdmin: boolean): AccountTier => {
+  if (value === 'plus') {
+    return 'plus';
+  }
+  return isAdmin ? ADMIN_ACCOUNT_TIER : DEFAULT_ACCOUNT_TIER;
 };
 
 function appReducer(state: AppState, action: AppAction): AppState {
@@ -272,8 +289,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           const isAppAdmin = APP_ADMIN_EMAILS.includes(normalizedEmail);
           if (snap.exists()) {
             const data: any = snap.data();
-            const tier = data.tier || (isAppAdmin ? ADMIN_ACCOUNT_TIER : DEFAULT_ACCOUNT_TIER);
-            const role = data.role || (isAppAdmin ? 'leader' : 'member');
+            const tier = resolveTier(data.tier, isAppAdmin);
+            const role = resolveRole(data.role, isAppAdmin);
             const schoolName = data.schoolName ?? null;
             const userCode = data.userCode || await ensureUserCode(user.uid, {
               name: data.name || user.displayName || 'معلم',
@@ -305,8 +322,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               userCode: profile.userCode,
             }, { merge: true });
           } else {
-            const tier = isAppAdmin ? ADMIN_ACCOUNT_TIER : DEFAULT_ACCOUNT_TIER;
-            const role = isAppAdmin ? 'leader' : 'member';
+            const tier = resolveTier(undefined, isAppAdmin);
+            const role = resolveRole(undefined, isAppAdmin);
             const basic = {
               email: normalizedEmail,
               name: user.displayName || 'معلم',
@@ -339,8 +356,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               name: user.displayName || 'معلم',
               schoolId: null,
               schoolName: null,
-              role: isAppAdmin ? 'leader' : 'member',
-              tier: isAppAdmin ? ADMIN_ACCOUNT_TIER : DEFAULT_ACCOUNT_TIER,
+              role: resolveRole(undefined, isAppAdmin),
+              tier: resolveTier(undefined, isAppAdmin),
               isAppAdmin,
             };
             dispatch({ type: 'SET_USER_PROFILE', payload: defaultProfile });
@@ -358,6 +375,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         dispatch({ type: 'SET_LOADING', payload: false });
         dispatch({ type: 'SET_USER_PROFILE', payload: null });
         await offlineStorage.saveUserProfile(null);
+        FirebaseRealtimeService.unsubscribeAll();
         console.log('✅ State cleared - user should see Login screen');
       }
     });
@@ -906,8 +924,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const isAppAdmin = APP_ADMIN_EMAILS.includes(normalizedEmail);
         if (snap.exists()) {
           const data: any = snap.data();
-          const tier = data.tier || (isAppAdmin ? ADMIN_ACCOUNT_TIER : DEFAULT_ACCOUNT_TIER);
-          const role = data.role || (isAppAdmin ? 'leader' : 'member');
+          const tier = resolveTier(data.tier, isAppAdmin);
+          const role = resolveRole(data.role, isAppAdmin);
           const schoolName = data.schoolName ?? null;
           const resolvedName = data.name || user.displayName || 'معلم';
           const userCode = data.userCode || await ensureUserCode(user.uid, {

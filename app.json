@@ -2,12 +2,12 @@
   "expo": {
     "name": "LearnzPlus",
     "slug": "just-a-app",
-    "version": "1.1.5",
+    "version": "1.1.8",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "description": "تطبيق بسيط لإدارة حضور وغياب الطلاب للمعلمين",
-    "runtimeVersion": "1.1.6",
+    "runtimeVersion": "1.1.8",
     "updates": {
       "enabled": true,
       "checkAutomatically": "ON_LOAD",
@@ -22,8 +22,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.maanstuden.app",
-      "buildNumber": "8",
-      "displayName": "Learnz Plus",
+      "buildNumber": "10",
       "infoPlist": {
         "NSCameraUsageDescription": "نستخدم الكاميرا لمسح رموز QR للانضمام إلى المدارس",
         "NSPhotoLibraryUsageDescription": "نستخدم معرض الصور لاستيراد قوائم الطلاب من الصور",
@@ -38,14 +37,14 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.maanstuden.app",
-      "versionCode": 6,
-      "displayName": "Learnz Plus"
+      "versionCode": 8
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-camera"
+      "expo-camera",
+      "expo-font"
     ],
     "extra": {
       "eas": {

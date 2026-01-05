@@ -188,27 +188,27 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
         contentContainerStyle={{ paddingBottom: insets.bottom + spacing['2xl'] }}
       >
         <View style={[styles.content, { paddingTop: insets.top + spacing.lg }]}>
-        <View style={[styles.heroCard, { backgroundColor: colors.primary }]}>
+        <View style={[styles.heroCard, { backgroundColor: colors.background.secondary, borderColor: colors.border.light }]}>
           <View style={styles.heroHeader}>
-            <View style={styles.heroBadge}>
+            <View style={[styles.heroBadge, { backgroundColor: colors.background.tertiary }]}>
               <Text style={[styles.heroBadgeText, { color: colors.primary }]}>ملفك الشخصي</Text>
             </View>
-            <Text style={[styles.heroTitle, { color: colors.text.light }]}>الإعدادات</Text>
+            <Text style={[styles.heroTitle, { color: colors.text.primary }]}>الإعدادات</Text>
           </View>
-          <Text style={[styles.heroName, { color: colors.text.light }]}>
+          <Text style={[styles.heroName, { color: colors.text.primary }]}>
             {userProfile?.name || currentTeacher?.name || 'معلم'}
           </Text>
-          <Text style={[styles.heroSubtitle, { color: colors.text.light }]}>
+          <Text style={[styles.heroSubtitle, { color: colors.text.secondary }]}>
             {userProfile?.email || currentTeacher?.phoneNumber || 'لا يوجد بريد مسجل'}
           </Text>
           <View style={styles.heroPills}>
-            <View style={[styles.pill, { backgroundColor: colors.background.secondary }]}>
+            <View style={[styles.pill, { backgroundColor: colors.background.tertiary }]}>
               <Text style={[styles.pillText, { color: colors.text.primary }]}>
                 {hasSchool ? userProfile?.schoolName || 'مدرستك' : 'بدون مدرسة'}
               </Text>
             </View>
             {isLeader && (
-              <View style={[styles.pill, { backgroundColor: colors.background.secondary }]}>
+              <View style={[styles.pill, { backgroundColor: colors.background.tertiary }]}>
                 <Text style={[styles.pillText, { color: colors.text.primary }]}>قائد المدرسة</Text>
               </View>
             )}
@@ -359,7 +359,7 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
               <View style={[styles.infoCard, { backgroundColor: colors.background.primary, borderColor: colors.border.light }]}>
                 <Text style={[styles.infoTitle, { color: colors.text.primary }]}>المشاركة مع الفريق</Text>
                 <Text style={[styles.infoText, { color: colors.text.secondary }]}>
-                  شارك رمز المعلم مع زملائك للدخول إلى نفس المدرسة. بعد الربط ستظهر لهم الشُعب المتاحة ويمكنهم تسجيل حضورهم.
+                  شارك رمز المعلم مع زملائك للانضمام إلى نفس المدرسة. بعد الربط، ستظهر لهم الفصول المتاحة ويمكنهم تسجيل الحضور.
                 </Text>
                 {!teacherCode && (
                   <Text style={[styles.infoText, { color: colors.text.secondary }]}>
@@ -551,6 +551,7 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     padding: spacing['2xl'],
     marginBottom: spacing['2xl'],
+    borderWidth: 1,
     ...shadows.md,
   },
   heroHeader: {
@@ -562,7 +563,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.full,
-    backgroundColor: 'rgba(255,255,255,0.9)',
   },
   heroBadgeText: {
     fontSize: 12,

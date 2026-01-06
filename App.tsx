@@ -70,6 +70,7 @@ function MainTabs() {
         tabBarHideOnKeyboard: true,
       }}
     >
+      {/* من اليسار إلى اليمين: الحضور → الطلاب → (إدارة المدرسة للقائد) → الإعدادات */}
       <Tab.Screen
         name="AttendanceHome"
         component={DashboardScreen}

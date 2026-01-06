@@ -30,6 +30,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { currentTeacher, classes, attendanceSessions, isLoading, userProfile, isOffline, pendingActions } = state as any;
+  const userSchoolId = userProfile?.schoolId || currentTeacher?.schoolId;
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showSchoolModal, setShowSchoolModal] = useState(false);
   const [schoolMode, setSchoolMode] = useState<'create' | 'join'>('create');
@@ -169,12 +170,13 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
   }, [handleAddClass, handleQuickReport, classes, navigation, userProfile?.schoolId, canAccessCommunity]);
 
   useEffect(() => {
-    if (userProfile && !userProfile.schoolId) {
+    // Only prompt to link a school when the user truly has no school assigned
+    if (userProfile && !userSchoolId) {
       setShowSchoolModal(true);
     } else {
       setShowSchoolModal(false);
     }
-  }, [userProfile?.schoolId]);
+  }, [userProfile, userSchoolId]);
 
   const handleCreateSchool = useCallback(async () => {
     if (!userProfile?.id) return;

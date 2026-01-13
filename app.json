@@ -23,7 +23,6 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.maanstuden.app",
       "buildNumber": "13",
-      "deploymentTarget": "13.4",
       "infoPlist": {
         "NSCameraUsageDescription": "نستخدم الكاميرا لمسح رموز QR للانضمام إلى المدارس",
         "NSPhotoLibraryUsageDescription": "نستخدم معرض الصور لاستيراد قوائم الطلاب من الصور",
